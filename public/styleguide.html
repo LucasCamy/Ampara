@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ampara · Styleguide</title>
+<style>
+/*
+ * Ampara · tokens.css
+ * Fonte única de cor, raio, sombra, tipografia e motion.
+ * Contraste calculado em DESIGN.md (todas as combinações usadas passam WCAG AA).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Superfícies · Calma Orgânica */
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --subtle: #eef1f6;
+  --selected: #e3ece8;
+  --night: #0f172a;
+  --on-night: #f1f5f9;
+
+  /* Texto e linhas */
+  --ink: #0f172a;
+  --muted: #526077;
+  --line: rgb(15 23 42 / 0.1);
+  --line-strong: rgb(15 23 42 / 0.22);
+
+  /* Ação e foco (único acento) */
+  --action: #25634b;
+  --action-hover: #1d4f3c;
+  --on-action: #ffffff;
+  --focus: #25634b;
+
+  /* Identidade das pessoas e do casal */
+  --partner-a: #2b5b84;
+  --partner-b: #9e4730;
+  --couple: #5b4b8a;
+
+  /* Estados semânticos (exclusivos) */
+  --state-ok: #1e6b45;
+  --state-ok-soft: #e8f3ec;
+  --state-warn: #8c5311;
+  --state-warn-soft: #fbf3e6;
+  --state-err: #b42318;
+  --state-err-soft: #fbecea;
+
+  /* Overlay e elevação */
+  --overlay: rgb(15 23 42 / 0.42);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 6px 20px rgb(15 23 42 / 0.06);
+  --shadow-float: 0 10px 34px rgb(15 23 42 / 0.16), 0 2px 6px rgb(15 23 42 / 0.08);
+  --elev-border: transparent;
+
+  /* Forma */
+  --radius-module: 28px;
+  --radius-card: 20px;
+  --radius-control: 14px;
+  --radius-pill: 999px;
+
+  /* Tipografia */
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-data: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 120ms;
+  --dur-fast: 180ms;
+  --dur-enter: 260ms;
+  --dur-exit: 170ms;
+}
+
+/* Noite Serena · tema escuro explícito */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0a0f1d;
+  --surface: #131b2e;
+  --subtle: #1c2740;
+  --selected: #1e352f;
+  --night: #f1f5f9;
+  --on-night: #0a0f1d;
+
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --line: rgb(241 245 249 / 0.12);
+  --line-strong: rgb(241 245 249 / 0.26);
+
+  --action: #4ade80;
+  --action-hover: #6ee7a0;
+  --on-action: #062819;
+  --focus: #4ade80;
+
+  --partner-a: #7dd3fc;
+  --partner-b: #fda4af;
+  --couple: #c4b5fd;
+
+  --state-ok: #4ade80;
+  --state-ok-soft: #12291f;
+  --state-warn: #fbbf24;
+  --state-warn-soft: #2a2413;
+  --state-err: #f87171;
+  --state-err-soft: #2e1a1f;
+
+  --overlay: rgb(2 6 16 / 0.66);
+  --shadow-card: none;
+  --shadow-float: 0 12px 36px rgb(2 6 16 / 0.5);
+  --elev-border: rgb(241 245 249 / 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0.01ms;
+    --dur-fast: 0.01ms;
+    --dur-enter: 0.01ms;
+    --dur-exit: 0.01ms;
+  }
+}
+
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.5 }
+main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px }
+h1 { font-size: 34px; letter-spacing: -0.02em; margin: 0 } h1 span, h2 span { color: var(--muted) }
+h2 { font-size: 20px; margin: 40px 0 12px }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) }
+.sw { border-radius: 20px; border: 1px solid var(--line); background: var(--surface); overflow: hidden }
+.sw i { display: block; height: 64px } .sw p { margin: 0; padding: 8px 12px; font-size: 13px } .sw code { color: var(--muted); font-family: var(--font-data) }
+.module { background: var(--surface); border-radius: 28px; padding: 20px; box-shadow: var(--shadow-card); border: 1px solid var(--elev-border) }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center }
+.badge { display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 600; border: 1px solid }
+.ok { color: var(--state-ok); background: var(--state-ok-soft); border-style: solid }
+.warn { color: var(--state-warn); background: var(--state-warn-soft); border-style: dashed }
+.err { color: var(--state-err); background: var(--state-err-soft); border-style: solid }
+.btn { min-height: 48px; padding: 0 18px; border-radius: 16px; font: inherit; font-weight: 600; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink) }
+.btn.primary { background: var(--action); color: var(--on-action); border-color: transparent }
+.data { font-family: var(--font-data); font-variant-numeric: tabular-nums }
+.ledger-solid { border: 1px solid var(--line-strong); border-radius: 18px; padding: 12px } .ledger-dashed { border: 1px dashed var(--state-warn); border-radius: 18px; padding: 12px }
+header { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap }
+</style>
+<script>document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'</script>
+</head>
+<body><main>
+<header><h1>Ampara <span>styleguide vivo.</span></h1>
+<button class="btn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Alternar tema</button></header>
+<p style="color:var(--muted)">Painel de Aterrissagem Calma &amp; Livro-Razão Vivo do Casal. Fonte: src/styles/tokens.css (contrastes em DESIGN.md).</p>
+<h2>Cores <span>por token</span></h2>
+<div class="grid" id="sw"></div>
+<h2>Tipografia <span>tripla</span></h2>
+<div class="module"><p style="font-size:28px;font-weight:700;margin:0;letter-spacing:-0.02em">Para agora, <span style="color:var(--muted)">uma coisa de cada vez.</span></p>
+<p>Interface em Plus Jakarta Sans, 15 a 16px. Inputs sempre com 16px.</p>
+<p class="data" style="font-size:22px;margin:0">R$ 110,00 · 08:00 · 12 na caixa</p></div>
+<h2>Estado <span>= ícone + texto + cor + traço</span></h2>
+<div class="row"><span class="badge ok">&#10003; Tomado às 08:04</span><span class="badge warn">&#9676; Previsto p/ dia 10</span><span class="badge warn">&#9719; Pegando água · 04:12</span><span class="badge err">&#9746; Atrasado há 35 min</span></div>
+<div class="row" style="margin-top:12px"><div class="ledger-solid">Supermercado <span class="data">R$ 300,00</span> · pago</div><div class="ledger-dashed">Internet <span class="data">R$ 120,00</span> · previsto</div></div>
+<h2>Ação <span>um único acento</span></h2>
+<div class="row"><button class="btn primary">Já engoli</button><button class="btn" style="border-style:dashed">Pegando água (+5 min)</button></div>
+</main>
+<script>
+const names=['bg','surface','subtle','selected','ink','muted','action','on-action','partner-a','partner-b','couple','state-ok','state-warn','state-err'];
+const el=document.getElementById('sw');
+const paint=()=>{el.innerHTML=names.map(n=>{const v=getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();return '<div class="sw"><i style="background:var(--'+n+')"></i><p>--'+n+'<br><code>'+v+'</code></p></div>'}).join('')};
+paint();new MutationObserver(paint).observe(document.documentElement,{attributes:true});
+</script>
+</body></html>

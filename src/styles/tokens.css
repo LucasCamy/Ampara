@@ -1,0 +1,114 @@
+/*
+ * Ampara · tokens.css
+ * Fonte única de cor, raio, sombra, tipografia e motion.
+ * Contraste calculado em DESIGN.md (todas as combinações usadas passam WCAG AA).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Superfícies · Calma Orgânica */
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --subtle: #eef1f6;
+  --selected: #e3ece8;
+  --night: #0f172a;
+  --on-night: #f1f5f9;
+
+  /* Texto e linhas */
+  --ink: #0f172a;
+  --muted: #526077;
+  --line: rgb(15 23 42 / 0.1);
+  --line-strong: rgb(15 23 42 / 0.22);
+
+  /* Ação e foco (único acento) */
+  --action: #25634b;
+  --action-hover: #1d4f3c;
+  --on-action: #ffffff;
+  --focus: #25634b;
+
+  /* Identidade das pessoas e do casal */
+  --partner-a: #2b5b84;
+  --partner-b: #9e4730;
+  --couple: #5b4b8a;
+
+  /* Estados semânticos (exclusivos) */
+  --state-ok: #1e6b45;
+  --state-ok-soft: #e8f3ec;
+  --state-warn: #8c5311;
+  --state-warn-soft: #fbf3e6;
+  --state-err: #b42318;
+  --state-err-soft: #fbecea;
+
+  /* Overlay e elevação */
+  --overlay: rgb(15 23 42 / 0.42);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 6px 20px rgb(15 23 42 / 0.06);
+  --shadow-float: 0 10px 34px rgb(15 23 42 / 0.16), 0 2px 6px rgb(15 23 42 / 0.08);
+  --elev-border: transparent;
+
+  /* Forma */
+  --radius-module: 28px;
+  --radius-card: 20px;
+  --radius-control: 14px;
+  --radius-pill: 999px;
+
+  /* Tipografia */
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-data: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 120ms;
+  --dur-fast: 180ms;
+  --dur-enter: 260ms;
+  --dur-exit: 170ms;
+}
+
+/* Noite Serena · tema escuro explícito */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0a0f1d;
+  --surface: #131b2e;
+  --subtle: #1c2740;
+  --selected: #1e352f;
+  --night: #f1f5f9;
+  --on-night: #0a0f1d;
+
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --line: rgb(241 245 249 / 0.12);
+  --line-strong: rgb(241 245 249 / 0.26);
+
+  --action: #4ade80;
+  --action-hover: #6ee7a0;
+  --on-action: #062819;
+  --focus: #4ade80;
+
+  --partner-a: #7dd3fc;
+  --partner-b: #fda4af;
+  --couple: #c4b5fd;
+
+  --state-ok: #4ade80;
+  --state-ok-soft: #12291f;
+  --state-warn: #fbbf24;
+  --state-warn-soft: #2a2413;
+  --state-err: #f87171;
+  --state-err-soft: #2e1a1f;
+
+  --overlay: rgb(2 6 16 / 0.66);
+  --shadow-card: none;
+  --shadow-float: 0 12px 36px rgb(2 6 16 / 0.5);
+  --elev-border: rgb(241 245 249 / 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0.01ms;
+    --dur-fast: 0.01ms;
+    --dur-enter: 0.01ms;
+    --dur-exit: 0.01ms;
+  }
+}

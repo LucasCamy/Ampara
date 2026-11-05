@@ -1,0 +1,284 @@
+import { CircleCheck, CircleDashed, Clock, HeartHandshake, SkipForward, SquareX, type LucideIcon } from 'lucide-react'
+import { useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
+
+export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(' ')
+
+/** Título bicolor ARQ-E: âncora da ação em ink + complemento em muted, na mesma frase */
+export function Title({
+  anchor,
+  rest,
+  as: Tag = 'h1',
+  size = 'lg',
+  id,
+}: {
+  anchor: string
+  rest?: string
+  as?: 'h1' | 'h2' | 'h3'
+  size?: 'xl' | 'lg' | 'md' | 'sm'
+  id?: string
+}) {
+  const sizes = {
+    xl: 'text-[28px] leading-[1.15] sm:text-[34px]',
+    lg: 'text-[22px] leading-tight sm:text-[26px]',
+    md: 'text-[18px] leading-snug',
+    sm: 'text-[15px] leading-snug',
+  }
+  return (
+    <Tag id={id} className={cx('font-bold tracking-tight text-ink', sizes[size])}>
+      {anchor}
+      {rest ? <span className="text-muted"> {rest}</span> : null}
+    </Tag>
+  )
+}
+
+export type StatusKind = 'ok' | 'pending' | 'snooze' | 'late' | 'sos' | 'skipped'
+
+const STATUS: Record<StatusKind, { icon: LucideIcon; cls: string }> = {
+  ok: { icon: CircleCheck, cls: 'text-ok border-ok bg-ok-soft border-solid' },
+  pending: { icon: CircleDashed, cls: 'text-warn border-warn bg-warn-soft border-dashed' },
+  snooze: { icon: Clock, cls: 'text-warn border-warn bg-warn-soft border-dashed' },
+  late: { icon: SquareX, cls: 'text-err border-err bg-err-soft border-solid' },
+  sos: { icon: HeartHandshake, cls: 'text-err border-err bg-err-soft border-solid' },
+  skipped: { icon: SkipForward, cls: 'text-muted border-line-strong bg-subtle border-solid' },
+}
+
+/** Estado = forma (ícone) + texto + cor + traço */
+export function StatusBadge({ kind, children, className }: { kind: StatusKind; children: ReactNode; className?: string }) {
+  const { icon: Icon, cls } = STATUS[kind]
+  return (
+    <span
+      data-status={kind}
+      className={cx('inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[13px] font-semibold', cls, className)}
+    >
+      <Icon size={15} strokeWidth={2.4} aria-hidden />
+      <span className="tabular">{children}</span>
+    </span>
+  )
+}
+
+/** Grupo de seleção (rádio) que troca na hora, sem transição de cor */
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  size = 'md',
+  stretch,
+  hideLabel = true,
+}: {
+  label: string
+  value: T
+  options: { value: T; label: ReactNode; icon?: LucideIcon; testId?: string }[]
+  onChange: (v: T) => void
+  size?: 'sm' | 'md'
+  stretch?: boolean
+  hideLabel?: boolean
+}) {
+  const id = useId()
+  return (
+    <div>
+      <span id={id} className={hideLabel ? 'sr-only' : 'mb-1.5 block text-[13px] font-semibold text-muted'}>
+        {label}
+      </span>
+      <div
+        role="radiogroup"
+        aria-labelledby={id}
+        className={cx('no-scrollbar flex gap-1 overflow-x-auto rounded-[16px] bg-subtle p-1', stretch && 'w-full')}
+      >
+        {options.map((o) => {
+          const active = o.value === value
+          const Icon = o.icon
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              data-testid={o.testId}
+              onClick={() => onChange(o.value)}
+              className={cx(
+                'press inline-flex items-center justify-center gap-1.5 rounded-[12px] px-3 font-semibold whitespace-nowrap',
+                size === 'sm' ? 'min-h-10 text-[13px]' : 'min-h-11 text-[14px]',
+                stretch ? 'min-w-0 flex-1 px-2' : 'shrink-0',
+                active ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-muted',
+              )}
+            >
+              {Icon ? <Icon size={16} aria-hidden /> : null}
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** Pílulas de escolha (formulários). Alvo mínimo 48px. */
+export function ChoiceChips<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  error,
+}: {
+  label: string
+  value: T | null
+  options: { value: T; label: ReactNode; icon?: LucideIcon; hint?: string }[]
+  onChange: (v: T) => void
+  error?: string
+}) {
+  const id = useId()
+  return (
+    <fieldset className="min-w-0">
+      <legend id={id} className="mb-2 text-[14px] font-semibold text-ink">
+        {label}
+      </legend>
+      <div role="radiogroup" aria-labelledby={id} aria-invalid={error ? true : undefined} className="flex flex-wrap gap-2">
+        {options.map((o) => {
+          const active = o.value === value
+          const Icon = o.icon
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(o.value)}
+              className={cx(
+                'press inline-flex min-h-12 items-center gap-2 rounded-[14px] border px-3.5 text-left text-[14px] font-semibold',
+                active ? 'border-action bg-selected text-ink' : 'border-line bg-surface text-ink hoverable',
+              )}
+            >
+              {Icon ? <Icon size={18} aria-hidden className={active ? 'text-action' : 'text-muted'} /> : null}
+              <span>
+                {o.label}
+                {o.hint ? <span className="block text-[12px] font-medium text-muted">{o.hint}</span> : null}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {error ? <FieldError>{error}</FieldError> : null}
+    </fieldset>
+  )
+}
+
+export function FieldError({ children, id }: { children: ReactNode; id?: string }) {
+  return (
+    <p id={id} role="alert" className="mt-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-err">
+      <SquareX size={15} aria-hidden />
+      {children}
+    </p>
+  )
+}
+
+export function Switch({
+  checked,
+  onChange,
+  label,
+  description,
+  testId,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  label: ReactNode
+  description?: ReactNode
+  testId?: string
+}) {
+  const id = useId()
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <span id={id} className="block text-[15px] font-semibold text-ink">
+          {label}
+        </span>
+        {description ? <span className="mt-0.5 block text-[13px] text-muted">{description}</span> : null}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-labelledby={id}
+        data-testid={testId}
+        onClick={() => onChange(!checked)}
+        className="press relative mt-0.5 inline-flex h-12 w-[68px] shrink-0 items-center"
+      >
+        <span className={cx('absolute inset-x-0 top-2 h-8 rounded-full border', checked ? 'border-action bg-action' : 'border-line-strong bg-subtle')} />
+        <span
+          aria-hidden
+          className={cx(
+            'absolute top-3 h-6 w-6 rounded-full shadow-card transition-transform duration-150',
+            checked ? 'translate-x-[38px] bg-on-action' : 'translate-x-[4px] bg-surface ring-1 ring-line-strong',
+          )}
+        />
+        <span className="sr-only">{checked ? 'Ativado' : 'Desativado'}</span>
+      </button>
+    </div>
+  )
+}
+
+export function Button({
+  variant = 'secondary',
+  size = 'md',
+  icon: Icon,
+  className,
+  children,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'quiet'
+  size?: 'sm' | 'md' | 'lg'
+  icon?: LucideIcon
+}) {
+  const variants = {
+    primary: 'btn-primary',
+    secondary: 'border border-line-strong bg-surface text-ink hoverable',
+    ghost: 'text-action hoverable',
+    quiet: 'bg-subtle text-ink hoverable',
+  }
+  const sizes = {
+    sm: 'min-h-11 px-3.5 text-[14px] rounded-[14px]',
+    md: 'min-h-12 px-4 text-[15px] rounded-[16px]',
+    lg: 'min-h-14 px-5 text-[16px] rounded-[18px]',
+  }
+  return (
+    <button
+      type="button"
+      {...rest}
+      className={cx('press inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap disabled:opacity-50', variants[variant], sizes[size], className)}
+    >
+      {Icon ? <Icon size={size === 'lg' ? 20 : 18} aria-hidden /> : null}
+      {children}
+    </button>
+  )
+}
+
+/** Marca de pessoa/escopo: cor + texto, nunca só cor */
+export function OwnerTag({ tone, children }: { tone: 'a' | 'b' | 'us'; children: ReactNode }) {
+  const map = { a: 'text-partner-a', b: 'text-partner-b', us: 'text-couple' }
+  return (
+    <span className={cx('inline-flex items-center gap-1.5 text-[12px] font-semibold', map[tone])}>
+      <span aria-hidden className="h-2 w-2 rounded-full bg-current" />
+      <span>{children}</span>
+    </span>
+  )
+}
+
+export function SectionHeader({ title, rest, action, id }: { title: string; rest?: string; action?: ReactNode; id?: string }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+      <Title as="h2" size="md" anchor={title} rest={rest} id={id} />
+      {action}
+    </div>
+  )
+}
+
+export function EmptyState({ icon: Icon, title, text, action }: { icon: LucideIcon; title: string; text: string; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center rounded-[20px] border border-dashed border-line-strong px-5 py-8 text-center">
+      <Icon size={28} className="text-action" aria-hidden />
+      <p className="mt-3 text-[16px] font-bold text-ink">{title}</p>
+      <p className="mt-1 max-w-[34ch] text-[14px] text-muted">{text}</p>
+      {action ? <div className="mt-4">{action}</div> : null}
+    </div>
+  )
+}

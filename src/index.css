@@ -1,0 +1,163 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+
+/* Remove a paleta padrão do Tailwind: só tokens existem como cor. */
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-selected: var(--selected);
+  --color-night: var(--night);
+  --color-on-night: var(--on-night);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-on-action: var(--on-action);
+  --color-focus: var(--focus);
+  --color-partner-a: var(--partner-a);
+  --color-partner-b: var(--partner-b);
+  --color-couple: var(--couple);
+  --color-ok: var(--state-ok);
+  --color-ok-soft: var(--state-ok-soft);
+  --color-warn: var(--state-warn);
+  --color-warn-soft: var(--state-warn-soft);
+  --color-err: var(--state-err);
+  --color-err-soft: var(--state-err-soft);
+  --color-overlay: var(--overlay);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-sans: var(--font-sans);
+  --font-data: var(--font-data);
+
+  --radius-module: var(--radius-module);
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-float: var(--shadow-float);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--selected);
+    color: var(--ink);
+  }
+}
+
+@layer components {
+  .font-data {
+    font-family: var(--font-data);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Módulo e card */
+  .module {
+    background: var(--surface);
+    border-radius: var(--radius-module);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--elev-border);
+  }
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
+  }
+
+  /* Livro-razão: realizado = sólido, previsto = tracejado */
+  .ledger-solid {
+    border: 1px solid var(--line-strong);
+  }
+  .ledger-dashed {
+    border: 1px dashed var(--state-warn);
+  }
+  .ledger-ok {
+    border: 1px solid var(--state-ok);
+  }
+  .ledger-err {
+    border: 1px solid var(--state-err);
+    background: var(--state-err-soft);
+  }
+
+  /* Pressão tátil */
+  .press {
+    transition: transform var(--dur-press) var(--ease-out);
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+
+  /* Hover só em dispositivos com hover; seleção troca sem transição */
+  @media (hover: hover) {
+    .hoverable {
+      transition: background-color var(--dur-fast) var(--ease-out);
+    }
+    .hoverable:hover {
+      background-color: var(--subtle);
+    }
+    .btn-primary:hover {
+      background-color: var(--action-hover);
+    }
+  }
+
+  .btn-primary {
+    background: var(--action);
+    color: var(--on-action);
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
