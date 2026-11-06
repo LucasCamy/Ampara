@@ -14,7 +14,7 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -35,7 +35,7 @@ begin
      and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 16 tabelas, RLS ligado em todas, 6 funções'
+\echo 'ok  estrutura: 18 tabelas, RLS ligado em todas, 6 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -393,6 +393,28 @@ do $$ begin
   assert (select status from gift_ideas where id = '77777777-0000-4000-8000-000000000002') = 'IDEA', 'FALHOU: ela alterou ou apagou o presente dele';
 end $$;
 \echo 'ok  datas do casal: os dois veem; presente: só quem anotou vê, altera ou apaga'
+
+-- ---------------------------------------------------------------- 6e. check-in e "o que me acalma"
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+insert into mood_checkins (id, couple_id, owner_id, date, mood) values ('B@hoje', 'space-teste', 'B', current_date, 'NEED_CARE');
+insert into comfort_items (id, couple_id, owner_id, text) values ('88888888-0000-4000-8000-000000000001', 'space-teste', 'B', 'Chá de camomila');
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+update mood_checkins set mood = 'GOOD';
+update comfort_items set text = 'trocado';
+do $$ begin
+  assert (select mood from mood_checkins where id = 'B@hoje') = 'NEED_CARE', 'FALHOU: Lucas alterou o check-in dela';
+  assert (select text from comfort_items where owner_id = 'B') = 'Chá de camomila', 'FALHOU: Lucas alterou a lista dela';
+  begin
+    insert into mood_checkins (id, couple_id, owner_id, date, mood) values ('B@forjado', 'space-teste', 'B', current_date, 'GOOD');
+    raise exception 'FALHOU: Lucas gravou check-in em nome dela';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+\echo 'ok  check-in e "o que me acalma": o par lê, só a própria pessoa grava'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

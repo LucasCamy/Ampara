@@ -7,6 +7,8 @@ import type {
   ShoppingItem,
   SpecialDate,
   GiftIdea,
+  ComfortItem,
+  MoodCheckin,
   CycleSettings,
   Couple,
   Pronoun,
@@ -219,6 +221,17 @@ export function buildSeed(now: Date): DataState {
     },
   ]
 
+  // check-in dela hoje e o que acalma cada um
+  const checkin: MoodCheckin = { id: `B@${today}`, ownerId: 'B', date: today, mood: 'NEED_CARE', note: 'Cólica e cabeça cheia', updatedAt: iso }
+  const comfort: ComfortItem[] = [
+    ['B', 'Chá de camomila'],
+    ['B', 'Bolsa de água quente'],
+    ['B', 'Ficar abraçados vendo série'],
+    ['B', 'Não perguntar "o que foi?" toda hora'],
+    ['A', 'Caminhar um pouco'],
+    ['A', 'Silêncio por 20 minutos'],
+  ].map(([owner, text], i) => ({ id: uuid(), ownerId: owner as PartnerId, text: text!, createdAt: new Date(now.getTime() + i).toISOString(), updatedAt: iso }))
+
   const cycleB: CycleSettings = { ...defaultCycleSettings('B', iso), share: 'GENTLE' }
   Object.assign(cycleB, publishedForecast(cycleLogs, cycleB, today))
 
@@ -243,6 +256,8 @@ export function buildSeed(now: Date): DataState {
     shoppingItems: byId(shopping),
     specialDates: byId(specialDates),
     giftIdeas: byId(gifts),
+    moodCheckins: { [checkin.id]: checkin },
+    comfortItems: byId(comfort),
     outbox: [],
     lastSyncedAt: iso,
   }
@@ -299,6 +314,8 @@ export function buildEmpty(now: Date): DataState {
     shoppingItems: {},
     specialDates: {},
     giftIdeas: {},
+    moodCheckins: {},
+    comfortItems: {},
     outbox: [],
   }
 }

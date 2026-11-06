@@ -102,7 +102,7 @@ export class FakeSupabase {
     if (table === 'medication_logs' || table === 'tasks') return this.canRead(table, row, m)
     if (table === 'cycle_settings') return row.id === m.partner_id
     if (table === 'cycle_logs') return row.owner_id === m.partner_id
-    if (table === 'gift_ideas') return row.owner_id === m.partner_id
+    if (table === 'gift_ideas' || table === 'mood_checkins' || table === 'comfort_items') return row.owner_id === m.partner_id
     return true
   }
 

@@ -119,6 +119,8 @@ export function enqueueAll(who: PartnerId) {
     if (c === 'cycleLogs') return (e as CycleLog).ownerId === who
     // presente é surpresa: só quem anotou sobe (gift_ideas_insert)
     if (c === 'giftIdeas') return (e as GiftIdea).ownerId === who
+    // check-in e "o que me acalma": cada um grava o seu (o par lê)
+    if (c === 'moodCheckins' || c === 'comfortItems') return (e as { ownerId: PartnerId }).ownerId === who
     return true
   }
   dataStore.set((s) => {

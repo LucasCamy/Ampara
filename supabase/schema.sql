@@ -570,3 +570,49 @@ begin
     execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
   end loop;
 end $$;
+
+-- =====================================================================
+-- Iteração 13: check-in do dia e "o que me acalma" (cada um grava o seu; o casal lê)
+-- =====================================================================
+create table if not exists mood_checkins (
+  id text primary key, -- ownerId@data: um por pessoa por dia
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  date date not null,
+  mood text not null check (mood in ('GOOD', 'LOW_ENERGY', 'NEED_CARE', 'NEED_SPACE', 'OVERWHELMED')),
+  note text not null default '' check (length(note) <= 120),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_mood_checkins_pull on mood_checkins (couple_id, updated_at);
+
+create table if not exists comfort_items (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  text text not null check (length(text) between 3 and 120),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_comfort_items_pull on comfort_items (couple_id, updated_at);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['mood_checkins','comfort_items'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists %I on %I', t || '_read', t);
+    execute format('create policy %I on %I for select using (couple_id = my_couple_id())', t || '_read', t);
+    execute format('drop policy if exists %I on %I', t || '_insert', t);
+    execute format('create policy %I on %I for insert with check (couple_id = my_couple_id() and owner_id = my_partner_id())', t || '_insert', t);
+    execute format('drop policy if exists %I on %I', t || '_update', t);
+    execute format('create policy %I on %I for update using (couple_id = my_couple_id() and owner_id = my_partner_id()) with check (couple_id = my_couple_id() and owner_id = my_partner_id())', t || '_update', t);
+    execute format('drop policy if exists %I on %I', t || '_delete', t);
+    execute format('create policy %I on %I for delete using (couple_id = my_couple_id() and owner_id = my_partner_id())', t || '_delete', t);
+    execute format('drop trigger if exists trg_%I_synced on %I', t, t);
+    execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
+  end loop;
+end $$;

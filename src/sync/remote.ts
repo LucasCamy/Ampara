@@ -137,6 +137,8 @@ export const TABLES: Record<CollectionName, string> = {
   shoppingItems: 'shopping_items',
   specialDates: 'special_dates',
   giftIdeas: 'gift_ideas',
+  moodCheckins: 'mood_checkins',
+  comfortItems: 'comfort_items',
 }
 
 /** Tabelas com chave (couple_id, id): um registro por pessoa */
@@ -174,7 +176,9 @@ export function fromRow(collection: CollectionName, row: Record<string, unknown>
   for (const [k, v] of Object.entries(row)) {
     if (k === 'couple_id' || k === 'deleted' || k === 'synced_at' || k === 'invite_code') continue
     const key = camel(k)
-    out[key] = typeof v === 'string' && isTimestampKey(key) ? new Date(v).toISOString() : v
+    // data inválida fica como veio: um registro estranho não pode derrubar o download inteiro
+    const t = typeof v === 'string' && isTimestampKey(key) ? new Date(v) : null
+    out[key] = t && !Number.isNaN(t.getTime()) ? t.toISOString() : v
   }
   if (collection === 'couple') {
     out.spaceId = out.id

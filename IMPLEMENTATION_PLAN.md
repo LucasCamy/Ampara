@@ -37,6 +37,15 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 13 (2026-11-06): check-in do dia e "o que me acalma"
+
+- **Check-in** em 1 toque no Hoje (Bem, Sem energia, Preciso de colo, Quero espaço, No limite) com recado opcional;
+  um por pessoa por dia (`id = pessoa@data`). O par vê no Hoje dele com uma dica do que fazer.
+- **O que me acalma:** lista de cada um (até 12 itens, sem repetir), editada na aba Nós. Aparece para o par
+  quando a pessoa marca "Preciso de colo", "No limite" ou "Sem energia" e dentro do pedido de ajuda (SOS).
+- Banco: `mood_checkins` e `comfort_items` (o casal lê; só a própria pessoa grava), caso no `validate.sql`.
+- Correção achada no E2E da nuvem: `fromRow` não derruba mais o download inteiro por uma data inválida.
+
 ## Iteração 12 (2026-11-06): datas especiais e ideias de presente
 
 - **Datas especiais** do casal (namoro, aniversários, outra data): repetem todo ano (29/02 vira 28/02), contam

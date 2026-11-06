@@ -16,6 +16,7 @@ import { ui } from '../../store/ui'
 import { CycleTodayCards } from '../cycle/CycleSection'
 import { PackTodayCards } from '../routines/PackInfo'
 import { SpecialDatesTodayCards } from '../us/DatesGiftsSection'
+import { ComfortList, MoodTodayCards } from '../us/MoodSection'
 import { ENERGY } from '../shell/TopBar'
 
 const HELP_TYPE = {
@@ -90,6 +91,7 @@ export function TodayScreen() {
 
   const secondary = (
     <>
+      <MoodTodayCards />
       <CycleTodayCards />
       <PackTodayCards />
       <SpecialDatesTodayCards />
@@ -363,6 +365,7 @@ function HelpInCard({ req, partnerName }: { req: HelpRequest; partnerName: strin
       <p className="mt-1 text-[14px] text-muted">
         {HELP_TYPE[req.helpType]} · <span className="font-semibold text-ink">{URGENCY[req.urgency]}</span>
       </p>
+      <ComfortList owner={req.requesterId} title={`O que costuma acalmar ${partnerName.split(' ')[0]}`} />
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="primary" size="compact" icon={HandHeart} onClick={() => respondHelp(req.id, 'TAKE_OVER')} className="grow basis-[130px]" data-testid="help-take-over" aria-label="Deixa comigo (assumir)">
           Deixa comigo

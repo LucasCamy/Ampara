@@ -257,6 +257,28 @@ export interface GiftIdea {
   updatedAt: string
 }
 
+/** Check-in do dia: como a pessoa está (o par vê) */
+export type Mood = 'GOOD' | 'LOW_ENERGY' | 'NEED_CARE' | 'NEED_SPACE' | 'OVERWHELMED'
+
+export interface MoodCheckin {
+  /** `${ownerId}@${date}`: um por pessoa por dia (mudar sobrescreve) */
+  id: string
+  ownerId: PartnerId
+  date: DateKey
+  mood: Mood
+  note: string
+  updatedAt: string
+}
+
+/** "O que me acalma": escrito por uma pessoa para o par ler nos dias difíceis */
+export interface ComfortItem {
+  id: string
+  ownerId: PartnerId
+  text: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type OutboxOperation = 'UPSERT' | 'DELETE'
 export type OutboxStatus = 'PENDING' | 'SYNCED' | 'FAILED'
 
@@ -287,6 +309,8 @@ export interface Collections {
   shoppingItems: Record<string, ShoppingItem>
   specialDates: Record<string, SpecialDate>
   giftIdeas: Record<string, GiftIdea>
+  moodCheckins: Record<string, MoodCheckin>
+  comfortItems: Record<string, ComfortItem>
 }
 
 export type CollectionName = keyof Collections
@@ -307,6 +331,8 @@ export const COLLECTIONS: CollectionName[] = [
   'shoppingItems',
   'specialDates',
   'giftIdeas',
+  'moodCheckins',
+  'comfortItems',
 ]
 
 export interface DataState extends Collections {
