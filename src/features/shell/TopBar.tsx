@@ -1,10 +1,11 @@
-import { BatteryFull, BatteryLow, BatteryMedium, Cloud, CloudOff, Moon, RefreshCw, Settings, Sun, type LucideIcon } from 'lucide-react'
+import { Lock, BatteryFull, BatteryLow, BatteryMedium, Cloud, CloudOff, Moon, RefreshCw, Settings, Sun, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { cx, Segmented } from '../../components/ui'
 import type { EnergyLevel } from '../../domain/types'
 import { setEnergy } from '../../store/actions'
 import { usePeople } from '../../store/hooks'
 import { ui, useUi } from '../../store/ui'
+import { lock, switchPerson } from '../../auth/session'
 import { useSync } from '../../sync/engine'
 
 export const ENERGY: Record<EnergyLevel, { icon: LucideIcon; short: string; label: string; partner: string }> = {
@@ -62,6 +63,21 @@ export function SyncPill() {
   )
 }
 
+export function LockButton({ withLabel = false }: { withLabel?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => void lock()}
+      aria-label="Bloquear o Ampara neste aparelho"
+      data-testid="lock"
+      className={cx('press hoverable inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full text-ink', withLabel ? 'px-3 text-[14px] font-semibold' : 'w-11')}
+    >
+      <Lock size={19} aria-hidden />
+      {withLabel ? 'Bloquear' : null}
+    </button>
+  )
+}
+
 export function ThemeToggle() {
   const theme = useUi((s) => s.theme)
   const next = theme === 'dark' ? 'light' : 'dark'
@@ -84,12 +100,14 @@ export function PerspectiveSwitch({ compact = false }: { compact?: boolean }) {
     <Segmented
       label="Perspectiva: quem está usando o app"
       value={viewer}
-      onChange={(v) => ui.setViewer(v)}
+      onChange={(v) => {
+        if (v !== viewer) void switchPerson(v)
+      }}
       size="sm"
       stretch
       options={[
-        { value: 'A', label: compact ? profiles.A.displayName : `Visão: ${profiles.A.displayName}`, testId: 'viewer-A' },
-        { value: 'B', label: compact ? profiles.B.displayName : `Visão: ${profiles.B.displayName}`, testId: 'viewer-B' },
+        { value: 'A', label: compact ? profiles.A.displayName : `Visão: ${profiles.A.displayName}`, shortLabel: profiles.A.displayName, testId: 'viewer-A', ariaLabel: viewer === 'A' ? `Usando como ${profiles.A.displayName}` : `Entrar como ${profiles.A.displayName} (pede a senha)` },
+        { value: 'B', label: compact ? profiles.B.displayName : `Visão: ${profiles.B.displayName}`, shortLabel: profiles.B.displayName, testId: 'viewer-B', ariaLabel: viewer === 'B' ? `Usando como ${profiles.B.displayName}` : `Entrar como ${profiles.B.displayName} (pede a senha)` },
       ]}
     />
   )
@@ -131,20 +149,27 @@ export function TopBar() {
           <Settings size={20} aria-hidden />
         </button>
       </div>
-      <div className="mx-auto max-w-[720px] px-4 pt-1 pb-2">
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
-            <PerspectiveSwitch />
-          </div>
-          <ThemeToggle />
+      {batteryOpen ? (
+        <div id="battery-panel" className="mx-auto max-w-[720px] px-4 pt-1 pb-2">
+          <p className="mb-1.5 text-[12px] font-semibold text-muted">Minha bateria mental agora</p>
+          <BatterySelector compactLabels />
         </div>
-        {batteryOpen ? (
-          <div id="battery-panel" className="pt-2">
-            <p className="mb-1.5 text-[12px] font-semibold text-muted">Minha bateria mental agora</p>
-            <BatterySelector compactLabels />
-          </div>
-        ) : null}
-      </div>
+      ) : (
+        <div className="h-2" />
+      )}
     </header>
+  )
+}
+
+/** Linha de contexto que rola junto com a página no mobile (só a barra principal fica fixa) */
+export function ContextRow() {
+  return (
+    <div className="mx-auto flex max-w-[720px] items-center gap-1 px-4 pt-3 lg:hidden">
+      <div className="min-w-0 flex-1">
+        <PerspectiveSwitch />
+      </div>
+      <LockButton />
+      <ThemeToggle />
+    </div>
   )
 }

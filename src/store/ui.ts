@@ -49,7 +49,8 @@ function systemTheme(): Theme {
 
 const prefs = loadPrefs()
 export const uiStore = createStore<UiState>({
-  viewer: prefs.viewer ?? 'A',
+  // quem está usando vem da sessão autenticada (src/auth/session.ts), nunca das preferências
+  viewer: 'A',
   tab: initialTab(),
   theme: prefs.theme ?? systemTheme(),
   forcedOffline: prefs.forcedOffline ?? false,
@@ -60,7 +61,7 @@ export const uiStore = createStore<UiState>({
 uiStore.subscribe(() => {
   const s = uiStore.get()
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ viewer: s.viewer, theme: s.theme, forcedOffline: s.forcedOffline }))
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: s.theme, forcedOffline: s.forcedOffline }))
   } catch {
     /* armazenamento indisponível: preferências ficam só na sessão */
   }

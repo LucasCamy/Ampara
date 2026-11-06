@@ -1,7 +1,7 @@
 import { CalendarDays, CircleCheck, LifeBuoy, ListPlus, Pill, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/ui'
 import { ui, useUi, type SheetKind, type Tab } from '../../store/ui'
-import { BatterySelector, PerspectiveSwitch, SyncPill, ThemeToggle } from './TopBar'
+import { BatterySelector, LockButton, PerspectiveSwitch, SyncPill, ThemeToggle } from './TopBar'
 
 export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'hoje', label: 'Hoje', icon: Sun },
@@ -137,8 +137,9 @@ export function Sidebar() {
           ))}
         </div>
       </div>
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
         <SyncPill />
+        <LockButton withLabel />
       </div>
     </aside>
   )

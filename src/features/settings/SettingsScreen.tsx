@@ -2,6 +2,8 @@ import { CircleCheck, Copy, Eye, EyeOff, LifeBuoy, Link, ListPlus, ReceiptText, 
 import { useId, useState } from 'react'
 import { Button, ChoiceChips, cx, SectionHeader, StatusBadge, Switch, Title } from '../../components/ui'
 import type { PartnerId } from '../../domain/types'
+import { useAuth } from '../../auth/session'
+import { SecuritySection } from './SecuritySection'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
 import { useCouple, usePeople } from '../../store/hooks'
@@ -18,6 +20,7 @@ const SHORTCUTS: { quick: string; name: string; icon: LucideIcon; how: string }[
 export function SettingsScreen() {
   const { viewer, me, partner, profiles } = usePeople()
   const couple = useCouple()
+  const partnerPending = useAuth((s) => s.people?.[s.who === 'A' ? 'B' : 'A']?.status === 'invited')
   const theme = useUi((s) => s.theme)
   const [copied, setCopied] = useState<string | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -43,22 +46,27 @@ export function SettingsScreen() {
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <div className="flex flex-col gap-6">
-          <section className="module p-5" aria-labelledby="pareamento">
-            <SectionHeader id="pareamento" title="Espaço do casal" rest="· pareado" />
-            <p className="text-[14px] text-muted">
-              Código de convite: <span className="font-data text-[18px] font-semibold text-ink">{couple.inviteCode}</span>
+          <section className="module p-4 sm:p-5" aria-labelledby="pareamento">
+            <SectionHeader id="pareamento" title="Espaço do casal" rest="· protegido por senha" />
+            {partnerPending ? (
+              <p className="text-[14px] text-muted" data-testid="settings-invite">
+                {partner.displayName} ainda não ativou o acesso. Código de convite:{' '}
+                <span className="font-data text-[18px] font-semibold text-ink">{couple.inviteCode}</span>
+              </p>
+            ) : (
+              <StatusBadge kind="ok">Vocês dois já têm senha própria</StatusBadge>
+            )}
+            <p className="mt-2 text-[13px] text-muted">
+              Sincronização: {adapterName}. Para ver a visão de {partner.displayName} neste aparelho, toque no nome no topo: o app pede a senha.
             </p>
-            <p className="mt-1 text-[13px] text-muted">
-              Sincronização: {adapterName}. Neste aparelho, a visão alterna entre os dois para testar os fluxos do casal.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {(['A', 'B'] as PartnerId[]).map((id) => (
-                <NameField key={`${id}-${profiles[id].displayName}`} id={id} value={profiles[id].displayName} label={id === 'A' ? 'Nome do Parceiro A' : 'Nome da Parceira B'} />
-              ))}
+            <div className="mt-4">
+              <NameField key={`${viewer}-${profiles[viewer].displayName}`} id={viewer} value={profiles[viewer].displayName} label="Seu nome" />
             </div>
           </section>
 
-          <section className="module p-5" aria-labelledby="divisao">
+          <SecuritySection partnerName={partner.displayName} />
+
+          <section className="module p-4 sm:p-5" aria-labelledby="divisao">
             <SectionHeader id="divisao" title="Divisão padrão" rest="· gastos do casal" />
             <ChoiceChips<'50_50' | 'PROPORTIONAL'>
               label="Como vocês dividem por padrão?"
@@ -72,7 +80,7 @@ export function SettingsScreen() {
             <RatioField ratioA={ratioA} nameA={profiles.A.displayName} nameB={profiles.B.displayName} onChange={(r) => setSplit(mode === '50_50' ? 'PROPORTIONAL' : mode, r * 100)} />
           </section>
 
-          <section className="module p-5" aria-labelledby="privacidade">
+          <section className="module p-4 sm:p-5" aria-labelledby="privacidade">
             <SectionHeader id="privacidade" title="Privacidade financeira" rest="· dos dois" />
             <Switch
               checked={me.sharePersonalFinances}
@@ -92,7 +100,7 @@ export function SettingsScreen() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <section className="module p-5" aria-labelledby="atalhos">
+          <section className="module p-4 sm:p-5" aria-labelledby="atalhos">
             <SectionHeader id="atalhos" title="Atalhos do iPhone" rest="· captura sem procurar o app" />
             <ol className="mb-4 flex list-decimal flex-col gap-1 pl-5 text-[14px] text-muted">
               <li>Abra o app Atalhos e crie um atalho novo.</li>
@@ -135,7 +143,7 @@ export function SettingsScreen() {
             </p>
           </section>
 
-          <section className="module p-5" aria-labelledby="aparelho">
+          <section className="module p-4 sm:p-5" aria-labelledby="aparelho">
             <SectionHeader id="aparelho" title="Este aparelho" />
             <p className="text-[14px] text-muted">
               Usando como {profiles[viewer].displayName} · tema {theme === 'dark' ? 'Noite Serena' : 'Calma Orgânica'}.

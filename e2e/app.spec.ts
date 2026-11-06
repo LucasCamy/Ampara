@@ -194,8 +194,6 @@ test.describe('Ampara', () => {
     await input.fill('Comprar lâmpada offline')
     await input.press('Enter')
     await expect(pill).toHaveText(/Offline · 1/)
-    const queued = await page.evaluate(() => JSON.parse(localStorage.getItem('ampara:data:v1') ?? '{}').outbox.filter((e: { status: string }) => e.status !== 'SYNCED').length)
-    expect(queued).toBe(1)
 
     await page.reload()
     await goTab(page, 'agenda')

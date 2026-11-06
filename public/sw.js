@@ -1,7 +1,7 @@
 /* Ampara service worker: app shell offline (network-first para navegação, cache-first para assets) */
-const CACHE = 'ampara-v1'
+const CACHE = 'ampara-v2'
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon.svg'])).then(() => self.skipWaiting()))
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon.svg', '/theme-init.js'])).then(() => self.skipWaiting()))
 })
 self.addEventListener('activate', (e) => {
   e.waitUntil(

@@ -5,7 +5,9 @@ import { FinanceScreen } from './features/finance/FinanceScreen'
 import { RoutinesScreen } from './features/routines/RoutinesScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { BottomNav, Dock, Sidebar } from './features/shell/Nav'
-import { TopBar } from './features/shell/TopBar'
+import { ContextRow, TopBar } from './features/shell/TopBar'
+import { LoadingScreen, LoginScreen, SetupScreen, WelcomeScreen } from './features/auth/AuthScreens'
+import { useAuth } from './auth/session'
 import { SheetHost } from './features/sheets/SheetHost'
 import { TodayScreen } from './features/today/TodayScreen'
 import { ui, useUi, type SheetKind } from './store/ui'
@@ -49,16 +51,17 @@ function Screen() {
   }
 }
 
-export default function App() {
+function AppShell() {
   useQuickLaunch()
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex min-h-dvh" data-testid="app">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:rounded-[12px] focus:bg-surface focus:p-3">
         Pular para o conteúdo
       </a>
       <Sidebar />
       <div className="min-w-0 flex-1">
         <TopBar />
+        <ContextRow />
         <main id="conteudo" className="mx-auto w-full max-w-[720px] px-4 pt-4 pb-[calc(160px+env(safe-area-inset-bottom))] lg:max-w-[1180px] lg:px-8 lg:pt-8 lg:pb-12">
           <Screen />
         </main>
@@ -69,4 +72,21 @@ export default function App() {
       <Toaster />
     </div>
   )
+}
+
+/** Nada do casal aparece antes da autenticação */
+export default function Root() {
+  const status = useAuth((s) => s.status)
+  switch (status) {
+    case 'loading':
+      return <LoadingScreen />
+    case 'setup':
+      return <SetupScreen />
+    case 'welcome':
+      return <WelcomeScreen />
+    case 'locked':
+      return <LoginScreen />
+    case 'unlocked':
+      return <AppShell />
+  }
 }

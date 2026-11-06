@@ -69,7 +69,7 @@ function CoupleTab({ month, monthLabel }: { month: string; monthLabel: string })
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
-      <section className={cx('module p-5 sm:p-6', plan ? '' : 'ledger-ok')} aria-labelledby="encontro" data-testid="balance-card">
+      <section className={cx('module p-4 sm:p-6', plan ? '' : 'ledger-ok')} aria-labelledby="encontro" data-testid="balance-card">
         <p id="encontro" className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">
           Encontro de contas · {monthLabel}
         </p>
@@ -222,7 +222,7 @@ function PersonalTab({ month, owner }: { month: string; owner: 'me' | 'partner' 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
       <div className="flex flex-col gap-4">
         {view.status === 'own' ? (
-          <section className="module p-5" aria-label="Transparência mútua">
+          <section className="module p-4 sm:p-5" aria-label="Transparência mútua">
             <Switch
               checked={me.sharePersonalFinances}
               onChange={setSharePersonal}
@@ -245,7 +245,7 @@ function PersonalTab({ month, owner }: { month: string; owner: 'me' | 'partner' 
             {view.ownerName} liberou a leitura · somente leitura
           </StatusBadge>
         )}
-        <section className="module p-5" data-testid="personal-total">
+        <section className="module p-4 sm:p-5" data-testid="personal-total">
           <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">
             {view.status === 'own' ? 'Meus gastos pessoais' : `Gastos pessoais de ${view.ownerName}`}
           </p>

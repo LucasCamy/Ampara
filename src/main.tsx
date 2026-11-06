@@ -13,10 +13,12 @@ import App from './App'
 import { startClocks } from './store/clock'
 import { uiStore } from './store/ui'
 import { startSync } from './sync/engine'
+import { startAuth } from './auth/session'
 
 document.documentElement.dataset.theme = uiStore.get().theme
 startClocks()
 startSync()
+void startAuth()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

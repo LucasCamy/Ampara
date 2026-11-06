@@ -61,18 +61,22 @@ export function AgendaScreen() {
       <div className="mb-4">
         <Title anchor="Agenda e tarefas," rest="no tempo certo." />
       </div>
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+        <div className="w-full lg:w-auto lg:min-w-[440px]">
         <Segmented<View>
           label="Visão da agenda"
           value={view}
           onChange={setView}
+          size="sm"
+          stretch
           options={[
             { value: 'DAY', label: 'Dia', testId: 'agenda-DAY' },
             { value: 'WEEK', label: 'Semana', testId: 'agenda-WEEK' },
             { value: 'MONTH', label: 'Mês', testId: 'agenda-MONTH' },
-            { value: 'INBOX', label: 'Caixa de Entrada', icon: Inbox, testId: 'agenda-INBOX' },
+            { value: 'INBOX', label: 'Caixa de Entrada', shortLabel: 'Entrada', testId: 'agenda-INBOX', ariaLabel: 'Caixa de Entrada' },
           ]}
         />
+        </div>
         <Segmented<ScopeFilter>
           label="Filtrar por pessoa"
           value={scope}

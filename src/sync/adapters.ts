@@ -28,22 +28,25 @@ const toRow = (payload: unknown): Record<string, unknown> =>
  * Ativado só quando VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY existem.
  */
 export function supabaseAdapter(url: string, anonKey: string, getAccessToken: () => string | null, coupleId: () => string): SyncAdapter {
-  const headers = () => ({
+  const headers = (token: string) => ({
     apikey: anonKey,
-    Authorization: `Bearer ${getAccessToken() ?? anonKey}`,
+    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     Prefer: 'resolution=merge-duplicates,return=minimal',
   })
   return {
     name: 'Supabase',
     async push(batch: OutboxEntry[]) {
+      // sem sessão de usuário não envia nada: a fila espera (nunca usa a chave anônima para gravar)
+      const token = getAccessToken()
+      if (!token) return []
       const accepted: string[] = []
       for (const e of batch) {
         const table = TABLES[e.entityType]
         const res =
           e.operation === 'DELETE'
-            ? await fetch(`${url}/rest/v1/${table}?id=eq.${encodeURIComponent(e.entityId)}`, { method: 'DELETE', headers: headers() })
-            : await fetch(`${url}/rest/v1/${table}`, { method: 'POST', headers: headers(), body: JSON.stringify(e.entityType === 'couple' ? toRow(e.payload) : { ...toRow(e.payload), couple_id: coupleId() }) })
+            ? await fetch(`${url}/rest/v1/${table}?id=eq.${encodeURIComponent(e.entityId)}`, { method: 'DELETE', headers: headers(token) })
+            : await fetch(`${url}/rest/v1/${table}`, { method: 'POST', headers: headers(token), body: JSON.stringify(e.entityType === 'couple' ? toRow(e.payload) : { ...toRow(e.payload), couple_id: coupleId() }) })
         if (res.ok) accepted.push(e.id)
       }
       return accepted

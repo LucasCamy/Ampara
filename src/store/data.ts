@@ -1,54 +1,16 @@
 import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
-import { buildSeed, uuid } from '../domain/seed'
+import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
 import type { Collections, CollectionName, DataState } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
-export const STORAGE_KEY = 'ampara:data:v1'
+/** Chave antiga (dados em texto claro, versão sem login). Migrada para o cofre e apagada no cadastro. */
+export const LEGACY_PLAINTEXT_KEY = 'ampara:data:v1'
 
-/** Persistência local estruturada (localStorage). Trocável por IndexedDB pela mesma interface. */
-export interface Persistence {
-  load(): DataState | null
-  save(state: DataState): void
-  clear(): void
-}
-
-export const localPersistence: Persistence = {
-  load() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) return null
-      const parsed = JSON.parse(raw) as DataState
-      return parsed.schemaVersion === 1 ? parsed : null
-    } catch {
-      return null
-    }
-  },
-  save(state) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    } catch {
-      /* cota cheia ou modo privado: estado segue em memória */
-    }
-  },
-  clear() {
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-    } catch {
-      /* noop */
-    }
-  },
-}
-
-function initialState(): DataState {
-  const loaded = typeof localStorage !== 'undefined' ? localPersistence.load() : null
-  if (loaded) return loaded
-  const seed = buildSeed(new Date())
-  if (typeof localStorage !== 'undefined') localPersistence.save(seed)
-  return seed
-}
-
-export const dataStore = createStore<DataState>(initialState())
-dataStore.subscribe(() => localPersistence.save(dataStore.get()))
+/**
+ * Estado em memória. Antes do login é um marcador vazio (nenhum dado real é lido sem a chave).
+ * A gravação cifrada é feita por src/auth/session.ts enquanto a sessão está aberta.
+ */
+export const dataStore = createStore<DataState>(buildEmpty(new Date()))
 
 export const useData = <S>(sel: (s: DataState) => S) => useStore(dataStore, sel)
 
@@ -112,7 +74,15 @@ export function transact(recipe: (tx: Tx) => void): () => void {
     })
 }
 
+/** Volta aos dados de exemplo mantendo nomes, convite e o vínculo do casal */
 export function resetData() {
-  const seed = buildSeed(new Date())
+  const cur = dataStore.get()
+  const A = cur.profiles.A!
+  const B = cur.profiles.B!
+  const seed = withIdentity(buildSeed(new Date()), {
+    a: { name: A.displayName, pronoun: A.pronoun },
+    b: { name: B.displayName, pronoun: B.pronoun },
+    inviteCode: cur.couple.couple?.inviteCode ?? '',
+  })
   dataStore.set(() => seed)
 }

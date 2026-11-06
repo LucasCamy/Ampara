@@ -8,6 +8,13 @@ import type { PartnerId, SplitRule, TxCategory, TxStatus } from '../../domain/ty
 import { addExpense } from '../../store/actions'
 import { useCouple, usePeople } from '../../store/hooks'
 
+/** Máscara de caixa eletrônico: os dígitos sempre entram pela direita */
+const caretToEnd = (e: { currentTarget: HTMLInputElement }) => {
+  const el = e.currentTarget
+  const end = el.value.length
+  if (el.selectionStart !== end || el.selectionEnd !== end) el.setSelectionRange(end, end)
+}
+
 export function ExpenseSheet({ params, onDone }: { params: Record<string, string>; onDone: () => void }) {
   const { viewer, partnerId, partner, me } = usePeople()
   const couple = useCouple()
@@ -54,6 +61,10 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
           inputMode="numeric"
           autoComplete="off"
           data-testid="expense-amount"
+          onFocus={caretToEnd}
+          onClick={caretToEnd}
+          onKeyDown={caretToEnd}
+          onSelect={caretToEnd}
           value={formatCents(cents)}
           onChange={(e) => {
             setCents(digitsToCents(e.target.value))

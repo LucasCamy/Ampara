@@ -1,6 +1,8 @@
 import { addDays, parseDateKey, toDateKey } from './dates'
 import { computeShares } from './finance'
 import type {
+  Couple,
+  Pronoun,
   CalendarEvent,
   DataState,
   DateKey,
@@ -180,4 +182,34 @@ export function buildSeed(now: Date): DataState {
     outbox: [],
     lastSyncedAt: iso,
   }
+}
+
+export interface CoupleIdentity {
+  a: { name: string; pronoun: Pronoun }
+  b: { name: string; pronoun: Pronoun }
+  inviteCode: string
+  splitMode?: Couple['splitMode']
+  shareA?: boolean
+  shareB?: boolean
+}
+
+/** Aplica nomes, pronomes, convite e preferências iniciais a um estado (exemplo ou vazio) */
+export function withIdentity(state: DataState, id: CoupleIdentity): DataState {
+  const couple = state.couple.couple
+  return {
+    ...state,
+    couple: couple
+      ? { couple: { ...couple, inviteCode: id.inviteCode, splitMode: id.splitMode ?? couple.splitMode } }
+      : state.couple,
+    profiles: {
+      A: { ...state.profiles.A!, displayName: id.a.name, pronoun: id.a.pronoun, sharePersonalFinances: id.shareA ?? state.profiles.A!.sharePersonalFinances },
+      B: { ...state.profiles.B!, displayName: id.b.name, pronoun: id.b.pronoun, sharePersonalFinances: id.shareB ?? state.profiles.B!.sharePersonalFinances },
+    },
+  }
+}
+
+/** Estado sem lançamentos: casal recém-criado que não quer dados de exemplo */
+export function buildEmpty(now: Date): DataState {
+  const seed = buildSeed(now)
+  return { ...seed, tasks: {}, events: {}, meds: {}, medLogs: {}, transactions: {}, helpRequests: {}, nudges: {}, outbox: [] }
 }

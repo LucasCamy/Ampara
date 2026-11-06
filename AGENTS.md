@@ -14,7 +14,8 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 - Tailwind CSS v4 (`@tailwindcss/vite`) com a paleta padrão **removida** (`--color-*: initial`)
 - `motion/react` para gavetas e toasts, `lucide-react` para ícones
 - `@fontsource/plus-jakarta-sans` (interface e display) e `@fontsource/jetbrains-mono` (dados)
-- Persistência local em `localStorage` estruturado por coleções + fila `sync_outbox`
+- Autenticação local obrigatória com cofre cifrado (WebCrypto: PBKDF2 600k + AES-GCM 256), ver `SECURITY.md`
+- Persistência local cifrada em `localStorage` (`ampara:vault:v1`) + fila `sync_outbox`
 - Vitest (domínio) e Playwright (E2E, usa o Microsoft Edge instalado via `channel: 'msedge'`)
 
 ## Comandos
@@ -22,9 +23,10 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | Servidor Vite em `http://localhost:5173` |
-| `npm run typecheck` | `tsc -b` sem emitir |
+| `npm run typecheck` | `tsc` (app + configs) sem emitir |
 | `npm run lint` | ESLint + `scripts/check-tokens.mjs` (hex solto, cor padrão do Tailwind, travessão longo, emoji em UI) |
-| `npm test` | Vitest dos motores de domínio (`src/domain/**/*.test.ts`) |
+| `npm test` | Vitest de domínio e do cofre (`src/**/*.test.ts`) |
+| `node scripts/audit-responsive.mjs` | Com `npm run dev` rodando: aponta menus cortados e botões estourando em 360/390 |
 | `npm run build` | Typecheck + build de produção em `dist/` |
 | `npm run e2e` | Build + `vite preview` + Playwright (larguras 360, 390, 1280, 1440; claro e escuro) |
 
@@ -34,6 +36,7 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 src/
   domain/      regras puras e testadas (finance, privacy, medication, outbox, tasks, dates, format)
   store/       stores externos (data, ui, clock) com useSyncExternalStore; ações estáveis
+  auth/        cofre cifrado, sessão, convite do par (crypto, vault, session)
   sync/        adaptadores de sincronização (loopback local e Supabase via REST)
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
   features/    telas: today, agenda, routines, finance, settings, sheets, shell
@@ -57,7 +60,12 @@ public/        manifest.webmanifest, ícones, sw.js
 7. **Formulários.** `label` acima, campo `>= 16px`, alvo `>= 48px`, erro inline com `role="alert"` + `aria-invalid`.
 8. **Desfazer em vez de confirmar.** Ações rápidas acontecem na hora e mostram `Toast` com `[Desfazer]` por 5 s.
 9. **Sem emoji como ícone estrutural** e sem travessão longo em texto visível. Ícones: Lucide.
-10. **Privacidade é regra de domínio.** Qualquer leitura de transações para um visualizador passa por
+10. **Nada antes do login.** Nenhuma tela lê dados sem sessão aberta. Nunca gravar dados ou senha em texto claro;
+    toda gravação passa por `src/auth/session.ts`. Quem está usando (`viewer`) vem da sessão, não de preferência.
+    Trocar de pessoa, apagar dados e gerar convite exigem senha.
+11. **Mobile primeiro de verdade.** Menus (`Segmented`) precisam caber em 360px: use `stretch` e `shortLabel`.
+    Rode `scripts/audit-responsive.mjs` depois de mexer em layout.
+12. **Privacidade é regra de domínio.** Qualquer leitura de transações para um visualizador passa por
     `src/domain/privacy.ts`. Nunca filtrar privacidade só na UI.
 
 ## Desempenho

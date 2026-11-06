@@ -37,6 +37,28 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 2 (2026-11-06): autenticação, responsividade e dependências
+
+- **Autenticação obrigatória** (decisão do usuário): cofre local cifrado, convite do par, sessão lembrada,
+  bloqueio por inatividade, step-up para ações sensíveis, recuperação por novo convite. Ver `SECURITY.md`.
+- **Divergência com o doc 04:** o doc prevê Supabase Auth. Sem projeto Supabase nesta sessão, a autenticação é
+  local e o adaptador de sync só grava com token de usuário. Ligar Supabase Auth é o próximo passo.
+- **Responsividade:** `Segmented` não rola mais horizontalmente (stretch + rótulo curto), cards do Hoje
+  compactos no celular, ações de tarefa com rótulos curtos, só a barra principal fica fixa no topo.
+- **Bugs corrigidos:** o campo de valor começava com o cursor antes de "R$" e o primeiro dígito entrava errado;
+  o foco automático da gaveta podia puxar o foco de volta enquanto a pessoa já digitava em outro campo;
+  reabrir uma gaveta durante a animação de saída reaproveitava a gaveta que estava saindo.
+
+| Verificação (2026-11-06) | Resultado |
+|---|---|
+| typecheck, lint + check-tokens | ok |
+| `npm test` | 49 testes (finanças, privacidade, remédio, outbox, cofre e recuperação) |
+| `npm audit` | 0 vulnerabilidades |
+| `npm run e2e` | 114 passando; 30 pulados por desenho (testes de acesso rodam em 3 dos 8 projetos) |
+| `scripts/audit-responsive.mjs` | 360 e 390: nenhum menu cortado, botão estourando ou overflow |
+- **npm:** 0 vulnerabilidades (override `minimatch@^11.0.5`), `lucide-react` e `motion` atualizados.
+  TypeScript fica em 6.x porque `typescript-eslint` ainda exige < 6.1.
+
 ## Validação executada (2026-11-05)
 
 | Verificação | Resultado |

@@ -88,7 +88,7 @@ export function TodayScreen() {
   const secondary = (
     <>
       {d.nudges.map((n) => (
-        <section key={n.id} className="module ledger-dashed p-5" aria-label="Lembrete carinhoso">
+        <section key={n.id} className="module ledger-dashed p-4 sm:p-5" aria-label="Lembrete carinhoso">
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">
             <HandHeart size={16} aria-hidden /> Lembrete carinhoso de {partner.displayName}
           </p>
@@ -106,7 +106,7 @@ export function TodayScreen() {
       ))}
 
       {d.helpAnswered.map((h) => (
-        <section key={h.id} className="module ledger-ok p-5" data-testid="help-answered">
+        <section key={h.id} className="module ledger-ok p-4 sm:p-5" data-testid="help-answered">
           <StatusBadge kind="ok">{h.response === 'TAKE_OVER' ? `${partner.displayName} assumiu` : `${partner.displayName} vai fazer junto`}</StatusBadge>
           <p className="mt-2 text-[16px] font-semibold text-ink">{h.situation}</p>
           <div className="mt-3">
@@ -130,7 +130,7 @@ export function TodayScreen() {
       {d.alerts.map((a) => {
         const sentAt = d.nudgedLogs.get(a.log.id)
         return (
-          <section key={a.log.id} className="module ledger-err p-5" data-testid="partner-delay-alert">
+          <section key={a.log.id} className="module ledger-err p-4 sm:p-5" data-testid="partner-delay-alert">
             <StatusBadge kind="late">Rede de apoio · atrasado</StatusBadge>
             <p className="mt-2 text-[16px] font-semibold text-ink">
               O remédio das <span className="font-data">{a.log.scheduledTime}</span> de {partner.displayName} ainda consta pendente.
@@ -276,17 +276,20 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
     const { med, log, view } = next.dose
     const days = stockDaysLeft(med)
     return (
-      <section className={cx('module p-5 sm:p-6', doseBorder(view))} aria-labelledby="agora-title" data-testid="now-card">
-        <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
-        <div className="mt-3 flex items-start gap-3">
-          <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-subtle text-ink">
+      <section className={cx('module p-4 sm:p-6', doseBorder(view))} aria-labelledby="agora-title" data-testid="now-card">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
+          <DoseStatus dose={next.dose} now={now} />
+        </div>
+        <div className="mt-2.5 flex items-start gap-3">
+          <span className="mt-0.5 hidden h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-subtle text-ink sm:inline-flex">
             <Pill size={22} aria-hidden />
           </span>
           <div className="min-w-0">
-            <h2 id="agora-title" className="text-[20px] leading-tight font-bold text-ink">
+            <h2 id="agora-title" className="text-[18px] leading-tight font-bold text-ink sm:text-[20px]">
               <span className="font-data">{log.scheduledTime}</span> · {med.name}
             </h2>
-            <p className="mt-1 text-[14px] text-muted">
+            <p className="mt-1 text-[13px] text-muted sm:text-[14px]">
               {med.dosage}
               {med.stockCount !== null ? (
                 <>
@@ -298,9 +301,6 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
           </div>
         </div>
         <div className="mt-3">
-          <DoseStatus dose={next.dose} now={now} />
-        </div>
-        <div className="mt-4">
           <DoseActions dose={next.dose} size={big} />
         </div>
       </section>
@@ -309,7 +309,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
   if (next.kind === 'event') {
     const { event, minutesUntil } = next
     return (
-      <section className="module ledger-dashed p-5 sm:p-6" data-testid="now-card">
+      <section className="module ledger-dashed p-4 sm:p-6" data-testid="now-card">
         <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
         <div className="mt-3 flex items-start gap-3">
           <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-subtle text-ink">
@@ -330,7 +330,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
   }
   if (next.kind === 'task') {
     return (
-      <section className="module p-5 sm:p-6" data-testid="now-card">
+      <section className="module p-4 sm:p-6" data-testid="now-card">
         <p className="mb-3 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
         <ul>
           <TaskRow task={next.task} />
@@ -339,7 +339,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
     )
   }
   return (
-    <section className="module p-5 sm:p-6" data-testid="now-card">
+    <section className="module p-4 sm:p-6" data-testid="now-card">
       <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
       <p className="mt-3 flex items-center gap-2 text-[18px] font-bold text-ink">
         <Sparkles size={20} aria-hidden className="text-action" /> Nada urgente para agora.
@@ -351,18 +351,18 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
 
 function HelpInCard({ req, partnerName }: { req: HelpRequest; partnerName: string }) {
   return (
-    <section className="module border border-err p-5" data-testid="help-request-card" aria-label={`Pedido de apoio de ${partnerName}`}>
+    <section className="module border border-err p-4 sm:p-5" data-testid="help-request-card" aria-label={`Pedido de apoio de ${partnerName}`}>
       <StatusBadge kind="sos">Pedido de apoio de {partnerName}</StatusBadge>
-      <p className="mt-3 text-[17px] font-bold text-ink">{req.situation}</p>
+      <p className="mt-2 text-[16px] font-bold text-ink sm:text-[17px]">{req.situation}</p>
       <p className="mt-1 text-[14px] text-muted">
         {HELP_TYPE[req.helpType]} · <span className="font-semibold text-ink">{URGENCY[req.urgency]}</span>
       </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="primary" icon={HandHeart} onClick={() => respondHelp(req.id, 'TAKE_OVER')} className="grow basis-[160px]" data-testid="help-take-over">
-          Deixa comigo (assumir)
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="primary" size="compact" icon={HandHeart} onClick={() => respondHelp(req.id, 'TAKE_OVER')} className="grow basis-[130px]" data-testid="help-take-over" aria-label="Deixa comigo (assumir)">
+          Deixa comigo
         </Button>
-        <Button variant="secondary" icon={HeartHandshake} onClick={() => respondHelp(req.id, 'TOGETHER')} className="grow basis-[160px]" data-testid="help-together">
-          Vamos fazer juntos
+        <Button variant="secondary" size="compact" icon={HeartHandshake} onClick={() => respondHelp(req.id, 'TOGETHER')} className="grow basis-[130px]" data-testid="help-together" aria-label="Vamos fazer juntos">
+          Fazer juntos
         </Button>
       </div>
     </section>

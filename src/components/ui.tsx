@@ -68,24 +68,32 @@ export function Segmented<T extends string>({
 }: {
   label: string
   value: T
-  options: { value: T; label: ReactNode; icon?: LucideIcon; testId?: string }[]
+  /** shortLabel aparece abaixo de 640px, quando o rótulo longo não cabe */
+  options: { value: T; label: ReactNode; shortLabel?: ReactNode; icon?: LucideIcon; testId?: string; ariaLabel?: string }[]
   onChange: (v: T) => void
   size?: 'sm' | 'md'
   stretch?: boolean
   hideLabel?: boolean
 }) {
   const id = useId()
+  const move = (from: number, dir: 1 | -1, el: HTMLElement) => {
+    const next = options[(from + dir + options.length) % options.length]
+    if (!next) return
+    onChange(next.value)
+    const radios = el.parentElement?.querySelectorAll<HTMLButtonElement>('[role=radio]')
+    radios?.[(from + dir + options.length) % options.length]?.focus()
+  }
   return (
-    <div>
+    <div className={stretch ? 'w-full' : 'max-w-full'}>
       <span id={id} className={hideLabel ? 'sr-only' : 'mb-1.5 block text-[13px] font-semibold text-muted'}>
         {label}
       </span>
       <div
         role="radiogroup"
         aria-labelledby={id}
-        className={cx('no-scrollbar flex gap-1 overflow-x-auto rounded-[16px] bg-subtle p-1', stretch && 'w-full')}
+        className={cx('gap-1 rounded-[16px] bg-subtle p-1', stretch ? 'flex w-full' : 'inline-flex max-w-full')}
       >
-        {options.map((o) => {
+        {options.map((o, i) => {
           const active = o.value === value
           const Icon = o.icon
           return (
@@ -94,17 +102,35 @@ export function Segmented<T extends string>({
               type="button"
               role="radio"
               aria-checked={active}
+              aria-label={o.ariaLabel}
+              tabIndex={active ? 0 : -1}
               data-testid={o.testId}
               onClick={() => onChange(o.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  move(i, 1, e.currentTarget)
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  move(i, -1, e.currentTarget)
+                }
+              }}
               className={cx(
-                'press inline-flex items-center justify-center gap-1.5 rounded-[12px] px-3 font-semibold whitespace-nowrap',
-                size === 'sm' ? 'min-h-10 text-[13px]' : 'min-h-11 text-[14px]',
-                stretch ? 'min-w-0 flex-1 px-2' : 'shrink-0',
+                'press inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[12px] font-semibold whitespace-nowrap',
+                size === 'sm' ? 'min-h-10 px-2.5 text-[13px]' : 'min-h-11 px-3 text-[14px]',
+                stretch ? 'flex-1 basis-0' : 'shrink',
                 active ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-muted',
               )}
             >
-              {Icon ? <Icon size={16} aria-hidden /> : null}
-              {o.label}
+              {Icon ? <Icon size={16} aria-hidden className="shrink-0" /> : null}
+              {o.shortLabel ? (
+                <>
+                  <span className="truncate sm:hidden">{o.shortLabel}</span>
+                  <span className="hidden truncate sm:inline">{o.label}</span>
+                </>
+              ) : (
+                <span className="truncate">{o.label}</span>
+              )}
             </button>
           )
         })}
@@ -226,7 +252,7 @@ export function Button({
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'quiet'
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'compact' | 'lg'
   icon?: LucideIcon
 }) {
   const variants = {
@@ -238,6 +264,8 @@ export function Button({
   const sizes = {
     sm: 'min-h-11 px-3.5 text-[14px] rounded-[14px]',
     md: 'min-h-12 px-4 text-[15px] rounded-[16px]',
+    /** alvo de 48px com menos respiro lateral, para dois botões lado a lado no celular */
+    compact: 'min-h-12 px-3 text-[14px] rounded-[16px]',
     lg: 'min-h-14 px-5 text-[16px] rounded-[18px]',
   }
   return (

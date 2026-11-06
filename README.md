@@ -6,7 +6,7 @@ confirmação em 2 estágios (Já engoli / Pegando água +5 min), pedido de apoi
 do casal com encontro de contas em centavos e privacidade ajustável (com presentes ocultos).
 
 > Especificação de produto em [`docs/`](docs/). Os documentos ainda usam o nome provisório "Nós".
-> Regras de trabalho em [`AGENTS.md`](AGENTS.md), sistema visual em [`DESIGN.md`](DESIGN.md),
+> Segurança e autenticação em [`SECURITY.md`](SECURITY.md). Regras de trabalho em [`AGENTS.md`](AGENTS.md), sistema visual em [`DESIGN.md`](DESIGN.md),
 > decisões e pendências em [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
 ## Rodar
@@ -16,8 +16,9 @@ npm install
 npm run dev
 ```
 
-Abra `http://localhost:5173`. Os dados de exemplo são criados no primeiro acesso e ficam salvos no aparelho.
-Use o seletor **Visão: Lucas / Visão: Namorada** no topo para testar os fluxos dos dois lados.
+Abra `http://localhost:5173`. No primeiro acesso você cria o espaço do casal com sua senha e recebe um
+**código de convite** para o par criar a senha própria. Os dados ficam cifrados no aparelho
+(detalhes em [`SECURITY.md`](SECURITY.md)). Tocar no nome do par no topo pede a senha dele(a).
 
 ## Scripts
 
@@ -25,7 +26,7 @@ Use o seletor **Visão: Lucas / Visão: Namorada** no topo para testar os fluxos
 |---|---|
 | `npm run typecheck` | TypeScript strict (app + configs) |
 | `npm run lint` | ESLint + guarda de tokens (sem hex solto, sem paleta do Tailwind, sem travessão longo, sem emoji) |
-| `npm test` | Vitest: motor financeiro, privacidade, máquina de estados do remédio, fila `sync_outbox` |
+| `npm test` | Vitest: motor financeiro, privacidade, remédio, fila `sync_outbox` e cofre de autenticação |
 | `npm run build` | Typecheck + build de produção |
 | `npm run e2e` | Playwright (Edge instalado) em 360, 390, 1280 e 1440 px, temas claro e escuro |
 

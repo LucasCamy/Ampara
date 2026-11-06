@@ -63,7 +63,7 @@ export function DoseActions({ dose, size = 'md', onAfter }: { dose: DoseItem; si
           takeDose(med.id, log.scheduledDate, log.scheduledTime)
           onAfter?.()
         }}
-        className="grow basis-[150px]"
+        className="grow basis-[120px]"
       >
         {routine ? 'Feito' : 'Já engoli'}
       </Button>
@@ -77,9 +77,15 @@ export function DoseActions({ dose, size = 'md', onAfter }: { dose: DoseItem; si
             snoozeDose(med.id, log.scheduledDate, log.scheduledTime)
             onAfter?.()
           }}
-          className="grow basis-[190px] border-dashed"
+          className="grow basis-[120px] border-dashed"
+          aria-label={view === 'SNOOZED_WATER' ? 'Mais 5 minutos pegando água' : 'Pegando água (+5 min)'}
         >
-          {view === 'SNOOZED_WATER' ? 'Mais 5 min' : 'Pegando água (+5 min)'}
+          {view === 'SNOOZED_WATER' ? 'Mais 5 min' : (
+            <>
+              <span className="sm:hidden">Água +5 min</span>
+              <span className="hidden sm:inline">Pegando água (+5 min)</span>
+            </>
+          )}
         </Button>
       ) : null}
     </div>
@@ -160,7 +166,7 @@ export function TaskRow({
                 aria-label={`Adiar para amanhã: ${task.title}`}
                 className="press hoverable inline-flex min-h-11 items-center gap-1 rounded-[12px] px-2 text-[13px] font-semibold text-action"
               >
-                <MoveRight size={15} aria-hidden /> Adiar para amanhã
+                <MoveRight size={15} aria-hidden /> <span className="sm:hidden">Amanhã</span><span className="hidden sm:inline">Adiar para amanhã</span>
               </button>
             ) : null}
             {actions.includes('send') && task.assignedTo === viewer ? (
@@ -170,7 +176,7 @@ export function TaskRow({
                 aria-label={`Enviar para ${partner.displayName}: ${task.title}`}
                 className="press hoverable inline-flex min-h-11 items-center gap-1 rounded-[12px] px-2 text-[13px] font-semibold text-action"
               >
-                <Mail size={15} aria-hidden /> Enviar para meu amor
+                <Mail size={15} aria-hidden /> <span className="sm:hidden">Enviar ao amor</span><span className="hidden sm:inline">Enviar para meu amor</span>
               </button>
             ) : null}
           </div>
