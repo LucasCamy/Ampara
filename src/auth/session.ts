@@ -5,6 +5,9 @@ import { dataStore, LEGACY_PLAINTEXT_KEY } from '../store/data'
 import { ui, uiStore } from '../store/ui'
 import {
   AuthError,
+  backupFileName,
+  parseBackup,
+  toBackup,
   changePassword as rewrap,
   claimInvite,
   createSingleVault,
@@ -453,4 +456,36 @@ export async function reinvitePartner(password: string): Promise<string> {
   if (couple) dataStore.set((s) => ({ ...s, couple: { couple: { ...couple, inviteCode: r.invite } } }))
   authStore.set((s) => ({ ...s, people: headerOf(r.vault) }))
   return r.invite
+}
+
+/* ---------- backup cifrado ---------- */
+
+/** Exporta o cofre (já cifrado) depois de confirmar a senha de quem está usando */
+export async function exportBackup(password: string): Promise<{ name: string; content: string }> {
+  const who = authStore.get().who
+  const v0 = loadVault()
+  if (!who || !v0) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+  await unlockVault(v0, who, password)
+  await writeChain // a última alteração já está no cofre
+  const v = loadVault() ?? v0
+  const now = new Date()
+  return { name: backupFileName(toDateKeyLocal(now)), content: toBackup(v, who, now.toISOString()) }
+}
+
+const toDateKeyLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/**
+ * Restaura um backup neste aparelho. Só troca o cofre depois que a senha abre o cofre do arquivo
+ * (quem não tem a senha não consegue nem substituir os dados). Depois a pessoa entra normalmente.
+ */
+export async function restoreBackup(text: string, who: PartnerId, password: string): Promise<void> {
+  const file = parseBackup(text)
+  await unlockVault(file.vault, who, password)
+  await writeChain
+  await forgetSession()
+  saveVault(file.vault)
+  localStorage.removeItem(ATTEMPTS_KEY)
+  closeSession(who)
+  broadcast('lock')
+  authStore.set((s) => ({ ...s, status: 'locked', people: headerOf(file.vault) }))
 }

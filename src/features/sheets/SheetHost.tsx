@@ -65,7 +65,17 @@ export function SheetHost() {
       testId={sheet ? `sheet-${sheet.kind}` : undefined}
       footer={
         submit && formId ? (
-          <Button type="submit" form={formId} variant="primary" size="lg" className="w-full" data-testid={submit.testId}>
+          <Button
+            // envia o formulário da PRÓPRIA gaveta: a que está saindo (reabrir em menos de 170 ms) tem o mesmo id
+            // e o atributo form="" pegaria o primeiro do documento, que é o dela
+            type="button"
+            form={formId}
+            onClick={(e) => e.currentTarget.closest('[role=dialog]')?.querySelector<HTMLFormElement>(`form#${formId}`)?.requestSubmit()}
+            variant="primary"
+            size="lg"
+            className="w-full"
+            data-testid={submit.testId}
+          >
             {submit.label}
           </Button>
         ) : undefined

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildSeed } from '../domain/seed'
 import { normalizeInvite } from './crypto'
-import { AuthError, changePassword, claimInvite, createVault, lockoutMs, readData, unlockVault, validatePassword, writeData } from './vault'
+import { AuthError, backupFileName, changePassword, claimInvite, createVault, lockoutMs, parseBackup, readData, toBackup, unlockVault, validatePassword, writeData } from './vault'
 
 const IT = 1_000 // iterações reduzidas só no teste; produção usa 600.000
 const data = buildSeed(new Date('2026-11-05T10:00:00'))
@@ -90,5 +90,26 @@ describe('recuperação de acesso pelo par', () => {
     await expect(unlockVault(r.vault, 'B', 'senha antiga da parceira')).rejects.toMatchObject({ code: 'NOT_ACTIVATED' })
     const again = await claimInvite(r.vault, 'B', r.invite, 'senha nova da parceira 2')
     await expect(unlockVault(again.vault, 'B', 'senha nova da parceira 2')).resolves.toBeTruthy()
+  })
+})
+
+describe('backup cifrado', () => {
+  it('o arquivo é o próprio cofre: sem senha nem dados em claro, e abre com a mesma senha', async () => {
+    const { vault } = await make()
+    const text = toBackup(vault, 'A', '2026-11-06T10:00:00.000Z')
+    expect(text).not.toContain('uma frase longa do lucas')
+    expect(text).not.toContain('Supermercado')
+    const file = parseBackup(text)
+    expect(file.exportedBy).toBe('A')
+    const key = await unlockVault(file.vault, 'A', 'uma frase longa do lucas')
+    expect((await readData(file.vault, key)).profiles.B?.displayName).toBe('Namorada')
+    await expect(unlockVault(file.vault, 'A', 'senha errada qualquer')).rejects.toBeInstanceOf(AuthError)
+  })
+
+  it('arquivo que não é backup do Ampara: erro claro', () => {
+    expect(() => parseBackup('não é json')).toThrow('não é um backup do Ampara')
+    expect(() => parseBackup(JSON.stringify({ format: 'outra-coisa', version: 1 }))).toThrow('não é um backup do Ampara')
+    expect(() => parseBackup(JSON.stringify({ format: 'ampara-backup', version: 1, vault: { v: 1 } }))).toThrow('não é um backup do Ampara')
+    expect(backupFileName('2026-11-06')).toBe('ampara-backup-2026-11-06.ampara')
   })
 })

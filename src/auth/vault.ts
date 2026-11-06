@@ -223,3 +223,37 @@ export async function openCloud(vault: Vault, key: CryptoKey, who: PartnerId): P
   const sealed = vault.people[who].cloud
   return sealed ? open(key, sealed, cloudAad(who)) : null
 }
+
+/* ---------- backup (o próprio cofre cifrado, num arquivo) ---------- */
+
+export const BACKUP_FORMAT = 'ampara-backup'
+
+export interface BackupFile {
+  format: typeof BACKUP_FORMAT
+  version: 1
+  exportedAt: string
+  /** quem exportou (só para a tela de restauração; não dá acesso a nada) */
+  exportedBy: PartnerId
+  vault: Vault
+}
+
+/** Arquivo de backup: o cofre continua cifrado; nada é decifrado para exportar */
+export function toBackup(vault: Vault, by: PartnerId, nowIso: string): string {
+  const file: BackupFile = { format: BACKUP_FORMAT, version: 1, exportedAt: nowIso, exportedBy: by, vault }
+  return JSON.stringify(file)
+}
+
+/** Lê um arquivo de backup. Erro em português quando não é um backup do Ampara. */
+export function parseBackup(text: string): BackupFile {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new Error('Este arquivo não é um backup do Ampara.')
+  }
+  const f = parsed as BackupFile
+  if (!f || f.format !== BACKUP_FORMAT || f.version !== 1 || !isVault(f.vault)) throw new Error('Este arquivo não é um backup do Ampara.')
+  return f
+}
+
+export const backupFileName = (date: string) => `ampara-backup-${date}.ampara`

@@ -4,6 +4,7 @@ import { Button, ChoiceChips, cx, SectionHeader, StatusBadge, Switch, Title } fr
 import type { PartnerId } from '../../domain/types'
 import { useAuth } from '../../auth/session'
 import { SecuritySection } from './SecuritySection'
+import { BackupSection } from './BackupSection'
 import { CloudSection } from './CloudSection'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
@@ -66,6 +67,8 @@ export function SettingsScreen() {
           </section>
 
           <SecuritySection partnerName={partner.displayName} />
+
+          <BackupSection />
 
           <CloudSection />
 

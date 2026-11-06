@@ -63,7 +63,8 @@ public/        manifest.webmanifest, ícones, sw.js
 6. **Gavetas no compositor.** Animar apenas `transform` em string e `opacity`. Sem `backdrop-filter`.
 7. **Formulários e alvos.** `label` acima, campo `>= 16px`, erro inline com `role="alert"` + `aria-invalid`. Campos e ações
    primárias `>= 48px` (`min-h-12`); controles compactos e filtros (`Segmented size="sm"`, ícones, pílula de sync) `>= 44px` (`min-h-11`).
-   Botão de salvar da gaveta vai no `footer` do `<Sheet>` (fora da rolagem) com `form="<id>"` (ver `src/features/sheets/forms.ts`).
+   Botão de salvar da gaveta vai no `footer` do `<Sheet>` (fora da rolagem) e envia o formulário da própria gaveta
+   (`requestSubmit` no `form#<id>` do mesmo diálogo; ver `SheetHost` e `src/features/sheets/forms.ts`).
 8. **Desfazer em vez de confirmar.** Ações rápidas acontecem na hora e mostram `Toast` com `[Desfazer]` por 5 s.
 9. **Sem emoji como ícone estrutural** e sem travessão longo em texto visível. Ícones: Lucide.
 10. **Nada antes do login.** Nenhuma tela lê dados sem sessão aberta. Nunca gravar dados ou senha em texto claro;

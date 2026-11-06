@@ -53,7 +53,23 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
    fica. Coberto por teste unitário e E2E.
 7. **Política por comando:** nas tabelas com privacidade (`tasks`, `events`, `medications`, `medication_logs`,
    `transactions`) não existe política "for all": no Postgres ela também vale para SELECT e soma com a leitura.
-   `validate.sql` falha se alguma aparecer.
+   `validate.sql` falha se alguma aparecer (a lista cresceu com as tabelas novas: ciclo, compras, datas, presentes,
+   check-in, "o que me acalma", fazer junto e caixinhas).
+8. **Dados de saúde e surpresas:** ciclo menstrual (`cycle_settings`/`cycle_logs`) só a dona grava; o par lê a janela
+   ou os registros conforme ela escolheu, e com "Só eu vejo" a linha de ajustes não diz nada (janela nula por check no
+   banco, durações mascaradas pelo app). Ideias de presente (`gift_ideas`) só quem anotou lê ou grava. Nos dois casos a
+   tela também filtra por regra de domínio (`src/domain/cycle.ts`, `src/domain/specialDates.ts`), o que vale no aparelho
+   compartilhado.
+
+## Backup cifrado
+
+- O arquivo `.ampara` é o próprio cofre (PBKDF2 600k + AES-GCM 256), sem decifrar nada: sem a senha ele não abre.
+  Exportar pede a senha de novo. O arquivo não tem senha nem dado do casal em texto claro (coberto por teste e E2E);
+  só os nomes do cabeçalho, como no cofre local.
+- Restaurar só substitui o cofre deste aparelho depois que a senha abre o cofre do arquivo; com dados no aparelho,
+  pede confirmação explícita. Depois a pessoa entra normalmente (sessão lembrada e tentativas são zeradas).
+- O backup carrega a sessão da nuvem cifrada (refresh token). Quem tiver o arquivo e a senha entra na conta: guarde
+  o arquivo como guardaria a senha.
 
 ## Mapeamento das classes da skill
 

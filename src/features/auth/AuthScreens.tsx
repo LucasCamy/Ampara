@@ -1,4 +1,4 @@
-import { CircleCheck, Cloud, Copy, Eye, EyeOff, KeyRound, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react'
+import { CircleCheck, Cloud, Copy, Eye, EyeOff, KeyRound, LockKeyhole, ShieldCheck, Upload, UserRound } from 'lucide-react'
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { activate, enterApp, login, lockedUntil, setup, useAuth, type PersonHeader } from '../../auth/session'
 import { validatePassword } from '../../auth/vault'
@@ -6,6 +6,7 @@ import { Button, ChoiceChips, cx, FieldError, Segmented, Switch, Title } from '.
 import { enterFromCloud, useCloud } from '../../sync/cloud'
 import type { PartnerId, Pronoun, SplitMode } from '../../domain/types'
 import { ThemeToggle } from '../shell/TopBar'
+import { RestoreForm } from '../settings/BackupSection'
 
 function Shell({ children }: { children: ReactNode }) {
   return (
@@ -191,6 +192,7 @@ function CloudEntryScreen({ onBack }: { onBack: () => void }) {
 
 function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => void }) {
   const hasLegacy = useAuth((s) => s.hasLegacyData)
+  const [restoring, setRestoring] = useState(false)
   const [name, setName] = useState('')
   const [pronoun, setPronoun] = useState<Pronoun>('ele')
   const [pw, setPw] = useState('')
@@ -246,6 +248,21 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
           </Button>
         </div>
       ) : null}
+      <div className="card mt-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 flex-1 basis-[200px] text-[14px] text-ink">
+            <strong>Trocou de celular?</strong> Volte com o arquivo de backup.
+          </p>
+          <Button variant="quiet" icon={Upload} onClick={() => setRestoring((r) => !r)} aria-expanded={restoring} data-testid="setup-restore">
+            Restaurar backup
+          </Button>
+        </div>
+        {restoring ? (
+          <div className="mt-4 border-t border-line pt-4">
+            <RestoreForm replacing={false} />
+          </div>
+        ) : null}
+      </div>
       <form onSubmit={submit} noValidate className="module mt-6 flex flex-col gap-5 p-4 sm:p-6" data-testid="setup-form">
         <div className="flex flex-col gap-4">
           <h2 className="text-[16px] font-bold text-ink">Você</h2>

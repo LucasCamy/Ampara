@@ -37,6 +37,16 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 15 (2026-11-06): backup cifrado
+
+- Ajustes › Backup: "Baixar backup" (pede a senha) gera `ampara-backup-AAAA-MM-DD.ampara`, que é o próprio cofre
+  cifrado. "Restaurar" (Ajustes, com confirmação de substituir) e "Restaurar backup" na primeira tela de um celular
+  novo: o cofre só é trocado depois que a senha abre o do arquivo; depois a pessoa entra normalmente.
+- Reduz o risco de limpeza de armazenamento do Safari (ver Pendências) para quem não usa a nuvem.
+- **Correção de raiz achada no E2E:** reabrir uma gaveta enquanto a anterior ainda saía deixava dois formulários com
+  o mesmo `id`, e o botão `form="..."` enviava o da gaveta velha (o erro inline não aparecia). O botão agora envia o
+  formulário do próprio diálogo (`requestSubmit`). Explica a instabilidade do `pill.spec` vista na iteração 11.
+
 ## Iteração 14 (2026-11-06): fazer junto (body doubling) e caixinhas
 
 - **Fazer junto** (aba Nós): tarefa de hoje em 1 toque ou escrita, 15/25/45 min. O par recebe o convite no Hoje
@@ -273,5 +283,5 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   `src/domain` é puro e reaproveitável).
 - **Supabase:** adaptador e schema prontos, não conectados (sem credenciais nesta sessão). O pareamento é simulado
   com código de convite local.
-- **IndexedDB vs. limpeza do Safari:** iOS pode limpar armazenamento de sites pouco usados; instalar na Tela de
+- **IndexedDB vs. limpeza do Safari:** (mitigado pelo backup cifrado da iteração 15) iOS pode limpar armazenamento de sites pouco usados; instalar na Tela de
   Início reduz o risco. Sync com Supabase resolve de vez.
