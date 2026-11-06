@@ -106,4 +106,26 @@ describe('editar e excluir', () => {
     expect(dataStore.get().events[eid]).toBeUndefined()
     expect(deleteEvent(eid)).toBe(false)
   })
+
+  it('excluir remédio leva a tarefa "Repor estoque" pendente; Desfazer devolve os dois', async () => {
+    const { deleteMedication, saveMedication } = await import('./actions')
+    const id = saveMedication(medInput)!
+    const base = { createdBy: 'B', assignedTo: 'B', effort: 'QUICK_5M', dueDate: null, dueTime: null, visibleToPartner: true, sentBy: null, completedAt: null, completedBy: null, sourceMedicationId: id, createdAt: '', updatedAt: '' } as const
+    dataStore.set((s) => ({
+      ...s,
+      tasks: {
+        ...s.tasks,
+        repor: { ...base, id: 'repor', title: 'Repor Venvanse', status: 'PENDING' },
+        antiga: { ...base, id: 'antiga', title: 'Repor Venvanse (feito)', status: 'DONE' },
+      },
+    }))
+    expect(deleteMedication(id)).toBe(true)
+    const s = dataStore.get()
+    expect(s.tasks.repor).toBeUndefined()
+    expect(s.tasks.antiga).toBeTruthy() // concluída fica no histórico
+    expect(s.outbox.some((e) => e.entityId === 'repor' && e.operation === 'DELETE')).toBe(true)
+    lastToast()[1].undo!()
+    expect(dataStore.get().meds[id]).toBeTruthy()
+    expect(dataStore.get().tasks.repor?.status).toBe('PENDING')
+  })
 })

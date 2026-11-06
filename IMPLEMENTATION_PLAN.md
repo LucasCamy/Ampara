@@ -53,6 +53,33 @@
 - Pendente da análise: quantidade de reposição por caixa (hoje "Repor 30"), dias da semana para remédio, junção
   do dock com a navegação no celular, tom da dose muito atrasada, divisão do bundle, realtime e push.
 
+## Iteração 8 (2026-11-06): privacidade no servidor, autorização vencida e ajustes
+
+- **RLS (`supabase/schema.sql`):** sem política "for all" nas tabelas com privacidade.
+  - `events`: `events_read/insert/update/delete` com `owner_id is null or owner_id = my_partner_id()`. O compromisso
+    "Meu · só você vê" não chega ao par, e ele(a) não altera nem apaga.
+  - `medications`: `meds_insert/update/delete`, com `with check` de dono. Ninguém cria remédio no nome do outro nem
+    passa o seu para ele(a).
+  - `medication_logs`: `logs_*` seguem o remédio (subconsulta sob o RLS de `medications`). Dose de remédio sem rede
+    de apoio não desce mais para o par.
+  - `transactions`: `tx_insert/update/delete`. Não havia vazamento, mas a regra 11 vale para todas.
+  - Espelho em `e2e/fake-supabase.ts` (`canRead` e `canWrite` novos) e 5 casos novos em `validate.sql`, incluindo
+    um que falha se aparecer política "for all" nessas tabelas.
+- Correção da análise anterior: `meds_write` "for all" não vazava leitura, porque o `using` dela já estava contido
+  em `meds_read`. O problema real era o `with check` sem dono.
+- **Autorização vencida:**
+  - O pull incremental não avisa quando uma linha deixa de ser visível. Por isso, num aparelho de uma pessoa só,
+    cada descida também pede os ids visíveis de tarefas, compromissos e remédios (`listIds`).
+  - `purgeUnauthorized` apaga as cópias que sumiram, junto com as doses e as entradas da fila delas. O que ainda
+    está na fila, ou mudou depois do pedido, fica.
+  - E2E: o compromisso do casal que virou "só você vê" some do aparelho do par.
+- **Excluir remédio** leva a tarefa pendente "Repor estoque" (`sourceMedicationId`), e o Desfazer devolve as duas.
+  `EventSheet` usa `useNow()` como data inicial.
+- **Semana no computador:** botão de concluir e reabrir no card (`CircleDashed` / `CircleCheck` + "Feita" +
+  `ledger-ok`), com Desfazer.
+- **Validação:** `db:check` (18 verificações), 83 testes de unidade, 146 E2E, `e2e:local` 2/2 e
+  `audit-responsive` sem problemas.
+
 ## Iteração 7 (2026-11-06): data e hora com a cara do app
 
 - Decisão: manter o seletor nativo (roda do iOS, diálogo do Android, teclado e leitor de tela de graça) e

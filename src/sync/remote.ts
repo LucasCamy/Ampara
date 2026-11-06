@@ -191,3 +191,13 @@ export async function pullRows(cfg: RemoteConfig, token: string, collection: Col
   if (since) params.set('synced_at', `gt.${since}`)
   return (await call(cfg, `/rest/v1/${TABLES[collection]}?${params.toString()}`, { method: 'GET', token })) as Record<string, unknown>[]
 }
+
+/**
+ * Só os ids que o RLS ainda mostra (sem cursor). Serve para achar cópias locais que perderam a
+ * autorização: o pull incremental nunca avisa que uma linha deixou de ser visível.
+ */
+export async function listIds(cfg: RemoteConfig, token: string, collection: CollectionName, spaceId: string): Promise<Set<string>> {
+  const params = new URLSearchParams({ select: 'id', couple_id: `eq.${spaceId}` })
+  const rows = (await call(cfg, `/rest/v1/${TABLES[collection]}?${params.toString()}`, { method: 'GET', token })) as { id: string }[]
+  return new Set(rows.map((r) => String(r.id)))
+}

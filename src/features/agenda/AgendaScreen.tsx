@@ -1,4 +1,4 @@
-import { CalendarPlus, ChevronLeft, ChevronRight, Inbox, ListPlus, Mail, MoveRight, Sun } from 'lucide-react'
+import { CalendarPlus, CircleCheck, CircleDashed, ChevronLeft, ChevronRight, Inbox, ListPlus, Mail, MoveRight, Sun } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { TaskRow } from '../../components/domain'
 import { Button, cx, EditButton, EmptyState, OwnerTag, Segmented, StatusBadge, Title } from '../../components/ui'
@@ -8,7 +8,7 @@ import { isScheduledOn } from '../../domain/medication'
 import { dayLoad, filterTasks, inboxTasks, matchesScope, tasksForDay, type DayLoad, type ScopeFilter } from '../../domain/tasks'
 import { eventsVisibleTo } from '../../domain/today'
 import type { CalendarEvent, DateKey, Medication, Transaction } from '../../domain/types'
-import { postponeTask, scheduleTaskToday, sendTaskToPartner } from '../../store/actions'
+import { postponeTask, scheduleTaskToday, sendTaskToPartner, toggleTask } from '../../store/actions'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
 import { ownerLabel, possessive, toneOf, usePeople } from '../../store/hooks'
@@ -292,10 +292,27 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
             </ul>
             <ul className="hidden flex-col gap-1 lg:flex">
               {ts.map((t) => (
-                <li key={t.id} className={cx('min-w-0 rounded-[12px] border px-2 pt-1.5 text-[13px] break-words', t.status === 'DONE' ? 'border-ok pb-1.5 text-muted line-through' : 'border-line text-ink')}>
-                  {t.title}
+                <li key={t.id} data-testid="week-task" className={cx('min-w-0 rounded-[12px] px-1 text-[13px]', t.status === 'DONE' ? 'ledger-ok pb-1' : 'border border-line')}>
+                  {/* Concluir/reabrir: CircleDashed (pendente) ou CircleCheck + "Feita" + traço sólido (regra 3) */}
+                  <span className="flex min-w-0 items-start">
+                    <button
+                      type="button"
+                      aria-pressed={t.status === 'DONE'}
+                      onClick={() => toggleTask(t.id)}
+                      aria-label={t.status === 'DONE' ? `Reabrir: ${t.title}` : `Concluir: ${t.title}`}
+                      title={t.status === 'DONE' ? 'Reabrir' : 'Concluir'}
+                      data-testid="week-task-toggle"
+                      className={cx('press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px]', t.status === 'DONE' ? 'text-ok' : 'hoverable text-muted')}
+                    >
+                      {t.status === 'DONE' ? <CircleCheck size={20} aria-hidden /> : <CircleDashed size={20} aria-hidden />}
+                    </button>
+                    <span className="min-w-0 flex-1 py-3 leading-snug break-words">
+                      <span className={t.status === 'DONE' ? 'text-muted line-through' : 'text-ink'}>{t.title}</span>
+                      {t.status === 'DONE' ? <span className="block text-[12px] font-semibold text-ok">Feita</span> : null}
+                    </span>
+                  </span>
                   {t.status === 'PENDING' ? (
-                    <span className="-mx-1 flex">
+                    <span className="flex">
                       <button
                         type="button"
                         onClick={() => postponeTask(t.id)}

@@ -401,12 +401,21 @@ export const addMedication = (input: MedicationInput) => saveMedication(input)
 export const addRoutine = (input: RoutineInput) => saveRoutine(input)
 export const addEvent = (input: EventInput) => saveEvent(input)
 
-/** Excluir na hora, com Desfazer (regra 8). Registros de doses antigas ficam no histórico. */
+/**
+ * Excluir na hora, com Desfazer (regra 8). Registros de doses antigas ficam no histórico.
+ * A tarefa automática "Repor estoque" ainda pendente sai junto (sem remédio ela não faz sentido) e o
+ * Desfazer devolve os dois na mesma operação. Tarefa já concluída fica no histórico.
+ */
 export function deleteMedication(id: string): boolean {
   const med = dataStore.get().meds[id]
   const allowed = med && (med.kind === 'ROUTINE' || med.ownerId === viewer())
   if (!med || !allowed) return false
-  const undo = transact((tx) => tx.remove('meds', id))
+  const undo = transact((tx) => {
+    tx.remove('meds', id)
+    for (const t of Object.values(tx.state().tasks)) {
+      if (t.sourceMedicationId === id && t.status === 'PENDING') tx.remove('tasks', t.id)
+    }
+  })
   ui.toast(`${med.kind === 'ROUTINE' ? 'Rotina excluída' : 'Remédio excluído'} · ${med.name}`, { undo, tone: 'info' })
   return true
 }

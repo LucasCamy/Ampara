@@ -1,6 +1,6 @@
 import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
 import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
-import type { Collections, CollectionName, DataState, Medication, PartnerId, Task, Transaction } from '../domain/types'
+import type { CalendarEvent, Collections, CollectionName, DataState, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 /** Chave antiga (dados em texto claro, versão sem login). Migrada para o cofre e apagada no cadastro. */
@@ -108,13 +108,23 @@ export function enqueueAll(who: PartnerId) {
       const t = e as Task
       return t.assignedTo == null || t.assignedTo === who || t.sentBy === who || t.visibleToPartner
     }
+    if (c === 'events') {
+      // espelho de events_insert: compromisso "só você vê" do par não sobe deste aparelho
+      const ev = e as CalendarEvent
+      return ev.ownerId == null || ev.ownerId === who
+    }
     return true
   }
   dataStore.set((s) => {
+    // espelho de logs_insert: dose só de remédio visível (meu, da casa ou do par com rede de apoio)
+    const logOk = (e: unknown) => {
+      const m = s.meds[(e as MedicationLog).medicationId]
+      return !!m && (m.ownerId == null || m.ownerId === who || m.notifyPartnerOnDelay)
+    }
     let outbox = s.outbox
     for (const c of ['couple', 'profiles', 'tasks', 'events', 'meds', 'medLogs', 'transactions', 'helpRequests', 'nudges'] as CollectionName[]) {
       for (const [id, entity] of Object.entries(s[c])) {
-        if (mine(c, entity)) outbox = enqueue(outbox, makeEntry(c, id, 'UPSERT', entity, nowMs, uuid()))
+        if (c === 'medLogs' ? logOk(entity) : mine(c, entity)) outbox = enqueue(outbox, makeEntry(c, id, 'UPSERT', entity, nowMs, uuid()))
       }
     }
     return { ...s, outbox }

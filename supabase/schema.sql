@@ -164,14 +164,32 @@ drop policy if exists couple_rw on couples;
 create policy couple_rw on couples for all using (id = my_couple_id()) with check (id = my_couple_id());
 drop policy if exists couple_rw on profiles;
 create policy couple_rw on profiles for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+-- events e medication_logs têm políticas próprias mais abaixo (privacidade); a antiga "couple_rw" sai
 drop policy if exists couple_rw on events;
-create policy couple_rw on events for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 drop policy if exists couple_rw on help_requests;
 create policy couple_rw on help_requests for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 drop policy if exists couple_rw on nudges;
 create policy couple_rw on nudges for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 drop policy if exists couple_rw on medication_logs;
-create policy couple_rw on medication_logs for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- Compromissos: do casal (owner_id nulo) ou meus. "Meu · só você vê" não chega ao par nem pode ser
+-- alterado por ele(a). Gravação por comando: "for all" também valeria para SELECT.
+drop policy if exists events_read on events;
+create policy events_read on events for select using (
+  couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id())
+);
+drop policy if exists events_insert on events;
+create policy events_insert on events for insert with check (
+  couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id())
+);
+drop policy if exists events_update on events;
+create policy events_update on events for update using (
+  couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id())
+) with check (couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id()));
+drop policy if exists events_delete on events;
+create policy events_delete on events for delete using (
+  couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id())
+);
 
 -- Tarefas: do casal, minhas, enviadas por mim ou visíveis pelo dono (arquivadas também descem, para o
 -- arquivamento chegar ao outro aparelho; o app as esconde)
@@ -204,9 +222,39 @@ drop policy if exists meds_read on medications;
 create policy meds_read on medications for select using (
   couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id() or notify_partner_on_delay)
 );
+-- Gravar só o que é meu ou rotina da casa; o with check impede criar ou passar um remédio para o nome do par
 drop policy if exists meds_write on medications;
-create policy meds_write on medications for all using (couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id()))
-  with check (couple_id = my_couple_id());
+drop policy if exists meds_insert on medications;
+create policy meds_insert on medications for insert with check (
+  couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id())
+);
+drop policy if exists meds_update on medications;
+create policy meds_update on medications for update using (
+  couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id())
+) with check (couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id()));
+drop policy if exists meds_delete on medications;
+create policy meds_delete on medications for delete using (
+  couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id())
+);
+
+-- Doses: seguem o remédio. Só existe dose visível de remédio visível (meu, da casa ou com rede de apoio);
+-- a subconsulta passa pelo RLS de medications. Quem apoia confirma a dose do par, então grava também.
+drop policy if exists logs_read on medication_logs;
+create policy logs_read on medication_logs for select using (
+  couple_id = my_couple_id() and exists (select 1 from medications m where m.id = medication_logs.medication_id)
+);
+drop policy if exists logs_insert on medication_logs;
+create policy logs_insert on medication_logs for insert with check (
+  couple_id = my_couple_id() and exists (select 1 from medications m where m.id = medication_logs.medication_id)
+);
+drop policy if exists logs_update on medication_logs;
+create policy logs_update on medication_logs for update using (
+  couple_id = my_couple_id() and exists (select 1 from medications m where m.id = medication_logs.medication_id)
+) with check (couple_id = my_couple_id() and exists (select 1 from medications m where m.id = medication_logs.medication_id));
+drop policy if exists logs_delete on medication_logs;
+create policy logs_delete on medication_logs for delete using (
+  couple_id = my_couple_id() and exists (select 1 from medications m where m.id = medication_logs.medication_id)
+);
 
 -- Privacidade financeira (doc 04, seção 4): espelho de src/domain/privacy.ts
 drop policy if exists tx_read on transactions;
@@ -224,9 +272,18 @@ create policy tx_read on transactions for select using (
 );
 -- Só o autor grava lançamentos pessoais; gastos do casal qualquer um dos dois
 drop policy if exists tx_write on transactions;
-create policy tx_write on transactions for all using (
+drop policy if exists tx_insert on transactions;
+create policy tx_insert on transactions for insert with check (
+  couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id())
+);
+drop policy if exists tx_update on transactions;
+create policy tx_update on transactions for update using (
   couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id())
 ) with check (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()));
+drop policy if exists tx_delete on transactions;
+create policy tx_delete on transactions for delete using (
+  couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id())
+);
 
 -- =====================================================================
 -- Iteração 3: nuvem entre aparelhos (pareamento por convite + exclusão lógica)

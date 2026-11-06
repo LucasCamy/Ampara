@@ -103,6 +103,24 @@ test('nuvem: cada um no seu celular, com sync e privacidade aplicada pelo servid
   await expect(b.getByTestId('personal-closed')).toBeVisible({ timeout: 15_000 })
   await expect(b.getByText('Café com o time')).toHaveCount(0)
 
+  // ---- Compromisso do casal vira "Meu · só você vê": o servidor para de entregar e a cópia dela sai
+  await goTab(b, 'agenda')
+  const jantarB = b.getByTestId('event-row').filter({ hasText: 'Jantar com a família' })
+  await expect(jantarB).toHaveCount(1)
+  await expect(b.getByText('Reunião de alinhamento')).toHaveCount(0) // "só você vê" do Lucas nunca desceu
+  await goTab(page, 'agenda')
+  await page.getByTestId('event-row').filter({ hasText: 'Jantar com a família' }).getByTestId('event-edit').click()
+  const ev = page.getByTestId('sheet-event')
+  await ev.getByRole('radio', { name: /Meu/ }).click()
+  await ev.getByTestId('event-save').click()
+  await expect(ev).toBeHidden()
+  await expect.poll(() => rows('events').find((r) => r.title === 'Jantar com a família')?.owner_id, { timeout: 20_000, message: 'falhas: ' + server.failures.join(' | ') }).toBe('A')
+  await goTab(b, 'ajustes')
+  await b.getByTestId('cloud-sync').click()
+  await goTab(b, 'agenda')
+  await expect(jantarB).toHaveCount(0, { timeout: 15_000 })
+  expect(server.failures).toEqual([])
+
   expect(errorsB).toEqual([])
   await ctxB.close()
 })

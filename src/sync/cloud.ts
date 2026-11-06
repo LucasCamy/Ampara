@@ -1,6 +1,6 @@
 import { isSingleDevice, onSessionChange, readCloudSecret, setupFromCloud, useAuth, writeCloudSecret, authStore } from '../auth/session'
 import { validatePassword } from '../auth/vault'
-import { applyRemote, purgeUnauthorized } from '../domain/merge'
+import { applyRemote, purgeUnauthorized, type VisibleIds } from '../domain/merge'
 import type { SyncAdapter } from '../domain/outbox'
 import { buildEmpty, uuid } from '../domain/seed'
 import type { CollectionName, DataState, PartnerId, Profile } from '../domain/types'
@@ -9,6 +9,7 @@ import { dataStore, enqueueAll } from '../store/data'
 import {
   friendlyAuthError,
   fromRow,
+  listIds,
   pullRows,
   refresh,
   remoteConfig,
@@ -137,6 +138,11 @@ export async function pull(): Promise<number> {
   const space = spaceId()
   const from = secret
   if (!cfg || !token || !space || !from) return 0
+  const single = isSingleDevice()
+  // Autorização vencida: o que ainda sobe (fila) e o que mudar depois deste instante não pode sair
+  const since = new Date().toISOString()
+  const unsynced = () => new Set(dataStore.get().outbox.filter((e) => e.status !== 'SYNCED').map((e) => e.entityId))
+  const protectAtStart = unsynced()
   // 1) baixa tudo primeiro (pode demorar; o usuário continua usando o app)
   let cursor = from.cursor
   const batches: { c: CollectionName; rows: ReturnType<typeof fromRow>[] }[] = []
@@ -161,10 +167,14 @@ export async function pull(): Promise<number> {
     batches.length = 0
     batches.push(...rest, { c: 'transactions', rows: all })
   }
+  // ids que o servidor ainda mostra: o pull incremental nunca avisa que algo deixou de ser visível
+  const visible: VisibleIds = single
+    ? { tasks: await listIds(cfg, token, 'tasks', space), events: await listIds(cfg, token, 'events', space), meds: await listIds(cfg, token, 'meds', space) }
+    : {}
   if (secret !== from) return 0 // sessão fechada ou trocada durante o download
   // 2) aplica de uma vez sobre o estado MAIS RECENTE (evita atualização perdida de quem editou no meio)
   let changed = 0
-  const single = isSingleDevice()
+  const protect = new Set([...protectAtStart, ...unsynced()])
   dataStore.set((cur) => {
     let state = cur
     for (const { c, rows } of batches) {
@@ -172,7 +182,7 @@ export async function pull(): Promise<number> {
       state = r.state
       changed += r.changed
     }
-    return who && single ? purgeUnauthorized(state, who) : state
+    return who && single ? purgeUnauthorized(state, who, { visible, protect, since }) : state
   })
   if (cursor !== from.cursor) {
     secret = { ...from, ...(secret ?? {}), cursor }

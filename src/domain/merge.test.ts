@@ -58,4 +58,58 @@ describe('merge de sincronização', () => {
     const open = { ...base, profiles: { ...base.profiles, B: { ...base.profiles.B!, sharePersonalFinances: true } } }
     expect(purgeUnauthorized(open, 'A').transactions[partnerTx.id]).toBeTruthy()
   })
+
+  describe('autorização vencida em remédios, compromissos e tarefas', () => {
+    const find = <T extends { id: string }>(m: Record<string, T>, f: (x: T) => boolean) => Object.values(m).find(f) as T
+    const magnesio = find(base.meds, (m) => m.name === 'Magnésio') // da B, sem rede de apoio
+    const anticoncepcional = find(base.meds, (m) => m.name === 'Anticoncepcional') // da B, com rede de apoio
+    const gato = find(base.meds, (m) => m.name === 'Remédio do gato')
+    const exame = find(base.events, (e) => e.title === 'Exame de rotina') // "só você vê" da B
+    const jantar = find(base.events, (e) => e.title === 'Jantar com a família')
+    const orcamento = find(base.tasks, (t) => t.title === 'Revisar orçamento da viagem') // privada da B
+    const doseDela = { ...log('PENDING', '2026-11-06T09:00:00Z'), id: 'x@1', medicationId: anticoncepcional.id }
+
+    it('regras locais: tira o que é privado do par, mantém o que é meu, do casal e da rede de apoio', () => {
+      const p = purgeUnauthorized({ ...base, medLogs: { [doseDela.id]: doseDela } }, 'A')
+      expect(p.meds[magnesio.id]).toBeUndefined()
+      expect(p.events[exame.id]).toBeUndefined()
+      expect(p.tasks[orcamento.id]).toBeUndefined()
+      expect(p.meds[anticoncepcional.id]).toBeTruthy()
+      expect(p.medLogs[doseDela.id]).toBeTruthy()
+      expect(p.meds[gato.id] && p.events[jantar.id]).toBeTruthy()
+      expect(Object.values(p.meds).filter((m) => m.ownerId === 'A')).toHaveLength(2)
+    })
+
+    it('rede de apoio desligada lá: a cópia antiga (ainda "ligada") sai pela lista do servidor, com as doses e a fila', () => {
+      const s = {
+        ...base,
+        medLogs: { [doseDela.id]: doseDela },
+        outbox: [{ id: 'o1', entityType: 'medLogs' as const, entityId: doseDela.id, operation: 'UPSERT' as const, payload: doseDela, hlc: '1', status: 'FAILED' as const, attempts: 3 }],
+      }
+      const visible = { meds: new Set(Object.keys(base.meds).filter((id) => id !== anticoncepcional.id)), events: new Set(Object.keys(base.events)), tasks: new Set(Object.keys(base.tasks)) }
+      const p = purgeUnauthorized(s, 'A', { visible, since: '2026-11-07T00:00:00Z' })
+      expect(p.meds[anticoncepcional.id]).toBeUndefined()
+      expect(p.medLogs[doseDela.id]).toBeUndefined()
+      expect(p.outbox).toHaveLength(0)
+    })
+
+    it('compromisso do casal que virou "só você vê" do par sai; o que ainda está subindo ou mudou agora fica', () => {
+      const novo = { ...jantar, id: 'novo-local', updatedAt: '2026-11-07T00:00:01Z' }
+      const subindo = { ...jantar, id: 'subindo', updatedAt: '2026-11-06T08:00:00Z' }
+      const s = { ...base, events: { ...base.events, [novo.id]: novo, [subindo.id]: subindo } }
+      const visible = { events: new Set(Object.keys(base.events).filter((id) => id !== jantar.id)) }
+      const p = purgeUnauthorized(s, 'A', { visible, protect: new Set(['subindo']), since: '2026-11-07T00:00:00Z' })
+      expect(p.events[jantar.id]).toBeUndefined()
+      expect(p.events[novo.id]).toBeTruthy()
+      expect(p.events[subindo.id]).toBeTruthy()
+      // o que é meu nunca sai, mesmo fora da lista
+      const meu = find(base.events, (e) => e.ownerId === 'A')
+      expect(purgeUnauthorized(base, 'A', { visible: { events: new Set() } }).events[meu.id]).toBeTruthy()
+    })
+
+    it('nada a tirar devolve o mesmo estado (sem re-render nem sync à toa)', () => {
+      const clean = purgeUnauthorized(base, 'A')
+      expect(purgeUnauthorized(clean, 'A')).toBe(clean)
+    })
+  })
 })

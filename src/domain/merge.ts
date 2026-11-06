@@ -1,4 +1,4 @@
-import type { CollectionName, DataState, MedicationLog, PartnerId, Transaction } from './types'
+import type { CalendarEvent, CollectionName, DataState, Medication, MedicationLog, PartnerId, Task, Transaction } from './types'
 
 export interface RemoteRow<T = unknown> {
   entity: T
@@ -45,16 +45,64 @@ export function applyRemote(state: DataState, collection: CollectionName, rows: 
   return changed ? { state: { ...state, [collection]: next }, changed } : { state, changed }
 }
 
+/** Ids que o servidor ainda mostra para quem está usando (consulta só de ids, sem cursor) */
+export type VisibleIds = Partial<Record<'tasks' | 'events' | 'meds', ReadonlySet<string>>>
+
+export interface PurgeOptions {
+  /** ids visíveis no servidor agora; sem isso, só as regras locais valem */
+  visible?: VisibleIds
+  /** itens com mudança local ainda não confirmada pelo servidor (outbox): nunca saem */
+  protect?: ReadonlySet<string>
+  /** quando a lista de ids foi pedida: o que mudou depois disso ainda pode não estar nela */
+  since?: string
+}
+
 /**
- * Autorização vencida (classe "stale authorization" da skill de segurança):
- * num aparelho de uma pessoa só, se o par fechou a aba pessoal, cópias antigas
- * dos lançamentos pessoais dele(a) saem deste aparelho. Presentes nunca deveriam estar aqui.
+ * Autorização vencida (classe "stale authorization" da skill de segurança), num aparelho de uma pessoa só.
+ * O servidor deixa de mandar o que o par tornou privado, mas a cópia antiga continua aqui dizendo que era
+ * compartilhada. Por isso, além das regras locais (espelho do RLS), vale a lista de ids que o servidor
+ * ainda mostra:
+ * - lançamentos: aba pessoal do par fechada ou presente secreto;
+ * - tarefas: privada do par ou sumida do servidor;
+ * - compromissos: "Meu · só você vê" do par ou sumido do servidor;
+ * - remédios: do par sem rede de apoio ou sumido do servidor; as doses dele saem junto;
+ * - fila: mudanças pendentes de itens que saíram (o servidor recusaria para sempre).
+ * O que é meu nunca sai.
  */
-export function purgeUnauthorized(state: DataState, owner: PartnerId): DataState {
+export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: PurgeOptions = {}): DataState {
   const partner: PartnerId = owner === 'A' ? 'B' : 'A'
+  const { visible = {}, protect, since } = opts
+  const onServer = (c: keyof VisibleIds, e: { id: string; updatedAt: string }) => {
+    const ids = visible[c]
+    if (!ids || ids.has(e.id)) return true
+    // ainda subindo, ou mudou depois que a lista foi pedida: na dúvida, fica
+    return !!protect?.has(e.id) || (!!since && e.updatedAt >= since)
+  }
+
   const partnerShares = state.profiles[partner]?.sharePersonalFinances ?? false
-  const keep = (t: Transaction) => t.scope === 'COUPLE' || t.createdBy === owner || (partnerShares && !t.isSecretGift)
-  const all = Object.values(state.transactions)
-  if (all.every(keep)) return state
-  return { ...state, transactions: Object.fromEntries(all.filter(keep).map((t) => [t.id, t])) }
+  const keepTx = (t: Transaction) => t.scope === 'COUPLE' || t.createdBy === owner || (partnerShares && !t.isSecretGift)
+  const keepTask = (t: Task) =>
+    t.assignedTo === owner || t.sentBy === owner || ((t.assignedTo === null || t.visibleToPartner) && onServer('tasks', t))
+  const keepEvent = (e: CalendarEvent) => e.ownerId === owner || (e.ownerId === null && onServer('events', e))
+  const keepMed = (m: Medication) =>
+    m.ownerId === owner || ((m.ownerId === null || m.notifyPartnerOnDelay) && onServer('meds', m))
+
+  const removed = new Set<string>()
+  const filter = <T extends { id: string }>(map: Record<string, T>, keep: (x: T) => boolean): Record<string, T> => {
+    const all = Object.values(map)
+    if (all.every(keep)) return map
+    for (const x of all) if (!keep(x)) removed.add(x.id)
+    return Object.fromEntries(all.filter(keep).map((x) => [x.id, x]))
+  }
+
+  const transactions = filter(state.transactions, keepTx)
+  const tasks = filter(state.tasks, keepTask)
+  const events = filter(state.events, keepEvent)
+  const meds = filter(state.meds, keepMed)
+  const medLogs = meds === state.meds ? state.medLogs : filter(state.medLogs, (l) => !removed.has(l.medicationId))
+  if (!removed.size) return state
+  const logIds = Object.keys(state.medLogs).filter((id) => !medLogs[id])
+  for (const id of logIds) removed.add(id)
+  const outbox = state.outbox.filter((e) => !removed.has(e.entityId))
+  return { ...state, transactions, tasks, events, meds, medLogs, outbox }
 }

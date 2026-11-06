@@ -76,6 +76,22 @@ export class FakeSupabase {
     }
     if (table === 'tasks') return row.assigned_to == null || row.assigned_to === m.partner_id || row.sent_by === m.partner_id || row.visible_to_partner === true
     if (table === 'medications') return row.owner_id == null || row.owner_id === m.partner_id || row.notify_partner_on_delay === true
+    if (table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
+    if (table === 'medication_logs') {
+      // logs_read: a dose segue o remédio (subconsulta sob o RLS de medications)
+      const med = this.table('medications').get(String(row.medication_id))
+      return !!med && this.canRead('medications', med, m)
+    }
+    return true
+  }
+
+  /** Espelho das políticas de gravação (*_insert / *_update / *_delete, using e with check) */
+  private canWrite(table: string, row: Row, m: Member): boolean {
+    if (table === 'couples') return row.id === m.couple_id
+    if (row.couple_id !== m.couple_id) return false
+    if (table === 'transactions') return row.scope === 'COUPLE' || row.created_by === m.partner_id
+    if (table === 'medications' || table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
+    if (table === 'medication_logs' || table === 'tasks') return this.canRead(table, row, m)
     return true
   }
 
@@ -167,19 +183,21 @@ export class FakeSupabase {
       return json(200, rows)
     }
     if (req.method() === 'POST') {
-      const owner = tableName === 'couples' ? body.id : body.couple_id
-      if (owner !== me.couple_id) return json(403, { message: 'new row violates row-level security policy' })
-      if (tableName === 'transactions' && body.scope === 'PERSONAL' && body.created_by !== me.partner_id) {
-        return json(403, { message: 'new row violates row-level security policy' })
-      }
       const key = keyOf(body)
-      t.set(key, { ...(t.get(key) ?? {}), ...body, synced_at: this.stamp() })
+      const existing = t.get(key)
+      // upsert: a linha nova passa no with check; a que já existe precisa passar no using do update
+      const insertOk = tableName === 'tasks' ? body.couple_id === me.couple_id : this.canWrite(tableName, body, me)
+      if (!insertOk || (existing && !this.canWrite(tableName, existing, me))) {
+        return json(403, { code: '42501', message: 'new row violates row-level security policy' })
+      }
+      t.set(key, { ...(existing ?? {}), ...body, synced_at: this.stamp() })
       return json(201, null)
     }
     if (req.method() === 'PATCH') {
       const id = url.searchParams.get('id')?.replace(/^eq\./, '') ?? ''
       const row = t.get(id)
-      if (!row || row.couple_id !== me.couple_id) return json(204, null)
+      // update sem permissão no using: 0 linhas, sem erro (como no PostgREST)
+      if (!row || !this.canWrite(tableName, row, me)) return json(204, null)
       t.set(id, { ...row, ...body, synced_at: this.stamp() })
       return json(204, null)
     }

@@ -43,11 +43,17 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
    de dados e AAD por pessoa). Renovação em voo único (o Supabase rotaciona o refresh token). Desconectar revoga no
    servidor; bloquear o app tira o token da memória.
 4. **Gravação só com token de usuário:** sem sessão, a fila espera. Cada pessoa só sobe o que pode gravar (lançamentos
-   pessoais e remédios do par ficam para o aparelho do par, espelhando `tx_write` e `meds_write`).
+   pessoais e remédios do par ficam para o aparelho do par, espelhando `tx_insert`, `meds_insert`, `events_insert` e `logs_insert`).
 5. **Descida:** cursor `synced_at` carimbado pelo servidor (relógios diferentes não fazem perder alterações);
    conflito = última edição vence, exceto dose tomada, que sempre vence. Remoções viajam como exclusão lógica.
-6. **Autorização vencida:** se o par fecha a aba pessoal, o servidor para de entregar e o aparelho de uma pessoa só
-   apaga as cópias antigas (`purgeUnauthorized`, coberto por teste unitário e E2E).
+6. **Autorização vencida:** quando o par fecha a aba pessoal, desliga a rede de apoio de um remédio, torna um compromisso
+   "Meu · só você vê" ou uma tarefa privada, o servidor para de entregar a linha. O pull incremental nunca avisa disso,
+   então a cada descida o aparelho de uma pessoa só pede os ids que o RLS ainda mostra (`listIds`) e apaga as cópias
+   que sumiram, com as doses e a fila delas (`purgeUnauthorized`). O que ainda está subindo, ou mudou depois do pedido,
+   fica. Coberto por teste unitário e E2E.
+7. **Política por comando:** nas tabelas com privacidade (`tasks`, `events`, `medications`, `medication_logs`,
+   `transactions`) não existe política "for all": no Postgres ela também vale para SELECT e soma com a leitura.
+   `validate.sql` falha se alguma aparecer.
 
 ## Mapeamento das classes da skill
 
@@ -64,9 +70,9 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 | Clickjacking | confirmado no `vite preview` / needs_validation na hospedagem | `vite.config.ts` e `public/_headers`; conferir os cabeçalhos no provedor real |
 | postMessage origin and source trust | não se aplica | Sem `postMessage`; `BroadcastChannel` é restrito à mesma origem |
 | Ordinary CSRF | não se aplica | Supabase usa token `Authorization: Bearer`, não cookie |
-| Missing tenant or owner enforcement / Policy and query disagreement | confirmado no Postgres local (Docker) / conferir de novo no projeto de produção | `supabase/schema.sql` (RLS por `couple_id`, `tx_read` espelha `src/domain/privacy.ts`); `supabase/tests/validate.sql` com três contas e `e2e/real-supabase.spec.ts`. A validação real achou e corrigiu um vazamento (`tasks_write` "for all" liberava SELECT) |
+| Missing tenant or owner enforcement / Policy and query disagreement | confirmado no Postgres local (Docker) / conferir de novo no projeto de produção | `supabase/schema.sql` (RLS por `couple_id`, `tx_read` espelha `src/domain/privacy.ts`); `supabase/tests/validate.sql` com três contas e `e2e/real-supabase.spec.ts`. A validação real achou e corrigiu um vazamento (`tasks_write` "for all" liberava SELECT). Iteração 8: compromisso "só você vê" e doses de remédio sem rede de apoio deixaram de chegar ao par; ninguém cria remédio ou compromisso em nome do outro |
 | Account linking and identity collision | confirmado | Conta que já pertence a outra pessoa ou espaço é recusada e deslogada (`connect()`); convite é de uso único e amarrado ao parceiro certo |
-| Stale authorization and derived copy use | confirmado | `purgeUnauthorized` ao fechar a aba pessoal; tokens saem da memória ao bloquear |
+| Stale authorization and derived copy use | confirmado | `purgeUnauthorized` com a lista de ids visíveis no servidor (lançamentos, tarefas, compromissos, remédios e doses); tokens saem da memória ao bloquear |
 | API-key exposure and unsafe transport | confirmado | Só a chave anônima pública vai ao cliente; o adaptador recusa gravar sem token de usuário |
 | Export and backup scope expansion / Import and restore | confirmado | Não há exportação; "Restaurar exemplo" e "Apagar dados" só existem dentro da sessão, o último com senha |
 
@@ -82,8 +88,5 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 - **Se as duas pessoas esquecerem a senha**, os dados deste aparelho não podem ser recuperados (por desenho).
 - **Nuvem validada num Supabase local** (Docker com as imagens oficiais: `npm run db:check` e `npm run e2e:local`).
   No projeto de produção, rode `supabase/tests/validate.sql` no SQL Editor depois de aplicar o schema.
-- **Logs de dose** de remédio sem rede de apoio ainda descem para o par (status e horário, sem o nome do remédio).
 - **Sem realtime:** a descida acontece ao abrir, ao voltar online, ao sincronizar e a cada 30 s com o app aberto.
-- **Tarefa que vira privada** depois de sincronizada continua no aparelho do par até ser arquivada (o RLS só
-  impede leituras novas).
 - `style-src 'unsafe-inline'` permanece porque o Motion anima por atributo `style`.

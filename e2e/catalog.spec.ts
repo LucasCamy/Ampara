@@ -180,3 +180,26 @@ test('Atalhos de data e hora nas gavetas', async ({ page, errors }, info) => {
   await med.getByTestId('new-med-save').click()
   await expect(page.getByText(/Remédio salvo · Ômega 3 às 12:00/)).toBeVisible()
 })
+
+/** Semana no computador (>= 1024px): concluir e reabrir direto no card, com ícone, texto e traço */
+test('Concluir tarefa na visão Semana do computador', async ({ page, errors }, info) => {
+  void errors
+  test.skip(!info.project.name.startsWith('desktop'), 'os cards compactos da Semana só aparecem em >= 1024px')
+  await at(page, '09:00')
+  await open(page)
+  await goTab(page, 'agenda')
+  await page.getByRole('radio', { name: 'Semana' }).click()
+  const card = page.getByTestId('week-task').filter({ hasText: 'Comprar ração do gato' }).first()
+  const toggle = card.getByTestId('week-task-toggle')
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(toggle).toHaveAccessibleName('Reabrir: Comprar ração do gato')
+  await expect(card).toContainText('Feita')
+  await expect(card).toHaveClass(/ledger-ok/)
+  await shot(page, '33-semana-concluir', info.project.name)
+  // Desfazer pelo Toast devolve como pendente
+  await page.getByRole('button', { name: 'Desfazer' }).last().click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(card).not.toContainText('Feita')
+})

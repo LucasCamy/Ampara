@@ -4,22 +4,25 @@ import { DateField, TimeField } from '../../components/pickers'
 import { ChoiceChips, TextField } from '../../components/ui'
 import { eventToInput, hasErrors, isDateKey, isTimeKey, validateEvent, type EventInput, type EventOwner, type EventType } from '../../domain/catalog'
 import { addMinutesToTime, DURATION_SHORTCUTS, minutesOf, toDateKey } from '../../domain/dates'
-
-const START_SHORTCUTS = ['09:00', '14:00', '19:00'].map((t) => ({ value: t, label: t }))
 import { deleteEvent, saveEvent } from '../../store/actions'
+import { useNow } from '../../store/clock'
 import { dataStore } from '../../store/data'
 import { DeleteButton } from './fields'
 import { SHEET_FORM } from './forms'
 
+const START_SHORTCUTS = ['09:00', '14:00', '19:00'].map((t) => ({ value: t, label: t }))
+
 /** Novo compromisso (params.date vem da Agenda) ou edição quando params.id existe */
 export function EventSheet({ params, onDone }: { params: Record<string, string>; onDone: () => void }) {
   const id = params.id
+  // "hoje" do mesmo relógio do app que o atalho "Hoje" do DateField usa
+  const today = toDateKey(useNow())
   const [form, setForm] = useState<EventInput>(() => {
     const prev = id ? dataStore.get().events[id] : undefined
     if (prev) return eventToInput(prev)
     return {
       title: params.title ?? '',
-      date: params.date && isDateKey(params.date) ? params.date : toDateKey(new Date()),
+      date: params.date && isDateKey(params.date) ? params.date : today,
       start: '19:00',
       end: '20:00',
       owner: 'US',

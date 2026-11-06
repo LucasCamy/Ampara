@@ -27,6 +27,13 @@ begin
     from unnest(array['create_couple','create_invite','join_couple','my_membership','my_couple_id','my_partner_id']) f
    where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f);
   assert missing is null, 'FALHOU: funções ausentes: ' || coalesce(missing, '');
+
+  -- regra 11: política "for all" também libera SELECT; tabelas com privacidade só têm política por comando
+  select string_agg(tablename || '.' || policyname, ', ') into missing
+    from pg_policies
+   where schemaname = 'public' and cmd = 'ALL'
+     and tablename in ('tasks','events','medications','medication_logs','transactions');
+  assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
 \echo 'ok  estrutura: 11 tabelas, RLS ligado em todas, 6 funções'
 
@@ -53,13 +60,16 @@ insert into tasks (id, couple_id, created_by, assigned_to, title, effort, status
 
 insert into events (id, couple_id, title, date, start, "end", kind) values
   ('22222222-0000-4000-8000-000000000001', 'space-teste', 'Jantar', current_date, '20:00', '22:00', 'COUPLE');
+insert into events (id, couple_id, title, date, start, "end", kind, owner_id) values
+  ('22222222-0000-4000-8000-000000000002', 'space-teste', 'Terapia do Lucas', current_date, '18:00', '19:00', 'HEALTH', 'A');
 
 insert into medications (id, couple_id, kind, owner_id, name, dosage, times, stock_count, notify_partner_on_delay) values
   ('33333333-0000-4000-8000-000000000001', 'space-teste', 'MED', 'A', 'Remédio do Lucas', '30 mg', '["08:00"]', 20, false),
   ('33333333-0000-4000-8000-000000000002', 'space-teste', 'MED', 'A', 'Remédio com apoio', '10 mg', '["21:00"]', 3, true);
 
 insert into medication_logs (id, couple_id, medication_id, scheduled_date, scheduled_time, status) values
-  ('33333333-0000-4000-8000-000000000002@hoje@21:00', 'space-teste', '33333333-0000-4000-8000-000000000002', current_date, '21:00', 'PENDING');
+  ('33333333-0000-4000-8000-000000000002@hoje@21:00', 'space-teste', '33333333-0000-4000-8000-000000000002', current_date, '21:00', 'PENDING'),
+  ('33333333-0000-4000-8000-000000000001@hoje@08:00', 'space-teste', '33333333-0000-4000-8000-000000000001', current_date, '08:00', 'TAKEN');
 
 insert into transactions (id, couple_id, created_by, paid_by, scope, is_secret_gift, type, status, amount_cents, category, description,
                           partner_a_share_cents, partner_b_share_cents, competence_date) values
@@ -133,6 +143,46 @@ do $$ declare n int; begin
 end $$;
 \echo 'ok  remédios: vê só o que tem rede de apoio e não altera o do Lucas'
 
+-- doses seguem o remédio: a dose do remédio sem rede de apoio não aparece
+do $$ begin
+  assert (select count(*) from medication_logs) = 1, 'FALHOU: dose de remédio privado vazou, viu ' || (select count(*) from medication_logs);
+  assert (select medication_id from medication_logs) = '33333333-0000-4000-8000-000000000002', 'FALHOU: dose visível errada';
+end $$;
+\echo 'ok  doses: só as do remédio com rede de apoio'
+
+-- ela não cria remédio nem compromisso em nome do Lucas
+do $$ begin
+  begin
+    insert into medications (id, couple_id, kind, owner_id, name, dosage, times)
+    values (gen_random_uuid(), 'space-teste', 'MED', 'A', 'forjado', '1', '["09:00"]');
+    raise exception 'FALHOU: ela criou remédio em nome do Lucas';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into events (id, couple_id, title, date, start, "end", kind, owner_id)
+    values (gen_random_uuid(), 'space-teste', 'forjado', current_date, '10:00', '11:00', 'PERSONAL', 'A');
+    raise exception 'FALHOU: ela criou compromisso em nome do Lucas';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+\echo 'ok  RLS recusa remédio e compromisso forjados em nome do par'
+
+-- compromisso "Meu · só você vê" do Lucas: não aparece, não muda, não some
+do $$ declare n int; begin
+  assert (select count(*) from events) = 1 and (select title from events) = 'Jantar', 'FALHOU: compromisso privado vazou';
+  update events set title = 'mexido' where id = '22222222-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  assert n = 0, 'FALHOU: ela alterou o compromisso privado do Lucas';
+  delete from events where id = '22222222-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  assert n = 0, 'FALHOU: ela apagou o compromisso privado do Lucas';
+  -- e o do casal ela edita normalmente
+  update events set start = '20:30' where id = '22222222-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  assert n = 1, 'FALHOU: ela não conseguiu editar o compromisso do casal';
+end $$;
+\echo 'ok  compromisso privado do Lucas não aparece nem muda para ela; o do casal ela edita'
+
 -- ela não grava lançamento pessoal em nome do Lucas
 do $$ begin
   begin
@@ -183,7 +233,8 @@ select synced_at as before_sync from profiles where id = 'A' \gset
 update profiles set share_personal_finances = true, updated_at = now() where id = 'A';
 do $$ begin
   assert (select count(*) from transactions) = 4, 'FALHOU: Lucas deveria ver os 4 lançamentos';
-  assert (select status from medication_logs) = 'TAKEN', 'FALHOU: dose confirmada pela parceira não chegou';
+  assert (select status from medication_logs where medication_id = '33333333-0000-4000-8000-000000000002') = 'TAKEN', 'FALHOU: dose confirmada pela parceira não chegou';
+  assert (select count(*) from events) = 2, 'FALHOU: Lucas deveria ver o próprio compromisso privado';
 end $$;
 select (synced_at > :'before_sync'::timestamptz) as cursor_moved from profiles where id = 'A' \gset
 \if :cursor_moved
@@ -200,6 +251,27 @@ do $$ begin
   assert not exists (select 1 from transactions where is_secret_gift), 'FALHOU: presente secreto vazou';
 end $$;
 \echo 'ok  aba pessoal aberta: ela vê o café do Lucas, mas nunca o presente secreto'
+
+-- Lucas desliga a rede de apoio: o remédio e as doses somem para ela; e ele não passa o remédio para o nome dela
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+update medications set notify_partner_on_delay = false where id = '33333333-0000-4000-8000-000000000002';
+do $$ begin
+  begin
+    update medications set owner_id = 'B' where id = '33333333-0000-4000-8000-000000000001';
+    raise exception 'FALHOU: Lucas passou o remédio para o nome dela';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select count(*) from medications) = 0, 'FALHOU: remédio continuou visível depois de desligar a rede de apoio';
+  assert (select count(*) from medication_logs) = 0, 'FALHOU: doses continuaram visíveis depois de desligar a rede de apoio';
+end $$;
+\echo 'ok  rede de apoio desligada: remédio e doses somem para ela; dono não troca de pessoa'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;
