@@ -1,0 +1,88 @@
+import { at, expect, goTab, noHorizontalOverflow, open, setViewer, shot, test } from './fixtures'
+
+test('fazer junto: um começa, o outro entra, terminam e a tarefa conclui', async ({ page, errors }, info) => {
+  void errors
+  test.setTimeout(60_000)
+  await at(page, '10:00')
+  await open(page)
+
+  await goTab(page, 'nos')
+  const section = page.getByTestId('focus-section')
+  await section.getByTestId('focus-start').click()
+  await expect(section.getByRole('alert')).toContainText('O que vocês vão fazer')
+  await section.getByTestId('focus-suggestion').filter({ hasText: 'Ligar na imobiliária' }).click()
+  await expect(section.getByTestId('focus-title')).toHaveValue('Ligar na imobiliária sobre o reajuste')
+  await noHorizontalOverflow(page)
+  await section.getByTestId('focus-start').click()
+  const card = section.getByTestId('focus-card')
+  await expect(card).toHaveAttribute('data-state', 'running')
+  await expect(card.getByTestId('focus-left')).toContainText('Faltam 25 min')
+  await expect(card.getByTestId('focus-left')).toContainText('até 10:25')
+  await shot(page, '80-fazer-junto', info.project.name)
+
+  // ela recebe o convite no Hoje e entra
+  await setViewer(page, 'B')
+  await goTab(page, 'hoje')
+  const invite = page.getByTestId('focus-card')
+  await expect(invite).toContainText('Lucas começou')
+  await expect(invite).toContainText('Lucas chamou você para fazer junto')
+  await invite.getByTestId('focus-join').click()
+  await expect(invite).toContainText('Lucas está junto')
+  await expect(invite.getByTestId('focus-join')).toHaveCount(0)
+  await noHorizontalOverflow(page)
+
+  // o tempo acaba: pergunta se terminaram; terminar conclui a tarefa ligada
+  await page.clock.fastForward('26:00')
+  await expect(invite).toHaveAttribute('data-state', 'finished')
+  await expect(invite).toContainText('Tempo! Terminaram?')
+  await invite.getByTestId('focus-finish').click()
+  await expect(page.getByText('Feito! Tarefa concluída.')).toBeVisible()
+  await expect(page.getByTestId('focus-card')).toHaveCount(0)
+
+  // parar também fecha
+  await goTab(page, 'nos')
+  await section.getByTestId('focus-title').fill('Lavar a louça')
+  await section.getByTestId('focus-15').click()
+  await section.getByTestId('focus-start').click()
+  await expect(section.getByTestId('focus-left')).toContainText('Faltam 15 min')
+  await section.getByTestId('focus-cancel').click()
+  await expect(section.getByTestId('focus-form')).toBeVisible()
+})
+
+test('caixinhas: quanto falta, quanto por mês, guardar, tirar e meta batida', async ({ page, errors }, info) => {
+  void errors
+  await at(page, '10:00')
+  await open(page)
+  await goTab(page, 'financas')
+
+  const viagem = page.getByTestId('goal-card').filter({ hasText: 'Viagem para a praia' })
+  await expect(viagem).toContainText('R$ 1.500,00 de R$ 6.000,00')
+  await expect(viagem.getByTestId('goal-status')).toContainText('Faltam R$ 4.500,00')
+  await expect(viagem.getByTestId('goal-status')).toContainText('por mês até 05/2027')
+  await viagem.getByTestId('goal-amount').pressSequentially('5000')
+  await expect(viagem.getByTestId('goal-amount')).toHaveValue('R$ 50,00')
+  await viagem.getByTestId('goal-deposit').click()
+  await expect(viagem).toContainText('R$ 1.550,00 de R$ 6.000,00')
+  await viagem.getByTestId('goal-amount').pressSequentially('999999')
+  await viagem.getByTestId('goal-withdraw').click()
+  await expect(viagem).toContainText('R$ 0,00 de R$ 6.000,00')
+  await page.getByRole('button', { name: 'Desfazer' }).last().click()
+  await expect(viagem).toContainText('R$ 1.550,00')
+  await noHorizontalOverflow(page)
+
+  await page.getByTestId('goal-add').click()
+  const sheet = page.getByTestId('sheet-goal')
+  await sheet.getByTestId('goal-save').click()
+  await expect(sheet.getByRole('alert').first()).toBeVisible()
+  await sheet.getByTestId('goal-title').fill('Sofá novo')
+  await sheet.getByTestId('goal-target').pressSequentially('300000')
+  await sheet.getByTestId('goal-save').click()
+  await expect(sheet).toBeHidden()
+  const sofa = page.getByTestId('goal-card').filter({ hasText: 'Sofá novo' })
+  await sofa.getByTestId('goal-amount').pressSequentially('300000')
+  await sofa.getByTestId('goal-deposit').click()
+  await expect(sofa.getByTestId('goal-status')).toContainText('Meta batida')
+  await sofa.scrollIntoViewIfNeeded()
+  await noHorizontalOverflow(page)
+  await shot(page, '81-caixinhas', info.project.name)
+})

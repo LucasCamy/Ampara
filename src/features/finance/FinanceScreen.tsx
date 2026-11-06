@@ -1,4 +1,5 @@
 import { ArrowRightLeft, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Lock, ReceiptText, User, Users } from 'lucide-react'
+import { GoalsSection } from './GoalsSection'
 import { useMemo, useState } from 'react'
 import { CATEGORIES } from '../../components/categories'
 import { Button, cx, EmptyState, MoneyText, OwnerTag, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
@@ -179,6 +180,8 @@ function CoupleTab({ month, monthLabel }: { month: string; monthLabel: string })
             </ul>
           )}
         </section>
+
+        <GoalsSection />
       </div>
     </div>
   )

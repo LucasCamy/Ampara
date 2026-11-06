@@ -1,5 +1,6 @@
 import { Title } from '../../components/ui'
 import { DatesGiftsSection } from './DatesGiftsSection'
+import { FocusSection } from './FocusSection'
 import { ComfortSection } from './MoodSection'
 import { ShoppingSection } from './ShoppingSection'
 
@@ -13,6 +14,7 @@ export function UsScreen() {
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <div className="flex flex-col gap-6">
           <ShoppingSection />
+          <FocusSection />
           <ComfortSection />
         </div>
         <DatesGiftsSection />

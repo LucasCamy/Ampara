@@ -279,6 +279,35 @@ export interface ComfortItem {
   updatedAt: string
 }
 
+/** Body doubling: um começa, o outro entra junto (do casal) */
+export type FocusStatus = 'RUNNING' | 'DONE' | 'CANCELLED'
+
+export interface FocusSession {
+  id: string
+  startedBy: PartnerId
+  title: string
+  /** tarefa ligada (concluir ao terminar) */
+  taskId: string | null
+  durationMin: number
+  startedAt: string
+  endsAt: string
+  joinedBy: PartnerId | null
+  status: FocusStatus
+  updatedAt: string
+}
+
+/** Caixinha: meta de dinheiro do casal (centavos) */
+export interface SavingsGoal {
+  id: string
+  title: string
+  targetCents: number
+  savedCents: number
+  deadline: DateKey | null
+  createdBy: PartnerId
+  createdAt: string
+  updatedAt: string
+}
+
 export type OutboxOperation = 'UPSERT' | 'DELETE'
 export type OutboxStatus = 'PENDING' | 'SYNCED' | 'FAILED'
 
@@ -311,6 +340,8 @@ export interface Collections {
   giftIdeas: Record<string, GiftIdea>
   moodCheckins: Record<string, MoodCheckin>
   comfortItems: Record<string, ComfortItem>
+  focusSessions: Record<string, FocusSession>
+  savingsGoals: Record<string, SavingsGoal>
 }
 
 export type CollectionName = keyof Collections
@@ -333,6 +364,8 @@ export const COLLECTIONS: CollectionName[] = [
   'giftIdeas',
   'moodCheckins',
   'comfortItems',
+  'focusSessions',
+  'savingsGoals',
 ]
 
 export interface DataState extends Collections {

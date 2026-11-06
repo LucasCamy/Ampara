@@ -17,6 +17,7 @@ import { CycleTodayCards } from '../cycle/CycleSection'
 import { PackTodayCards } from '../routines/PackInfo'
 import { SpecialDatesTodayCards } from '../us/DatesGiftsSection'
 import { ComfortList, MoodTodayCards } from '../us/MoodSection'
+import { FocusTodayCard } from '../us/FocusSection'
 import { ENERGY } from '../shell/TopBar'
 
 const HELP_TYPE = {
@@ -91,6 +92,7 @@ export function TodayScreen() {
 
   const secondary = (
     <>
+      <FocusTodayCard />
       <MoodTodayCards />
       <CycleTodayCards />
       <PackTodayCards />

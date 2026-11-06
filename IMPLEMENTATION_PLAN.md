@@ -37,6 +37,18 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 14 (2026-11-06): fazer junto (body doubling) e caixinhas
+
+- **Fazer junto** (aba Nós): tarefa de hoje em 1 toque ou escrita, 15/25/45 min. O par recebe o convite no Hoje
+  e entra junto; "Terminamos" fecha e conclui a tarefa ligada (um Desfazer volta tudo); "Parar" sem culpa.
+  Contagem em minutos com o relógio de minuto disparando o re-render e a hora exata na conta (regra de
+  desempenho: o relógio de segundos continua só no "Pegando água").
+- **Caixinhas** (Finanças, visão do casal): meta, guardado, quanto falta, barra de progresso, "R$ X por mês até
+  MM/AAAA" com prazo, guardar/tirar com Desfazer (nunca negativo), "Meta batida".
+- Banco: `focus_sessions` e `savings_goals` (o casal lê e grava; `saved_cents >= 0`), caso no `validate.sql`.
+- Achados no E2E e corrigidos: contagem mostrava 1 min a mais; campo de valor digitava no começo (cursor agora
+  fica no fim, como no gasto).
+
 ## Iteração 13 (2026-11-06): check-in do dia e "o que me acalma"
 
 - **Check-in** em 1 toque no Hoje (Bem, Sem energia, Preciso de colo, Quero espaço, No limite) com recado opcional;

@@ -8,6 +8,7 @@ import type {
   SpecialDate,
   GiftIdea,
   ComfortItem,
+  SavingsGoal,
   MoodCheckin,
   CycleSettings,
   Couple,
@@ -232,6 +233,19 @@ export function buildSeed(now: Date): DataState {
     ['A', 'Silêncio por 20 minutos'],
   ].map(([owner, text], i) => ({ id: uuid(), ownerId: owner as PartnerId, text: text!, createdAt: new Date(now.getTime() + i).toISOString(), updatedAt: iso }))
 
+  // caixinhas do casal
+  const goal = (title: string, targetCents: number, savedCents: number, deadline: DateKey | null): SavingsGoal => ({
+    id: uuid(),
+    title,
+    targetCents,
+    savedCents,
+    deadline,
+    createdBy: 'A',
+    createdAt: iso,
+    updatedAt: iso,
+  })
+  const goals: SavingsGoal[] = [goal('Viagem para a praia', 600000, 150000, addDays(today, 182)), goal('Reserva da casa', 1000000, 420000, null)]
+
   const cycleB: CycleSettings = { ...defaultCycleSettings('B', iso), share: 'GENTLE' }
   Object.assign(cycleB, publishedForecast(cycleLogs, cycleB, today))
 
@@ -258,6 +272,8 @@ export function buildSeed(now: Date): DataState {
     giftIdeas: byId(gifts),
     moodCheckins: { [checkin.id]: checkin },
     comfortItems: byId(comfort),
+    focusSessions: {},
+    savingsGoals: byId(goals),
     outbox: [],
     lastSyncedAt: iso,
   }
@@ -316,6 +332,8 @@ export function buildEmpty(now: Date): DataState {
     giftIdeas: {},
     moodCheckins: {},
     comfortItems: {},
+    focusSessions: {},
+    savingsGoals: {},
     outbox: [],
   }
 }

@@ -14,7 +14,7 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -35,7 +35,7 @@ begin
      and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 18 tabelas, RLS ligado em todas, 6 funções'
+\echo 'ok  estrutura: 20 tabelas, RLS ligado em todas, 6 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -415,6 +415,35 @@ do $$ begin
   end;
 end $$;
 \echo 'ok  check-in e "o que me acalma": o par lê, só a própria pessoa grava'
+
+-- ---------------------------------------------------------------- 6f. fazer junto e caixinhas
+-- (Lucas continua logado) cria a caixinha e começa uma sessão; ela entra e guarda dinheiro
+insert into savings_goals (id, couple_id, title, target_cents, created_by) values ('99999999-0000-4000-8000-000000000001', 'space-teste', 'Viagem', 600000, 'A');
+insert into focus_sessions (id, couple_id, started_by, title, duration_min, started_at, ends_at, status) values
+  ('99999999-0000-4000-8000-000000000002', 'space-teste', 'A', 'Louça', 25, now(), now() + interval '25 minutes', 'RUNNING');
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+update savings_goals set saved_cents = 15000 where id = '99999999-0000-4000-8000-000000000001';
+update focus_sessions set joined_by = 'B' where id = '99999999-0000-4000-8000-000000000002';
+do $$ begin
+  assert (select saved_cents from savings_goals) = 15000, 'FALHOU: ela não guardou na caixinha do casal';
+  assert (select joined_by from focus_sessions) = 'B', 'FALHOU: ela não entrou na sessão';
+  begin
+    update savings_goals set saved_cents = -1;
+    raise exception 'FALHOU: caixinha ficou negativa';
+  exception when check_violation then null;
+  end;
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"cccccccc-0000-4000-8000-00000000000c","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select count(*) from savings_goals) + (select count(*) from focus_sessions) = 0, 'FALHOU: conta de fora viu caixinha ou sessão';
+end $$;
+\echo 'ok  fazer junto e caixinhas: os dois editam, sem saldo negativo; conta de fora não vê'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

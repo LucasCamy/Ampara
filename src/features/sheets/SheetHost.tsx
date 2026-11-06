@@ -12,6 +12,7 @@ import { NewMedSheet } from './NewMedSheet'
 import { PeriodSheet } from './PeriodSheet'
 import { CycleSetupSheet } from './CycleSetupSheet'
 import { GiftSheet } from './GiftSheet'
+import { GoalSheet } from './GoalSheet'
 import { SpecialDateSheet } from './SpecialDateSheet'
 import { RoutineSheet } from './RoutineSheet'
 import { SosSheet } from './SosSheet'
@@ -29,6 +30,7 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
   cycleSetup: { title: 'Duração do seu ciclo', description: 'Usada na previsão enquanto o histórico é curto.' },
   specialDate: { title: 'Nova data especial', description: 'Repete todo ano. O app lembra uma semana antes.' },
   gift: { title: 'Ideia de presente', description: 'Anote na hora que ouvir. Só você vê.' },
+  goal: { title: 'Nova caixinha', description: 'Uma meta do casal. Os dois guardam e veem quanto falta.' },
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
@@ -38,6 +40,7 @@ const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: strin
   period: { title: 'Corrigir registro', description: 'Ajuste as datas ou exclua. A previsão se recalcula sozinha.' },
   specialDate: { title: 'Editar data especial', description: 'Os dois veem e recebem o lembrete.' },
   gift: { title: 'Editar ideia', description: 'Só você vê.' },
+  goal: { title: 'Editar caixinha', description: 'O valor guardado não muda aqui.' },
 }
 
 /** Assina o uiStore.sheet e, só em modo edição, se o item ainda existe (pode ter sido excluído no outro aparelho) */
@@ -46,7 +49,7 @@ export function SheetHost() {
   const close = useCallback(() => ui.closeSheet(), [])
   const editId = sheet?.params.id
   const exists = useData(
-    (d) => !editId || (sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : !!d.meds[editId]),
+    (d) => !editId || (sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : sheet?.kind === 'goal' ? !!d.savingsGoals[editId] : !!d.meds[editId]),
   )
   const editing = !!editId
   const meta = sheet ? ((editing && EDIT_TITLES[sheet.kind]) || TITLES[sheet.kind]) : null
@@ -83,6 +86,7 @@ export function SheetHost() {
       {sheet?.kind === 'period' && exists ? <PeriodSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'cycleSetup' ? <CycleSetupSheet onDone={close} /> : null}
       {sheet?.kind === 'specialDate' && exists ? <SpecialDateSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'goal' && exists ? <GoalSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'gift' && exists ? <GiftSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
     </Sheet>
   )

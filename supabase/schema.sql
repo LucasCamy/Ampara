@@ -616,3 +616,56 @@ begin
     execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
   end loop;
 end $$;
+
+-- =====================================================================
+-- Iteração 14: fazer junto (body doubling) e caixinhas (metas do casal; os dois gravam)
+-- =====================================================================
+create table if not exists focus_sessions (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  started_by text not null check (started_by in ('A', 'B')),
+  title text not null check (length(title) between 1 and 80),
+  task_id uuid,
+  duration_min integer not null check (duration_min between 5 and 120),
+  started_at timestamptz not null,
+  ends_at timestamptz not null,
+  joined_by text check (joined_by in ('A', 'B')),
+  status text not null check (status in ('RUNNING', 'DONE', 'CANCELLED')),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_focus_sessions_pull on focus_sessions (couple_id, updated_at);
+
+create table if not exists savings_goals (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  title text not null check (length(title) between 1 and 60),
+  target_cents bigint not null check (target_cents > 0),
+  saved_cents bigint not null default 0 check (saved_cents >= 0),
+  deadline date,
+  created_by text not null check (created_by in ('A', 'B')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_savings_goals_pull on savings_goals (couple_id, updated_at);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['focus_sessions','savings_goals'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists %I on %I', t || '_read', t);
+    execute format('create policy %I on %I for select using (couple_id = my_couple_id())', t || '_read', t);
+    execute format('drop policy if exists %I on %I', t || '_insert', t);
+    execute format('create policy %I on %I for insert with check (couple_id = my_couple_id())', t || '_insert', t);
+    execute format('drop policy if exists %I on %I', t || '_update', t);
+    execute format('create policy %I on %I for update using (couple_id = my_couple_id()) with check (couple_id = my_couple_id())', t || '_update', t);
+    execute format('drop policy if exists %I on %I', t || '_delete', t);
+    execute format('create policy %I on %I for delete using (couple_id = my_couple_id())', t || '_delete', t);
+    execute format('drop trigger if exists trg_%I_synced on %I', t, t);
+    execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
+  end loop;
+end $$;
