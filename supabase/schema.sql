@@ -469,3 +469,8 @@ begin
     execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
   end loop;
 end $$;
+
+-- =====================================================================
+-- Iteração 10: anticoncepcional em cartela (comprimidos + pausa); null = remédio comum
+-- =====================================================================
+alter table medications add column if not exists pack jsonb;

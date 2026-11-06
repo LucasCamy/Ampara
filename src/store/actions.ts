@@ -367,7 +367,7 @@ const editableEvent = (id: string) => {
  * Devolve o id, ou null se a entrada for inválida ou o remédio não puder ser editado por esta pessoa.
  */
 export function saveMedication(input: MedicationInput, id?: string): string | null {
-  if (hasErrors(validateMedication(input))) return null
+  if (hasErrors(validateMedication(input, today()))) return null
   const prev = id ? ownMed(id) : undefined
   if (id && !prev) return null
   const med = buildMedication(input, viewer(), uuid(), nowIso(), prev ?? undefined)

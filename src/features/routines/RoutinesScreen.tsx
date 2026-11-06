@@ -13,6 +13,7 @@ import { useData } from '../../store/data'
 import { toneOf, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
 import { CycleSection } from '../cycle/CycleSection'
+import { PACK_LATE_HINT, PackLine } from './PackInfo'
 
 const WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
@@ -214,10 +215,16 @@ function DoseCard({ dose, now }: { dose: DoseItem; now: Date }) {
         <div className="min-w-0 flex-1">
           <p className="text-[16px] font-bold text-ink">{med.name}</p>
           <p className="text-[13px] text-muted">{med.dosage}</p>
+          <PackLine med={med} />
         </div>
       </div>
       <div className="mt-3 flex flex-col gap-3">
         <DoseStatus dose={dose} now={now} />
+        {med.pack && dose.view === 'LATE' ? (
+          <p className="text-[13px] text-muted" data-testid="pack-late-hint">
+            {PACK_LATE_HINT}
+          </p>
+        ) : null}
         <DoseActions dose={dose} />
       </div>
       {/* o estoque completo fica em "Estoque e rede de apoio"; aqui só o alerta de acabando */}
@@ -280,15 +287,30 @@ function MedSettings({ med, partnerName }: { med: Medication; partnerName: strin
       <div className="flex items-center justify-between gap-2">
         <p className="min-w-0 flex-1 text-[15px] font-bold break-words text-ink">{med.name}</p>
         {med.stockCount !== null ? (
-          <Button size="sm" variant="quiet" icon={Plus} onClick={() => restock(med.id, 30)} aria-label={`Repor 30 unidades de ${med.name}`} className="shrink-0">
-            Repor 30
-          </Button>
+          med.pack ? (
+            <Button
+              size="sm"
+              variant="quiet"
+              icon={Plus}
+              onClick={() => restock(med.id, med.pack!.activeDays * med.times.length)}
+              aria-label={`Repor uma cartela (${med.pack.activeDays} comprimidos) de ${med.name}`}
+              className="shrink-0"
+              data-testid="restock-pack"
+            >
+              1 cartela
+            </Button>
+          ) : (
+            <Button size="sm" variant="quiet" icon={Plus} onClick={() => restock(med.id, 30)} aria-label={`Repor 30 unidades de ${med.name}`} className="shrink-0">
+              Repor 30
+            </Button>
+          )
         ) : null}
         <EditButton label={`Editar remédio ${med.name}`} onClick={() => ui.openSheet('newMed', { id: med.id })} testId="med-edit" />
       </div>
       <p className="mt-0.5 text-[13px] text-muted">
         {med.dosage} · <span className="font-data">{med.times.join(', ')}</span>
       </p>
+      <PackLine med={med} />
       {med.stockCount !== null ? <StockMeter med={med} /> : <p className="mt-1 text-[13px] text-muted">Sem controle de estoque.</p>}
       <div className="mt-3 border-t border-line pt-3">
         <Switch

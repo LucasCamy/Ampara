@@ -91,7 +91,16 @@ export interface Medication {
   lowStockThreshold: number
   notifyPartnerOnDelay: boolean
   delayMinutesThreshold: number
+  /** Anticoncepcional em cartela (comprimidos + pausa). null/ausente = remédio comum */
+  pack?: PillPack | null
   updatedAt: string
+}
+
+export interface PillPack {
+  activeDays: number
+  pauseDays: number
+  /** 1º comprimido de uma cartela (as seguintes se repetem a partir dele) */
+  startDate: DateKey
 }
 
 export type DoseStatus = 'PENDING' | 'SNOOZED_WATER' | 'TAKEN' | 'SKIPPED'

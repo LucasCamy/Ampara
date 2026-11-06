@@ -1,4 +1,5 @@
 import { addDays, atTime, parseDateKey } from './dates'
+import { packAllowsDose, packStockDays } from './pillPack'
 import type { DateKey, Medication, MedicationLog, PartnerId, SkipReason, TimeKey } from './types'
 
 export const SNOOZE_MS = 5 * 60 * 1000
@@ -24,6 +25,7 @@ export function emptyLog(med: Medication, date: DateKey, time: TimeKey, nowIso: 
 }
 
 export function isScheduledOn(med: Medication, date: DateKey): boolean {
+  if (!packAllowsDose(med, date)) return false
   return med.weekdays.length === 0 || med.weekdays.includes(parseDateKey(date).getDay())
 }
 
@@ -116,6 +118,8 @@ export function isLowStock(med: Medication): boolean {
 /** Estimativa de quantos dias a caixa dura no ritmo atual */
 export function stockDaysLeft(med: Medication): number | null {
   if (med.stockCount === null || med.times.length === 0) return null
+  // cartela: a pausa estica a duração da caixa
+  if (med.pack) return packStockDays(med.pack, Math.floor(med.stockCount / med.times.length))
   const perWeek = med.times.length * (med.weekdays.length || 7)
   return Math.floor((med.stockCount / perWeek) * 7)
 }

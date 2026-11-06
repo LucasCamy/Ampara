@@ -153,6 +153,8 @@ export const cloudAdapter: SyncAdapter = {
           missingTables.add(e.entityType)
           continue
         }
+        // coluna nova que o servidor ainda não tem (schema antigo): espera na fila, sem travar o resto
+        if (err.code === 'PGRST204') continue
         // 403/409/400: o servidor recusou (ex.: item do par). Não fica preso na fila para sempre.
         accepted.push(e.id)
       }

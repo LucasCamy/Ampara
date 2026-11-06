@@ -94,7 +94,7 @@ export function buildSeed(now: Date): DataState {
   const meds: Medication[] = [
     med({ kind: 'MED', ownerId: 'A', name: 'Venvanse 30mg', dosage: '1 cápsula', times: ['08:00'], stockCount: 12, lowStockThreshold: 5, notifyPartnerOnDelay: true }),
     med({ kind: 'MED', ownerId: 'A', name: 'Vitamina D 2000UI', dosage: '1 gota dupla', times: ['13:00'], stockCount: 28, lowStockThreshold: 5, notifyPartnerOnDelay: false }),
-    med({ kind: 'MED', ownerId: 'B', name: 'Anticoncepcional', dosage: '1 comprimido', times: ['21:00'], stockCount: 6, lowStockThreshold: 5, notifyPartnerOnDelay: true }),
+    med({ kind: 'MED', ownerId: 'B', name: 'Anticoncepcional', dosage: '1 comprimido', times: ['21:00'], stockCount: 6, lowStockThreshold: 5, notifyPartnerOnDelay: true, pack: { activeDays: 21, pauseDays: 7, startDate: addDays(today, -10) } }),
     med({ kind: 'MED', ownerId: 'B', name: 'Magnésio', dosage: '1 cápsula', times: ['22:00'], stockCount: 40, lowStockThreshold: 5, notifyPartnerOnDelay: false }),
     med({ kind: 'ROUTINE', ownerId: null, name: 'Remédio do gato', dosage: 'meio comprimido na ração', times: ['19:00'], stockCount: 14, lowStockThreshold: 5, notifyPartnerOnDelay: false }),
     med({ kind: 'ROUTINE', ownerId: null, name: 'Tirar o lixo', dosage: 'orgânico e reciclável', times: ['20:00'], weekdays: [1, 3, 5], stockCount: null, lowStockThreshold: 0, notifyPartnerOnDelay: false }),

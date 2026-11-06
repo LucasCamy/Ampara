@@ -1,5 +1,6 @@
 import type { CalendarEvent, DateKey, EventKind, Medication, PartnerId, TimeKey } from './types'
 import { otherPartner } from './types'
+import { PACK_KINDS, packKindOf, validatePackStart, type PackKind } from './pillPack'
 
 /**
  * Cadastros feitos pelo app: remédio, rotina da casa e compromisso.
@@ -43,15 +44,23 @@ export interface MedicationInput {
   times: string[]
   stock: string
   shareWithPartner: boolean
+  /** anticoncepcional em cartela: tipo e 1º comprimido da cartela atual */
+  packKind?: PackKind | 'NONE'
+  packStart?: string
 }
 
-export function validateMedication(i: MedicationInput): Errors<'name' | 'dosage' | 'times' | 'stock'> {
-  const e: Errors<'name' | 'dosage' | 'times' | 'stock'> = {}
+export function validateMedication(i: MedicationInput, today?: DateKey): Errors<'name' | 'dosage' | 'times' | 'stock' | 'packStart'> {
+  const e: Errors<'name' | 'dosage' | 'times' | 'stock' | 'packStart'> = {}
   if (!i.name.trim()) e.name = 'Escreva o nome do remédio (ex.: Venvanse 30mg).'
   if (!i.dosage.trim()) e.dosage = 'Escreva a dose (ex.: 1 cápsula).'
   const times = validateTimes(i.times)
   if (times) e.times = times
+  else if (i.packKind && i.packKind !== 'NONE' && i.times.length > 1) e.times = 'Cartela tem um comprimido por dia: deixe um horário só.'
   if (!parseStock(i.stock).ok) e.stock = 'Estoque é um número inteiro, 0 ou mais (ou deixe vazio).'
+  if (i.packKind && i.packKind !== 'NONE' && today) {
+    const pack = validatePackStart(i.packStart ?? '', today, isDateKey)
+    if (pack) e.packStart = pack
+  }
   return e
 }
 
@@ -73,12 +82,24 @@ export function buildMedication(i: MedicationInput, owner: PartnerId, id: string
     times: sortTimes(i.times),
     stockCount: stock.ok ? stock.value : null,
     notifyPartnerOnDelay: i.shareWithPartner,
+    pack:
+      !i.packKind || i.packKind === 'NONE'
+        ? null
+        : { activeDays: PACK_KINDS[i.packKind].activeDays, pauseDays: PACK_KINDS[i.packKind].pauseDays, startDate: i.packStart ?? '' },
     updatedAt: nowIso,
   }
 }
 
 export function medicationToInput(m: Medication): MedicationInput {
-  return { name: m.name, dosage: m.dosage, times: [...m.times], stock: m.stockCount === null ? '' : String(m.stockCount), shareWithPartner: m.notifyPartnerOnDelay }
+  return {
+    name: m.name,
+    dosage: m.dosage,
+    times: [...m.times],
+    stock: m.stockCount === null ? '' : String(m.stockCount),
+    shareWithPartner: m.notifyPartnerOnDelay,
+    packKind: m.pack ? (packKindOf(m.pack) ?? '21_7') : 'NONE',
+    packStart: m.pack?.startDate ?? '',
+  }
 }
 
 /* ---------- Rotina da casa ---------- */

@@ -37,6 +37,16 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 10 (2026-11-06): anticoncepcional em cartela
+
+- Remédio com `pack` (21+7, 24+4 ou 28 contínua) ancorado no 1º comprimido; as cartelas seguintes se repetem
+  sozinhas. Na pausa não existe dose (nem lembrete, atraso ou aviso ao par), via `isScheduledOn`.
+- Card: "Comprimido 12 de 21 · pausa a partir de ..." / "Pausa · dia 3 de 7 · cartela nova ..."; reposição
+  "+1 cartela"; estoque em dias de calendário conta a pausa. Atraso mostra um lembrete honesto sobre a janela
+  de 12 h (sem prometer, aponta a bula).
+- Hoje: começo da pausa, véspera e dia da cartela nova (só para a dona).
+- Banco: `medications.pack jsonb`. Servidor sem a coluna (PGRST204) deixa a alteração esperando na fila.
+
 ## Iteração 9 (2026-11-06): ciclo menstrual com privacidade e barra lateral
 
 - **Ciclo menstrual** (aba Remédios › Ciclo; opcional, para quem menstrua). Registro do 1º dia em 1 toque
