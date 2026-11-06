@@ -79,6 +79,8 @@ export class FakeSupabase {
     if (table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
     // cycle_settings_read / cycle_logs_read
     if (table === 'cycle_settings') return true
+    // gift_ideas_read: presente é surpresa, só quem anotou
+    if (table === 'gift_ideas') return row.owner_id === m.partner_id
     if (table === 'cycle_logs') {
       if (row.owner_id === m.partner_id) return true
       return this.table('cycle_settings').get(`${m.couple_id}|${String(row.owner_id)}`)?.share === 'FULL'
@@ -100,6 +102,7 @@ export class FakeSupabase {
     if (table === 'medication_logs' || table === 'tasks') return this.canRead(table, row, m)
     if (table === 'cycle_settings') return row.id === m.partner_id
     if (table === 'cycle_logs') return row.owner_id === m.partner_id
+    if (table === 'gift_ideas') return row.owner_id === m.partner_id
     return true
   }
 

@@ -37,6 +37,16 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 12 (2026-11-06): datas especiais e ideias de presente
+
+- **Datas especiais** do casal (namoro, aniversários, outra data): repetem todo ano (29/02 vira 28/02), contam
+  os anos ("3 anos de namoro") e aparecem no Hoje dos dois a partir de 7 dias antes.
+- **Ideias de presente** só de quem anota (surpresa): RLS `gift_ideas_*` só para a dona, enfileiramento só das
+  próprias, `purgeUnauthorized` tira as do par e a tela filtra por `giftsFor` mesmo no aparelho compartilhado.
+  "Comprei" abre o gasto como pessoal + presente (já escondido do par nas Finanças); "Entreguei" fecha.
+- No Hoje, quem não é o aniversariante vê "Você tem 1 ideia guardada" ou "Ainda sem ideia de presente?".
+- Banco: `special_dates` (casal) e `gift_ideas` (dona), com caso no `validate.sql`.
+
 ## Iteração 11 (2026-11-06): aba "Nós" e lista de compras
 
 - Nova aba **Nós** (5ª na navegação; cabe em 360px) para o que é do casal: lista de compras agora; presentes,

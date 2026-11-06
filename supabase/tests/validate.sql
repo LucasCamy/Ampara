@@ -14,7 +14,7 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -32,10 +32,10 @@ begin
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items');
+     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 14 tabelas, RLS ligado em todas, 6 funções'
+\echo 'ok  estrutura: 16 tabelas, RLS ligado em todas, 6 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -362,6 +362,37 @@ do $$ begin
   assert (select title from shopping_items where id = '66666666-0000-4000-8000-000000000001') = 'Leite', 'FALHOU: conta de fora alterou a lista';
 end $$;
 \echo 'ok  lista de compras: os dois editam; conta de fora não vê nem grava'
+
+-- ---------------------------------------------------------------- 6d. datas especiais e presentes (surpresa)
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+insert into special_dates (id, couple_id, title, date, kind, created_by) values
+  ('77777777-0000-4000-8000-000000000001', 'space-teste', 'Aniversário de namoro', '2023-11-10', 'ANNIVERSARY', 'A');
+insert into gift_ideas (id, couple_id, owner_id, title, status) values
+  ('77777777-0000-4000-8000-000000000002', 'space-teste', 'A', 'Colar de lua', 'IDEA');
+do $$ begin
+  begin
+    insert into gift_ideas (id, couple_id, owner_id, title, status) values ('77777777-0000-4000-8000-000000000003', 'space-teste', 'B', 'forjado', 'IDEA');
+    raise exception 'FALHOU: Lucas gravou ideia de presente em nome dela';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+update gift_ideas set status = 'GIVEN';
+delete from gift_ideas;
+do $$ begin
+  assert (select count(*) from special_dates) = 1, 'FALHOU: ela não vê a data do casal';
+  assert (select count(*) from gift_ideas) = 0, 'FALHOU: ela viu a ideia de presente do Lucas';
+end $$;
+
+reset role;
+do $$ begin
+  assert (select status from gift_ideas where id = '77777777-0000-4000-8000-000000000002') = 'IDEA', 'FALHOU: ela alterou ou apagou o presente dele';
+end $$;
+\echo 'ok  datas do casal: os dois veem; presente: só quem anotou vê, altera ou apaga'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

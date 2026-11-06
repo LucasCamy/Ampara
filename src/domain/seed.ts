@@ -5,6 +5,8 @@ import { COLLECTIONS } from './types'
 import type {
   CycleLog,
   ShoppingItem,
+  SpecialDate,
+  GiftIdea,
   CycleSettings,
   Couple,
   Pronoun,
@@ -189,6 +191,33 @@ export function buildSeed(now: Date): DataState {
     updatedAt: iso,
   })
   const shopping: ShoppingItem[] = [shop('Leite', 'MARKET', 'B', '2'), shop('Café', 'MARKET', 'A'), shop('Pão de forma', 'MARKET', 'A'), shop('Sabão de roupa', 'HOME', 'B')]
+  // namoro faz 3 anos daqui a 5 dias; aniversário dela no fim do ano; uma ideia de presente (só do Lucas)
+  const in5 = addDays(today, 5)
+  const namoro: SpecialDate = {
+    id: uuid(),
+    title: 'Aniversário de namoro',
+    date: `${Number(in5.slice(0, 4)) - 3}${in5.slice(4)}`,
+    kind: 'ANNIVERSARY',
+    personId: null,
+    createdBy: 'A',
+    updatedAt: iso,
+  }
+  const specialDates: SpecialDate[] = [
+    namoro,
+    { id: uuid(), title: 'Aniversário de Namorada', date: '1997-12-18', kind: 'BIRTHDAY', personId: 'B', createdBy: 'A', updatedAt: iso },
+  ]
+  const gifts: GiftIdea[] = [
+    {
+      id: uuid(),
+      ownerId: 'A',
+      title: 'Colar com pingente de lua',
+      note: 'Ela comentou na vitrine do shopping',
+      specialDateId: namoro.id,
+      status: 'IDEA',
+      createdAt: iso,
+      updatedAt: iso,
+    },
+  ]
 
   const cycleB: CycleSettings = { ...defaultCycleSettings('B', iso), share: 'GENTLE' }
   Object.assign(cycleB, publishedForecast(cycleLogs, cycleB, today))
@@ -212,6 +241,8 @@ export function buildSeed(now: Date): DataState {
     cycleSettings: { B: cycleB },
     cycleLogs: byId(cycleLogs),
     shoppingItems: byId(shopping),
+    specialDates: byId(specialDates),
+    giftIdeas: byId(gifts),
     outbox: [],
     lastSyncedAt: iso,
   }
@@ -266,6 +297,8 @@ export function buildEmpty(now: Date): DataState {
     cycleSettings: {},
     cycleLogs: {},
     shoppingItems: {},
+    specialDates: {},
+    giftIdeas: {},
     outbox: [],
   }
 }

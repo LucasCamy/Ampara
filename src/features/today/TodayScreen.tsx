@@ -15,6 +15,7 @@ import { possessive, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
 import { CycleTodayCards } from '../cycle/CycleSection'
 import { PackTodayCards } from '../routines/PackInfo'
+import { SpecialDatesTodayCards } from '../us/DatesGiftsSection'
 import { ENERGY } from '../shell/TopBar'
 
 const HELP_TYPE = {
@@ -91,6 +92,7 @@ export function TodayScreen() {
     <>
       <CycleTodayCards />
       <PackTodayCards />
+      <SpecialDatesTodayCards />
       {d.nudges.map((n) => (
         <section key={n.id} className="module ledger-dashed p-4 sm:p-5" aria-label="Lembrete carinhoso">
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">

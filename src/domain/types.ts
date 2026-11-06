@@ -227,6 +227,36 @@ export interface ShoppingItem {
   updatedAt: string
 }
 
+/** Datas que se repetem todo ano (do casal: os dois veem) */
+export type SpecialDateKind = 'ANNIVERSARY' | 'BIRTHDAY' | 'OTHER'
+
+export interface SpecialDate {
+  id: string
+  title: string
+  /** data original (o ano conta quantos anos faz) */
+  date: DateKey
+  kind: SpecialDateKind
+  /** aniversário de quem (BIRTHDAY); null = do casal */
+  personId: PartnerId | null
+  createdBy: PartnerId
+  updatedAt: string
+}
+
+/** Ideia de presente: só quem anotou vê (é surpresa) */
+export type GiftStatus = 'IDEA' | 'BOUGHT' | 'GIVEN'
+
+export interface GiftIdea {
+  id: string
+  ownerId: PartnerId
+  title: string
+  note: string
+  /** data especial ligada (opcional) */
+  specialDateId: string | null
+  status: GiftStatus
+  createdAt: string
+  updatedAt: string
+}
+
 export type OutboxOperation = 'UPSERT' | 'DELETE'
 export type OutboxStatus = 'PENDING' | 'SYNCED' | 'FAILED'
 
@@ -255,6 +285,8 @@ export interface Collections {
   cycleSettings: Record<string, CycleSettings>
   cycleLogs: Record<string, CycleLog>
   shoppingItems: Record<string, ShoppingItem>
+  specialDates: Record<string, SpecialDate>
+  giftIdeas: Record<string, GiftIdea>
 }
 
 export type CollectionName = keyof Collections
@@ -273,6 +305,8 @@ export const COLLECTIONS: CollectionName[] = [
   'cycleSettings',
   'cycleLogs',
   'shoppingItems',
+  'specialDates',
+  'giftIdeas',
 ]
 
 export interface DataState extends Collections {

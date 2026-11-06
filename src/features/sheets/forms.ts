@@ -12,6 +12,8 @@ export const SHEET_FORM = {
   event: 'sheet-form-event',
   period: 'sheet-form-period',
   cycleSetup: 'sheet-form-cycle-setup',
+  specialDate: 'sheet-form-special-date',
+  gift: 'sheet-form-gift',
 } as const satisfies Partial<Record<SheetKind, string>>
 
 export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: string }>> = {
@@ -22,4 +24,6 @@ export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: st
   event: { label: 'Salvar compromisso', testId: 'event-save' },
   period: { label: 'Salvar registro', testId: 'period-save' },
   cycleSetup: { label: 'Salvar durações', testId: 'cycle-setup-save' },
+  specialDate: { label: 'Salvar data', testId: 'special-save' },
+  gift: { label: 'Guardar ideia', testId: 'gift-save' },
 }

@@ -26,7 +26,7 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
   const [scope, setScope] = useState<'COUPLE' | 'PERSONAL'>(params.scope === 'PERSONAL' ? 'PERSONAL' : 'COUPLE')
   const [paidBy, setPaidBy] = useState<PartnerId>(viewer)
   const [rule, setRule] = useState<SplitRule>(defaultSplitRule(couple))
-  const [gift, setGift] = useState(false)
+  const [gift, setGift] = useState(params.gift === '1')
   const [status, setStatus] = useState<TxStatus>('CONFIRMED_SOLID')
   const [errors, setErrors] = useState<{ amount?: string; description?: string }>({})
   const id = useId()

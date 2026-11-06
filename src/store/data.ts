@@ -1,7 +1,7 @@
 import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
 import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
 import { COLLECTIONS } from '../domain/types'
-import type { CalendarEvent, Collections, CollectionName, CycleLog, CycleSettings, DataState, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
+import type { CalendarEvent, Collections, CollectionName, CycleLog, CycleSettings, DataState, GiftIdea, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 /** Chave antiga (dados em texto claro, versão sem login). Migrada para o cofre e apagada no cadastro. */
@@ -117,6 +117,8 @@ export function enqueueAll(who: PartnerId) {
     // ciclo: só a dona grava (espelho de cycle_settings_insert e cycle_logs_insert)
     if (c === 'cycleSettings') return (e as CycleSettings).id === who
     if (c === 'cycleLogs') return (e as CycleLog).ownerId === who
+    // presente é surpresa: só quem anotou sobe (gift_ideas_insert)
+    if (c === 'giftIdeas') return (e as GiftIdea).ownerId === who
     return true
   }
   dataStore.set((s) => {

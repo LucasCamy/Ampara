@@ -506,3 +506,67 @@ drop policy if exists shopping_delete on shopping_items;
 create policy shopping_delete on shopping_items for delete using (couple_id = my_couple_id());
 drop trigger if exists trg_shopping_items_synced on shopping_items;
 create trigger trg_shopping_items_synced before insert or update on shopping_items for each row execute function touch_synced_at();
+
+-- =====================================================================
+-- Iteração 12: datas especiais (do casal) e ideias de presente (só de quem anotou: é surpresa)
+-- =====================================================================
+create table if not exists special_dates (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  title text not null check (length(title) between 1 and 60),
+  date date not null,
+  kind text not null check (kind in ('ANNIVERSARY', 'BIRTHDAY', 'OTHER')),
+  person_id text check (person_id in ('A', 'B')),
+  created_by text not null check (created_by in ('A', 'B')),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_special_dates_pull on special_dates (couple_id, updated_at);
+
+create table if not exists gift_ideas (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  title text not null check (length(title) between 1 and 80),
+  note text not null default '' check (length(note) <= 280),
+  special_date_id uuid,
+  status text not null check (status in ('IDEA', 'BOUGHT', 'GIVEN')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_gift_ideas_pull on gift_ideas (couple_id, updated_at);
+
+alter table special_dates enable row level security;
+alter table gift_ideas enable row level security;
+
+drop policy if exists special_dates_read on special_dates;
+create policy special_dates_read on special_dates for select using (couple_id = my_couple_id());
+drop policy if exists special_dates_insert on special_dates;
+create policy special_dates_insert on special_dates for insert with check (couple_id = my_couple_id());
+drop policy if exists special_dates_update on special_dates;
+create policy special_dates_update on special_dates for update using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists special_dates_delete on special_dates;
+create policy special_dates_delete on special_dates for delete using (couple_id = my_couple_id());
+
+-- Presente: o par não lê, não grava e nem fica sabendo que existe
+drop policy if exists gift_ideas_read on gift_ideas;
+create policy gift_ideas_read on gift_ideas for select using (couple_id = my_couple_id() and owner_id = my_partner_id());
+drop policy if exists gift_ideas_insert on gift_ideas;
+create policy gift_ideas_insert on gift_ideas for insert with check (couple_id = my_couple_id() and owner_id = my_partner_id());
+drop policy if exists gift_ideas_update on gift_ideas;
+create policy gift_ideas_update on gift_ideas for update using (couple_id = my_couple_id() and owner_id = my_partner_id())
+  with check (couple_id = my_couple_id() and owner_id = my_partner_id());
+drop policy if exists gift_ideas_delete on gift_ideas;
+create policy gift_ideas_delete on gift_ideas for delete using (couple_id = my_couple_id() and owner_id = my_partner_id());
+
+do $$
+declare t text;
+begin
+  foreach t in array array['special_dates','gift_ideas'] loop
+    execute format('drop trigger if exists trg_%I_synced on %I', t, t);
+    execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
+  end loop;
+end $$;

@@ -108,6 +108,8 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const meds = filter(state.meds, keepMed)
   const medLogs = meds === state.meds ? state.medLogs : filter(state.medLogs, (l) => !removed.has(l.medicationId))
   const cycleLogs = filter(state.cycleLogs, keepCycleLog)
+  // ideia de presente do par nunca fica neste aparelho (é surpresa para quem está aqui)
+  const giftIdeas = filter(state.giftIdeas, (g) => g.ownerId === owner)
   // ajustes têm id = pessoa ('A'/'B'), igual ao do perfil: não entram em `removed` (que limpa a fila por id)
   const cycleSettings = Object.values(state.cycleSettings).every(keepCycleSettings)
     ? state.cycleSettings
@@ -116,5 +118,5 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const logIds = Object.keys(state.medLogs).filter((id) => !medLogs[id])
   for (const id of logIds) removed.add(id)
   const outbox = state.outbox.filter((e) => !removed.has(e.entityId))
-  return { ...state, transactions, tasks, events, meds, medLogs, cycleLogs, cycleSettings, outbox }
+  return { ...state, transactions, tasks, events, meds, medLogs, cycleLogs, cycleSettings, giftIdeas, outbox }
 }

@@ -135,6 +135,8 @@ export const TABLES: Record<CollectionName, string> = {
   cycleSettings: 'cycle_settings',
   cycleLogs: 'cycle_logs',
   shoppingItems: 'shopping_items',
+  specialDates: 'special_dates',
+  giftIdeas: 'gift_ideas',
 }
 
 /** Tabelas com chave (couple_id, id): um registro por pessoa */
