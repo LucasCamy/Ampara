@@ -7,3 +7,4 @@ playwright-report
 *.log
 .claude/settings.local.json
 dist-local
+dist-push

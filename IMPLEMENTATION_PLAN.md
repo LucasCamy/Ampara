@@ -37,6 +37,25 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 16 (2026-11-06): lembretes com a tela bloqueada (Web Push)
+
+- **Worker** (`server/push`, imagem `Dockerfile.push`, serviço `push` no compose, Deployment `ampara-push` no k8s,
+  imagem `ghcr.io/lucascamy/ampara-push` no CI). A cada 30 s lê o banco, decide com `planNotifications` (as mesmas
+  regras de dose do app: dias da semana, pausa da cartela) e envia: remédio na hora (janela de 10 min), "Pegou a
+  água?" quando o soneca acaba, atraso do par para a rede de apoio, rotina da casa (responsável ou os dois) e pedido
+  de ajuda. Cada envio é reservado em `push_sent` antes de sair (sem duplicar com reinício ou duas réplicas);
+  falha de rede libera a reserva; inscrição cancelada (404/410) é apagada. Fuso por aparelho.
+- **App:** Ajustes › Lembretes no celular (estados: iPhone sem instalar, sem nuvem, bloqueado, desligado, ativo),
+  opção de mostrar o nome do remédio (desligada por padrão), desligar neste aparelho. Service worker mostra a
+  notificação e abre o app no lugar certo (`/?quick=med` abre a confirmação).
+- **Banco:** `push_subscriptions`, `push_config`, `push_sent` e as RPCs `push_public_key`, `save_push_subscription`,
+  `delete_push_subscription`, com caso no `validate.sql`.
+- **Validação:** 9 testes do planejador, `push:check` contra o Postgres real (cifra decifrada como o aparelho, VAPID,
+  sem duplicar, 410, falha temporária), E2E da ativação (o pushManager é simulado: não há serviço de push no
+  navegador sem tela), imagem construída e rodando no Docker (gerou as chaves). O manifesto k8s não foi validado
+  contra o cluster (sem acesso daqui).
+- Não testado num celular de verdade: precisa do deploy (o push exige https e o app publicado).
+
 ## Iteração 15 (2026-11-06): backup cifrado
 
 - Ajustes › Backup: "Baixar backup" (pede a senha) gera `ampara-backup-AAAA-MM-DD.ampara`, que é o próprio cofre
@@ -278,7 +297,7 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 
 ## Pendências e riscos
 
-- **Alarmes nativos do iOS:** um PWA não agenda notificação local `time-sensitive` offline. O contador de 5 min roda
+- **Alarmes nativos do iOS:** (Web Push na iteração 16 cobre o caso com internet) um PWA não agenda notificação local `time-sensitive` offline. O contador de 5 min roda
   com o app aberto. Para alarmes reais na tela bloqueada, migrar a camada de UI/domínio para Expo (o domínio em
   `src/domain` é puro e reaproveitável).
 - **Supabase:** adaptador e schema prontos, não conectados (sem credenciais nesta sessão). O pareamento é simulado

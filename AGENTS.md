@@ -32,6 +32,8 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 | `npm run db:up` | Supabase local no Docker (Postgres, Auth, REST, gateway em `:54321`) e aplica `supabase/schema.sql` |
 | `npm run db:check` | `supabase/tests/validate.sql`: estrutura, inserções e RLS com três contas no Postgres real |
 | `npm run dev:local` / `npm run e2e:local` | App / Playwright de dois aparelhos contra o banco do Docker (`.env.docker`) |
+| `npm run push:check` | Worker de lembretes contra o Postgres do Docker: envia para um serviço de push falso e decifra (pare o serviço `push` do compose antes) |
+| `npm run push:build` | Empacota o worker (`server/push` + `src/domain`) em `dist-push/worker.mjs` (imagem: `Dockerfile.push`) |
 
 ## Estrutura
 
@@ -40,7 +42,9 @@ src/
   domain/      regras puras e testadas (finance, privacy, medication, cycle, outbox, tasks, dates, format)
   store/       stores externos (data, ui, clock) com useSyncExternalStore; ações estáveis
   auth/        cofre cifrado, sessão, convite do par (crypto, vault, session)
-  sync/        motor da fila, nuvem (cloud.ts: conta, pareamento, push/pull) e cliente REST do Supabase (remote.ts)
+  sync/        motor da fila, nuvem (cloud.ts: conta, pareamento, push/pull), cliente REST do Supabase (remote.ts)
+               e inscrição de lembretes (push.ts)
+server/push/   worker de Web Push: plan.ts (decide, puro e testado) e worker.ts (banco + envio)
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
   features/    telas: today, agenda, us (aba Nós), routines, cycle, finance, settings, sheets, shell
   styles/      tokens.css (fonte única de cor, raio, sombra e motion)

@@ -303,6 +303,13 @@ export async function connect(mode: 'signup' | 'signin', email: string, password
 }
 
 /** Registra de novo o convite na nuvem (após gerar um convite novo) */
+/** RPC autenticada da pessoa conectada (lembretes por push). Erro claro se a nuvem não está conectada. */
+export async function cloudRpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const token = await accessToken()
+  if (!cfg || !token) throw new Error('Conecte a nuvem neste aparelho primeiro.')
+  return rpc<T>(cfg, token, name, args)
+}
+
 export async function publishInvite(code: string) {
   const token = await accessToken()
   if (cfg && token) await rpc(cfg, token, 'create_invite', { p_code: code }).catch(() => undefined)

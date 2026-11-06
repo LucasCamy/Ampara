@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/session'
 import { SecuritySection } from './SecuritySection'
 import { BackupSection } from './BackupSection'
 import { CloudSection } from './CloudSection'
+import { NotificationsSection } from './NotificationsSection'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
 import { useCouple, usePeople } from '../../store/hooks'
@@ -71,6 +72,8 @@ export function SettingsScreen() {
           <BackupSection />
 
           <CloudSection />
+
+          <NotificationsSection />
 
           <section className="module p-4 sm:p-5" aria-labelledby="divisao">
             <SectionHeader id="divisao" title="Divisão padrão" rest="· gastos do casal" />

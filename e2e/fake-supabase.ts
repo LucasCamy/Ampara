@@ -31,6 +31,10 @@ export class FakeSupabase {
   tables = new Map<string, Map<string, Row>>()
   /** pedidos recebidos com Authorization ausente ou chave anônima tentando gravar */
   anonWrites = 0
+  /** inscrições de push (espelho de save_push_subscription / delete_push_subscription) */
+  pushSubs = new Map<string, { couple_id: string; partner_id: 'A' | 'B'; p256dh: string; auth: string; tz: string; show_details: boolean }>()
+  /** chave pública VAPID que o "servidor" anuncia (65 bytes, P-256) */
+  vapidPublicKey = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
   failures: string[] = []
   private seq = 0
 
@@ -154,6 +158,25 @@ export class FakeSupabase {
     // RPCs
     if (path.startsWith('/rest/v1/rpc/')) {
       const name = path.slice('/rest/v1/rpc/'.length)
+      if (name === 'push_public_key') return json(200, me ? this.vapidPublicKey : null)
+      if (name === 'save_push_subscription') {
+        if (!me) return json(400, { message: 'not paired' })
+        if (!/^https:\/\//.test(String(body.p_endpoint))) return json(400, { message: 'invalid subscription' })
+        this.pushSubs.set(String(body.p_endpoint), {
+          couple_id: me.couple_id,
+          partner_id: me.partner_id,
+          p256dh: String(body.p_p256dh),
+          auth: String(body.p_auth),
+          tz: String(body.p_tz || 'America/Sao_Paulo'),
+          show_details: body.p_show_details === true,
+        })
+        return json(200, null)
+      }
+      if (name === 'delete_push_subscription') {
+        const sub = this.pushSubs.get(String(body.p_endpoint))
+        if (me && sub && sub.couple_id === me.couple_id && sub.partner_id === me.partner_id) this.pushSubs.delete(String(body.p_endpoint))
+        return json(200, null)
+      }
       if (name === 'my_membership') return json(200, me ? [{ couple_id: me.couple_id, partner_id: me.partner_id }] : [])
       if (name === 'create_couple') {
         if (me) return json(400, { message: 'already paired' })

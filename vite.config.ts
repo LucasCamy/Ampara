@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => ({
   server: { headers: securityHeaders },
   preview: { headers: securityHeaders },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'server/**/*.test.ts'],
     environment: 'node',
   },
 }))

@@ -14,7 +14,7 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','push_subscriptions','push_config','push_sent']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -24,7 +24,7 @@ begin
   assert missing is null, 'FALHOU: tabelas sem RLS: ' || coalesce(missing, '');
 
   select string_agg(f, ', ') into missing
-    from unnest(array['create_couple','create_invite','join_couple','my_membership','my_couple_id','my_partner_id']) f
+    from unnest(array['create_couple','create_invite','join_couple','my_membership','my_couple_id','my_partner_id','push_public_key','save_push_subscription','delete_push_subscription']) f
    where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f);
   assert missing is null, 'FALHOU: funções ausentes: ' || coalesce(missing, '');
 
@@ -35,7 +35,7 @@ begin
      and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 20 tabelas, RLS ligado em todas, 6 funções'
+\echo 'ok  estrutura: 23 tabelas, RLS ligado em todas, 9 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -444,6 +444,42 @@ do $$ begin
   assert (select count(*) from savings_goals) + (select count(*) from focus_sessions) = 0, 'FALHOU: conta de fora viu caixinha ou sessão';
 end $$;
 \echo 'ok  fazer junto e caixinhas: os dois editam, sem saldo negativo; conta de fora não vê'
+
+-- ---------------------------------------------------------------- 6g. Web Push
+reset role;
+insert into push_config (id, public_key, private_key) values (1, 'chave-publica-teste', 'chave-privada-teste') on conflict (id) do nothing;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+select save_push_subscription('https://push.exemplo.test/ela-1', 'p256dh-dela', 'auth-dela', 'America/Sao_Paulo', false) as _ \gset
+do $$ begin
+  assert (select count(*) from push_subscriptions) = 1, 'FALHOU: ela não vê a própria inscrição';
+  assert push_public_key() is not null, 'FALHOU: chave pública indisponível para quem está logado';
+  begin
+    perform private_key from push_config;
+    assert (select count(*) from push_config) = 0, 'FALHOU: chave privada VAPID legível pelo app';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform save_push_subscription('http://inseguro.test/x', 'a', 'b', '', false);
+    raise exception 'FALHOU: aceitou endpoint sem https';
+  exception when raise_exception then
+    if sqlerrm like 'FALHOU%' then raise; end if;
+  end;
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+select delete_push_subscription('https://push.exemplo.test/ela-1') as _ \gset
+do $$ begin
+  assert (select count(*) from push_subscriptions) = 0, 'FALHOU: Lucas viu a inscrição dela';
+  assert (select count(*) from push_sent) = 0, 'FALHOU: registro de envios legível pelo app';
+end $$;
+reset role;
+do $$ begin
+  assert (select count(*) from push_subscriptions where endpoint = 'https://push.exemplo.test/ela-1') = 1, 'FALHOU: Lucas apagou a inscrição dela';
+end $$;
+\echo 'ok  push: cada um vê e apaga só as próprias inscrições; chave privada e envios fora do alcance do app'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

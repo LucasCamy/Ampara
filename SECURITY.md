@@ -92,6 +92,19 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 | API-key exposure and unsafe transport | confirmado | Só a chave anônima pública vai ao cliente; o adaptador recusa gravar sem token de usuário |
 | Export and backup scope expansion / Import and restore | confirmado | Não há exportação; "Restaurar exemplo" e "Apagar dados" só existem dentro da sessão, o último com senha |
 
+## Lembretes (Web Push)
+
+- O conteúdo vai cifrado de ponta a ponta (RFC 8291, aes128gcm): o serviço de push do navegador (Google, Apple,
+  Microsoft) não lê o texto. Assinatura VAPID (RFC 8292). Conferido em `npm run push:check` decifrando como o aparelho.
+- Por padrão a tela bloqueada não mostra o nome do remédio ("Hora do seu remédio"); a pessoa liga se quiser
+  (`show_details`, por aparelho). Pedido de ajuda e atraso do par seguem a mesma regra.
+- Inscrições: cada pessoa lê e apaga só as próprias (RLS); gravar só pela RPC `save_push_subscription`, que exige
+  https e prende a inscrição à pessoa logada. Chave privada VAPID e o registro de envios (`push_config`, `push_sent`)
+  ficam sem política: o app não lê. O worker gera as chaves na primeira vez.
+- Limitação: o worker usa o usuário `postgres` (precisa ler os remédios de todos os casais). Um papel próprio só de
+  leitura com BYPASSRLS seria o ideal; fica como melhoria. A senha não pode ter caracteres especiais de URL.
+- iPhone: só com o app na Tela de Início (iOS 16.4+). Sem a nuvem conectada não há lembrete com o app fechado.
+
 ## Limitações conhecidas (honestas)
 
 - **Mesmo aparelho, duas pessoas:** enquanto alguém está conectado, as ferramentas de desenvolvedor do navegador

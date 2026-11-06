@@ -669,3 +669,63 @@ begin
     execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
   end loop;
 end $$;
+
+-- =====================================================================
+-- Iteração 16: lembretes com a tela bloqueada (Web Push)
+-- =====================================================================
+-- Aparelhos inscritos. O endpoint identifica o navegador; trocar de pessoa no mesmo navegador move a inscrição.
+create table if not exists push_subscriptions (
+  endpoint text primary key check (endpoint ~ '^https://'),
+  couple_id text not null references couples (id) on delete cascade,
+  partner_id text not null check (partner_id in ('A', 'B')),
+  p256dh text not null,
+  auth text not null,
+  tz text not null default 'America/Sao_Paulo',
+  -- false: a tela bloqueada mostra só "Hora do seu remédio" (nome do remédio é dado de saúde)
+  show_details boolean not null default false,
+  created_at timestamptz not null default now(),
+  last_ok_at timestamptz
+);
+alter table push_subscriptions enable row level security;
+drop policy if exists push_subscriptions_read on push_subscriptions;
+create policy push_subscriptions_read on push_subscriptions for select using (couple_id = my_couple_id() and partner_id = my_partner_id());
+drop policy if exists push_subscriptions_delete on push_subscriptions;
+create policy push_subscriptions_delete on push_subscriptions for delete using (couple_id = my_couple_id() and partner_id = my_partner_id());
+
+-- Chaves VAPID (o worker gera na primeira vez) e registro do que já foi enviado: sem política, só o worker acessa
+create table if not exists push_config (
+  id integer primary key check (id = 1),
+  public_key text not null,
+  private_key text not null,
+  created_at timestamptz not null default now()
+);
+alter table push_config enable row level security;
+create table if not exists push_sent (
+  key text primary key,
+  sent_at timestamptz not null default now()
+);
+alter table push_sent enable row level security;
+
+create or replace function push_public_key() returns text language sql stable security definer set search_path = public as $$
+  select public_key from push_config where id = 1
+$$;
+
+create or replace function save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_tz text, p_show_details boolean)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_couple text := my_couple_id(); v_partner text := my_partner_id();
+begin
+  if v_couple is null then raise exception 'not paired'; end if;
+  if p_endpoint !~ '^https://' or length(p_endpoint) > 1000 or length(p_p256dh) > 200 or length(p_auth) > 100 then raise exception 'invalid subscription'; end if;
+  insert into push_subscriptions (endpoint, couple_id, partner_id, p256dh, auth, tz, show_details)
+  values (p_endpoint, v_couple, v_partner, p_p256dh, p_auth, coalesce(nullif(p_tz, ''), 'America/Sao_Paulo'), coalesce(p_show_details, false))
+  on conflict (endpoint) do update set couple_id = excluded.couple_id, partner_id = excluded.partner_id, p256dh = excluded.p256dh,
+    auth = excluded.auth, tz = excluded.tz, show_details = excluded.show_details, created_at = now();
+end $$;
+
+create or replace function delete_push_subscription(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  delete from push_subscriptions where endpoint = p_endpoint and couple_id = my_couple_id() and partner_id = my_partner_id()
+$$;
+
+revoke all on function push_public_key(), save_push_subscription(text, text, text, text, boolean), delete_push_subscription(text) from public, anon;
+grant execute on function push_public_key(), save_push_subscription(text, text, text, text, boolean), delete_push_subscription(text) to authenticated;

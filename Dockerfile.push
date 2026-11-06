@@ -1,0 +1,21 @@
+# Worker de lembretes (Web Push). Lê o Postgres e envia as notificações; não expõe porta.
+# Estágio 1: empacota server/push + src/domain num arquivo só
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY scripts/build-push.mjs scripts/
+COPY server server
+COPY src/domain src/domain
+RUN node scripts/build-push.mjs \
+ && node -e "const l=require('./package-lock.json').packages;const v=n=>l['node_modules/'+n].version;require('fs').writeFileSync('dist-push/package.json',JSON.stringify({private:true,type:'module',dependencies:{pg:v('pg'),'web-push':v('web-push')}}))"
+
+# Estágio 2: só o worker e as duas dependências de produção (versões do package-lock)
+FROM node:22-alpine AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=builder /app/dist-push/package.json ./
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY --from=builder /app/dist-push/worker.mjs ./
+USER node
+CMD ["node", "worker.mjs"]

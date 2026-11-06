@@ -40,3 +40,16 @@ jobs:
             ghcr.io/lucascamy/ampara:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and Push Push-Worker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.push
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/lucascamy/ampara-push:latest
+            ghcr.io/lucascamy/ampara-push:${{ github.sha }}
+          cache-from: type=gha,scope=push
+          cache-to: type=gha,mode=max,scope=push

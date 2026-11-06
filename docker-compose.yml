@@ -89,6 +89,16 @@ services:
       PGRST_JWT_SECRET: ampara-local-dev-jwt-secret-nao-use-em-producao-0001
       PGRST_DB_USE_LEGACY_GUCS: 'false'
 
+  # Lembretes com a tela bloqueada (Web Push): lê o banco e envia. Gera as chaves VAPID na primeira vez.
+  push:
+    build: { context: ., dockerfile: Dockerfile.push }
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://postgres:ampara-local-postgres@db:5432/postgres
+      PUSH_SUBJECT: http://localhost:5173
+
   gateway:
     image: nginx:1.27-alpine
     restart: unless-stopped

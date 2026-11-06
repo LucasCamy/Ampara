@@ -394,3 +394,56 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 16Mi
+---
+# Lembretes com a tela bloqueada (Web Push). Sem porta exposta: lê o Postgres e chama os serviços de push
+# dos navegadores. Gera as chaves VAPID na primeira vez (tabela push_config). Uma réplica basta; duas não
+# duplicam envio (cada lembrete é reservado em push_sent antes de sair).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ampara-push
+  namespace: ampara
+  labels:
+    app: ampara-push
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 1m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: ampara-push
+  template:
+    metadata:
+      labels:
+        app: ampara-push
+    spec:
+      containers:
+        - name: push
+          image: ghcr.io/lucascamy/ampara-push:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: POSTGRES_PASSWORD
+            # lê os dados de todos os casais (RLS não se aplica ao dono das tabelas); senha sem caracteres de URL
+            - name: DATABASE_URL
+              value: "postgres://postgres:$(POSTGRES_PASSWORD)@db:5432/postgres"
+            - name: PUSH_SUBJECT
+              value: "https://ampara.cloudlane.com.br"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 48Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
