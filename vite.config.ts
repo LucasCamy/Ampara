@@ -9,7 +9,8 @@ import tailwindcss from '@tailwindcss/vite'
  * style-src permite 'unsafe-inline' porque o Motion anima via atributo style.
  */
 function csp(supabaseUrl: string | undefined): string {
-  const connect = ["'self'", supabaseUrl].filter(Boolean).join(' ')
+  const extra = supabaseUrl && supabaseUrl !== 'self' ? supabaseUrl : undefined
+  const connect = ["'self'", extra].filter(Boolean).join(' ')
   return [
     "default-src 'self'",
     "script-src 'self'",

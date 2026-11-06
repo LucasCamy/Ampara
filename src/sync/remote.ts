@@ -11,7 +11,8 @@ export interface RemoteConfig {
 }
 
 export function remoteConfig(): RemoteConfig | null {
-  const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '')
+  const raw = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '')
+  const url = raw === 'self' && typeof location !== 'undefined' ? location.origin : raw
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   return url && anonKey ? { url, anonKey } : null
 }

@@ -1,0 +1,396 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ampara
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ampara-db-pvc
+  namespace: ampara
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: ampara
+spec:
+  type: ClusterIP
+  selector:
+    app: ampara-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth
+  namespace: ampara
+spec:
+  type: ClusterIP
+  selector:
+    app: ampara-auth
+  ports:
+    - name: http
+      port: 9999
+      targetPort: 9999
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rest
+  namespace: ampara
+spec:
+  type: ClusterIP
+  selector:
+    app: ampara-rest
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ampara-web
+  namespace: ampara
+spec:
+  type: LoadBalancer
+  selector:
+    app: ampara-web
+  ports:
+    - name: http
+      port: 8217
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ampara-db
+  namespace: ampara
+  labels:
+    app: ampara-db
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ampara-db
+  template:
+    metadata:
+      labels:
+        app: ampara-db
+    spec:
+      containers:
+        - name: db
+          image: supabase/postgres:15.8.1.085
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: POSTGRES_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: JWT_SECRET
+            - name: POSTGRES_HOST
+              value: /var/run/postgresql
+            - name: POSTGRES_DB
+              value: postgres
+            - name: JWT_EXP
+              value: "3600"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -h
+                - localhost
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -h
+                - localhost
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: sql
+              mountPath: /docker-entrypoint-initdb.d/init-scripts/99-roles.sql
+              subPath: 99-roles.sql
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ampara-db-pvc
+        - name: sql
+          configMap:
+            name: ampara-sql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ampara-auth
+  namespace: ampara
+  labels:
+    app: ampara-auth
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: ampara-auth
+  template:
+    metadata:
+      labels:
+        app: ampara-auth
+    spec:
+      initContainers:
+        - name: wait-db
+          image: supabase/postgres:15.8.1.085
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -U postgres -h db; do
+                echo "Aguardando Postgres (db:5432)..."
+                sleep 2
+              done
+      containers:
+        - name: auth
+          image: supabase/gotrue:v2.177.0
+          ports:
+            - containerPort: 9999
+              name: http
+          env:
+            - name: GOTRUE_API_HOST
+              value: "0.0.0.0"
+            - name: GOTRUE_API_PORT
+              value: "9999"
+            - name: API_EXTERNAL_URL
+              value: "https://ampara.cloudlane.com.br"
+            - name: GOTRUE_SITE_URL
+              value: "https://ampara.cloudlane.com.br"
+            - name: GOTRUE_URI_ALLOW_LIST
+              value: "*"
+            - name: GOTRUE_DB_DRIVER
+              value: postgres
+            - name: GOTRUE_DB_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: GOTRUE_DB_DATABASE_URL
+            - name: GOTRUE_DISABLE_SIGNUP
+              value: "false"
+            - name: GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: JWT_SECRET
+            - name: GOTRUE_JWT_EXP
+              value: "3600"
+            - name: GOTRUE_JWT_AUD
+              value: authenticated
+            - name: GOTRUE_JWT_DEFAULT_GROUP_NAME
+              value: authenticated
+            - name: GOTRUE_JWT_ADMIN_ROLES
+              value: service_role
+            - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
+              value: "true"
+            - name: GOTRUE_EXTERNAL_PHONE_ENABLED
+              value: "false"
+            - name: GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED
+              value: "false"
+            - name: GOTRUE_MAILER_AUTOCONFIRM
+              value: "true"
+          resources:
+            requests:
+              cpu: 15m
+              memory: 32Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ampara-rest
+  namespace: ampara
+  labels:
+    app: ampara-rest
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: ampara-rest
+  template:
+    metadata:
+      labels:
+        app: ampara-rest
+    spec:
+      initContainers:
+        - name: migrate
+          image: supabase/postgres:15.8.1.085
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGOPTIONS
+              value: "-c client_min_messages=warning"
+          command:
+            - sh
+            - -c
+            - |
+              until psql -h db -U postgres -d postgres -tAc "select coalesce(to_regclass('auth.users')::text, '')" 2>/dev/null | grep -q users; do
+                echo "Aguardando GoTrue criar auth.users..."
+                sleep 2
+              done
+              psql -h db -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f /supabase/schema.sql -c "notify pgrst, 'reload schema'"
+          volumeMounts:
+            - name: sql
+              mountPath: /supabase/schema.sql
+              subPath: schema.sql
+              readOnly: true
+      containers:
+        - name: rest
+          image: postgrest/postgrest:v12.2.12
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PGRST_DB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: PGRST_DB_URI
+            - name: PGRST_DB_SCHEMAS
+              value: public
+            - name: PGRST_DB_ANON_ROLE
+              value: anon
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: JWT_SECRET
+            - name: PGRST_DB_USE_LEGACY_GUCS
+              value: "false"
+          resources:
+            requests:
+              cpu: 15m
+              memory: 32Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+      volumes:
+        - name: sql
+          configMap:
+            name: ampara-sql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ampara-web
+  namespace: ampara
+  labels:
+    app: ampara-web
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 1m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: ampara-web
+  template:
+    metadata:
+      labels:
+        app: ampara-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/lucascamy/ampara:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
