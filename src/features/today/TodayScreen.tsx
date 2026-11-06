@@ -377,7 +377,7 @@ function BillRow({ bill }: { bill: Transaction }) {
       <div className="min-w-0 flex-1">
         <p className="text-[15px] font-semibold text-ink">Pagar {bill.description.toLowerCase()}</p>
         <p className="text-[13px] text-muted">
-          Previsto <span className="font-data">{formatCents(bill.amountCents)}</span> · conta do casal, vence hoje
+          Previsto <span className="font-data whitespace-nowrap">{formatCents(bill.amountCents)}</span> · conta do casal, vence hoje
         </p>
         <OwnerTag tone="us">Nós</OwnerTag>
       </div>

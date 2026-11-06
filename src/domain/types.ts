@@ -56,7 +56,8 @@ export interface Task {
   updatedAt: string
 }
 
-export type EventKind = 'COUPLE' | 'HEALTH' | 'PERSONAL'
+/** COUPLE/PERSONAL = compromisso (do casal / de uma pessoa), HEALTH = saúde/remédio, BILL = conta que vence */
+export type EventKind = 'COUPLE' | 'HEALTH' | 'PERSONAL' | 'BILL'
 
 export interface CalendarEvent {
   id: string
@@ -83,6 +84,10 @@ export interface Medication {
   /** 0 = domingo. Vazio = todos os dias */
   weekdays: number[]
   stockCount: number | null
+  /** Unidade do estoque ("comprimidos", "unidades"). Vazio = padrão pelo tipo */
+  stockUnit?: string | null
+  /** Rotina da casa: quem costuma fazer (só referência; qualquer um confirma). null = qualquer um */
+  assignee?: PartnerId | null
   lowStockThreshold: number
   notifyPartnerOnDelay: boolean
   delayMinutesThreshold: number

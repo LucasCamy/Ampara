@@ -64,7 +64,7 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 | Clickjacking | confirmado no `vite preview` / needs_validation na hospedagem | `vite.config.ts` e `public/_headers`; conferir os cabeçalhos no provedor real |
 | postMessage origin and source trust | não se aplica | Sem `postMessage`; `BroadcastChannel` é restrito à mesma origem |
 | Ordinary CSRF | não se aplica | Supabase usa token `Authorization: Bearer`, não cookie |
-| Missing tenant or owner enforcement / Policy and query disagreement | confirmado no simulado / needs_validation no Postgres | `supabase/schema.sql` (RLS por `couple_id`, `tx_read` espelha `src/domain/privacy.ts`); E2E de dois aparelhos com `e2e/fake-supabase.ts` |
+| Missing tenant or owner enforcement / Policy and query disagreement | confirmado no Postgres local (Docker) / conferir de novo no projeto de produção | `supabase/schema.sql` (RLS por `couple_id`, `tx_read` espelha `src/domain/privacy.ts`); `supabase/tests/validate.sql` com três contas e `e2e/real-supabase.spec.ts`. A validação real achou e corrigiu um vazamento (`tasks_write` "for all" liberava SELECT) |
 | Account linking and identity collision | confirmado | Conta que já pertence a outra pessoa ou espaço é recusada e deslogada (`connect()`); convite é de uso único e amarrado ao parceiro certo |
 | Stale authorization and derived copy use | confirmado | `purgeUnauthorized` ao fechar a aba pessoal; tokens saem da memória ao bloquear |
 | API-key exposure and unsafe transport | confirmado | Só a chave anônima pública vai ao cliente; o adaptador recusa gravar sem token de usuário |
@@ -80,8 +80,9 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 - **Troca de senha** reembrulha a DEK, mas não a troca: uma cópia antiga do cofre continua abrindo com a senha
   antiga. Rotacionar a DEK exige as duas senhas.
 - **Se as duas pessoas esquecerem a senha**, os dados deste aparelho não podem ser recuperados (por desenho).
-- **Nuvem testada contra um Supabase simulado** (`e2e/fake-supabase.ts`, que reproduz as políticas do schema).
-  Falta rodar o `schema.sql` num Postgres/Supabase real e repetir os fluxos: até lá, RLS e RPCs são `needs_validation`.
+- **Nuvem validada num Supabase local** (Docker com as imagens oficiais: `npm run db:check` e `npm run e2e:local`).
+  No projeto de produção, rode `supabase/tests/validate.sql` no SQL Editor depois de aplicar o schema.
+- **Logs de dose** de remédio sem rede de apoio ainda descem para o par (status e horário, sem o nome do remédio).
 - **Sem realtime:** a descida acontece ao abrir, ao voltar online, ao sincronizar e a cada 30 s com o app aberto.
 - **Tarefa que vira privada** depois de sincronizada continua no aparelho do par até ser arquivada (o RLS só
   impede leituras novas).

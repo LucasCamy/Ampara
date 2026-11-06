@@ -11,6 +11,7 @@
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-subtle: var(--subtle);
+  --color-segment-active: var(--segment-active);
   --color-selected: var(--selected);
   --color-night: var(--night);
   --color-on-night: var(--on-night);

@@ -25,6 +25,8 @@ const projects: Project[] = sizes.flatMap((s) =>
 
 export default defineConfig({
   testDir: './e2e',
+  // contra o Supabase real do Docker: playwright.local.config.ts (npm run e2e:local)
+  testIgnore: 'real-supabase.spec.ts',
   outputDir: './test-results/artifacts',
   fullyParallel: true,
   workers: 4,

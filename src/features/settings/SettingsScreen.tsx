@@ -8,10 +8,10 @@ import { CloudSection } from './CloudSection'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
 import { useCouple, usePeople } from '../../store/hooks'
-import { ui, useUi } from '../../store/ui'
+import { ui, useUi, type SheetKind } from '../../store/ui'
 import { adapterName } from '../../sync/engine'
 
-const SHORTCUTS: { quick: string; name: string; icon: LucideIcon; how: string }[] = [
+const SHORTCUTS: { quick: SheetKind; name: string; icon: LucideIcon; how: string }[] = [
   { quick: 'task', name: 'Ampara: + Tarefa rápida', icon: ListPlus, how: 'Abre a gaveta de tarefa com o teclado pronto.' },
   { quick: 'expense', name: 'Ampara: + Registrar gasto', icon: ReceiptText, how: 'Abre o registro de gasto. Aceita &amount=12,50.' },
   { quick: 'med', name: 'Ampara: Tomei meu remédio', icon: CircleCheck, how: 'Abre a confirmação da dose do turno atual.' },
@@ -129,7 +129,7 @@ export function SettingsScreen() {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Button size="sm" variant="primary" icon={Smartphone} onClick={() => location.assign(url)} data-testid={`try-${s.quick}`}>
+                      <Button size="sm" variant="primary" icon={Smartphone} onClick={() => ui.launchQuick(s.quick)} data-testid={`try-${s.quick}`}>
                         Testar agora
                       </Button>
                       <Button size="sm" variant="quiet" icon={copied === s.quick ? CircleCheck : Copy} onClick={() => copy(url, s.quick)}>

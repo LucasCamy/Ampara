@@ -29,6 +29,9 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 | `node scripts/audit-responsive.mjs` | Com `npm run dev` rodando: aponta menus cortados e botões estourando em 360/390 |
 | `npm run build` | Typecheck + build de produção em `dist/` |
 | `npm run e2e` | Build + `vite preview` + Playwright (larguras 360, 390, 1280, 1440; claro e escuro) |
+| `npm run db:up` | Supabase local no Docker (Postgres, Auth, REST, gateway em `:54321`) e aplica `supabase/schema.sql` |
+| `npm run db:check` | `supabase/tests/validate.sql`: estrutura, inserções e RLS com três contas no Postgres real |
+| `npm run dev:local` / `npm run e2e:local` | App / Playwright de dois aparelhos contra o banco do Docker (`.env.docker`) |
 
 ## Estrutura
 
@@ -41,7 +44,8 @@ src/
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
   features/    telas: today, agenda, routines, finance, settings, sheets, shell
   styles/      tokens.css (fonte única de cor, raio, sombra e motion)
-supabase/      schema.sql com RLS da privacidade financeira
+supabase/      schema.sql (idempotente, RLS da privacidade) e tests/validate.sql
+docker/       roles do Postgres e gateway nginx do docker-compose.yml
 public/        manifest.webmanifest, ícones, sw.js
 ```
 
@@ -57,7 +61,9 @@ public/        manifest.webmanifest, ícones, sw.js
    unidade, pessoa e janela de tempo. Dinheiro é sempre inteiro em centavos (`amountCents`).
 5. **Anti-flick.** Abas, chips e filtros trocam o estado ativo sem transição. Transição de cor só em `hover`.
 6. **Gavetas no compositor.** Animar apenas `transform` em string e `opacity`. Sem `backdrop-filter`.
-7. **Formulários.** `label` acima, campo `>= 16px`, alvo `>= 48px`, erro inline com `role="alert"` + `aria-invalid`.
+7. **Formulários e alvos.** `label` acima, campo `>= 16px`, erro inline com `role="alert"` + `aria-invalid`. Campos e ações
+   primárias `>= 48px` (`min-h-12`); controles compactos e filtros (`Segmented size="sm"`, ícones, pílula de sync) `>= 44px` (`min-h-11`).
+   Botão de salvar da gaveta vai no `footer` do `<Sheet>` (fora da rolagem) com `form="<id>"` (ver `src/features/sheets/forms.ts`).
 8. **Desfazer em vez de confirmar.** Ações rápidas acontecem na hora e mostram `Toast` com `[Desfazer]` por 5 s.
 9. **Sem emoji como ícone estrutural** e sem travessão longo em texto visível. Ícones: Lucide.
 10. **Nada antes do login.** Nenhuma tela lê dados sem sessão aberta. Nunca gravar dados ou senha em texto claro;
@@ -65,7 +71,8 @@ public/        manifest.webmanifest, ícones, sw.js
     Trocar de pessoa, apagar dados e gerar convite exigem senha.
 11. **Nuvem.** Escrever no estado depois de algo assíncrono sempre com `dataStore.set((cur) => ...)` sobre o estado
     atual, nunca com uma cópia lida antes (evita atualização perdida). Políticas novas no `schema.sql` precisam do
-    espelho em `e2e/fake-supabase.ts`.
+    espelho em `e2e/fake-supabase.ts` e um caso em `supabase/tests/validate.sql` (rode `npm run db:check`). Política
+    de escrita nunca `for all`: no Postgres ela também libera SELECT. O `schema.sql` precisa continuar idempotente.
 12. **Mobile primeiro de verdade.** Menus (`Segmented`) precisam caber em 360px: use `stretch` e `shortLabel`.
     Rode `scripts/audit-responsive.mjs` depois de mexer em layout.
 13. **Privacidade é regra de domínio.** Qualquer leitura de transações para um visualizador passa por

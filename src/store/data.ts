@@ -1,6 +1,6 @@
 import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
 import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
-import type { Collections, CollectionName, DataState, Medication, PartnerId, Transaction } from '../domain/types'
+import type { Collections, CollectionName, DataState, Medication, PartnerId, Task, Transaction } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 /** Chave antiga (dados em texto claro, versão sem login). Migrada para o cofre e apagada no cadastro. */
@@ -102,6 +102,11 @@ export function enqueueAll(who: PartnerId) {
     if (c === 'meds') {
       const m = e as Medication
       return m.ownerId === null || m.ownerId === who
+    }
+    if (c === 'tasks') {
+      // espelho de tasks_read: tarefa privada do par fica para o aparelho do par
+      const t = e as Task
+      return t.assignedTo == null || t.assignedTo === who || t.sentBy === who || t.visibleToPartner
     }
     return true
   }

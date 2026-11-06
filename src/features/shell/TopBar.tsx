@@ -53,7 +53,7 @@ export function SyncPill() {
       aria-label={`${full}. Tocar para ${forced ? 'voltar a sincronizar' : 'simular modo offline'}`}
       title={forced ? 'Voltar a sincronizar' : 'Simular modo offline'}
       className={cx(
-        'press inline-flex min-h-10 min-w-0 items-center gap-1.5 overflow-hidden rounded-full border px-2.5 text-[12px] font-semibold whitespace-nowrap',
+        'press inline-flex min-h-11 min-w-0 items-center gap-1.5 overflow-hidden rounded-full border px-2.5 text-[12px] font-semibold whitespace-nowrap',
         state === 'offline' ? 'border-dashed border-warn bg-warn-soft text-warn' : state === 'syncing' ? 'border-dashed border-line-strong text-muted' : 'border-line text-muted',
       )}
     >
@@ -118,6 +118,7 @@ export function TopBar() {
   const { me } = usePeople()
   const [batteryOpen, setBatteryOpen] = useState(false)
   const E = ENERGY[me.energy]
+  const onSettings = useUi((s) => s.tab === 'ajustes')
   return (
     <header className="safe-top sticky top-0 z-30 border-b border-line bg-bg lg:hidden">
       <div className="mx-auto flex max-w-[720px] items-center gap-1 px-4 pt-2">
@@ -144,7 +145,12 @@ export function TopBar() {
           type="button"
           onClick={() => ui.setTab('ajustes')}
           aria-label="Ajustes e atalhos do iPhone"
-          className="press hoverable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink"
+          aria-current={onSettings ? 'page' : undefined}
+          data-testid="topbar-settings"
+          className={cx(
+            'press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border',
+            onSettings ? 'border-action bg-selected text-action' : 'hoverable border-transparent text-ink',
+          )}
         >
           <Settings size={20} aria-hidden />
         </button>

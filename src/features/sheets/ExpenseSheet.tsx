@@ -1,12 +1,13 @@
 import { CircleCheck, CircleDashed, Gift, User, Users } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import { CATEGORIES, CATEGORY_ORDER } from '../../components/categories'
-import { Button, ChoiceChips, cx, FieldError, Switch } from '../../components/ui'
+import { ChoiceChips, cx, FieldError, Switch } from '../../components/ui'
 import { computeShares, defaultSplitRule } from '../../domain/finance'
 import { digitsToCents, formatCents, parseMoneyToCents } from '../../domain/format'
 import type { PartnerId, SplitRule, TxCategory, TxStatus } from '../../domain/types'
 import { addExpense } from '../../store/actions'
 import { useCouple, usePeople } from '../../store/hooks'
+import { SHEET_FORM } from './forms'
 
 /** Máscara de caixa eletrônico: os dígitos sempre entram pela direita */
 const caretToEnd = (e: { currentTarget: HTMLInputElement }) => {
@@ -50,7 +51,7 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-5 pt-2" noValidate>
+    <form id={SHEET_FORM.expense} onSubmit={submit} className="flex flex-col gap-5 pt-2" noValidate>
       <div>
         <label htmlFor={`${id}-v`} className="mb-2 block text-[14px] font-semibold text-ink">
           Valor
@@ -142,8 +143,8 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
           />
           {preview ? (
             <p className="text-[14px] text-ink" data-testid="expense-preview">
-              Sua parte: <span className="font-data font-semibold">{formatCents(preview.mine)}</span> · Parte de {partner.displayName}:{' '}
-              <span className="font-data font-semibold">{formatCents(preview.theirs)}</span>
+              Sua parte: <span className="font-data font-semibold whitespace-nowrap">{formatCents(preview.mine)}</span> · Parte de {partner.displayName}:{' '}
+              <span className="font-data font-semibold whitespace-nowrap">{formatCents(preview.theirs)}</span>
             </p>
           ) : null}
         </div>
@@ -172,12 +173,6 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
           { value: 'PREDICTED_DASHED', label: 'Previsto', hint: 'traço tracejado', icon: CircleDashed },
         ]}
       />
-
-      <div className="sticky bottom-0 -mx-1 bg-surface px-1 pt-1 pb-1">
-        <Button type="submit" variant="primary" size="lg" className="w-full" data-testid="expense-save">
-          Salvar gasto
-        </Button>
-      </div>
     </form>
   )
 }

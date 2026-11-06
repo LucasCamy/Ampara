@@ -10,7 +10,14 @@
     "test": "vitest run",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --port 4173 --strictPort",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:check": "docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q < supabase/tests/validate.sql",
+    "db:psql": "docker compose exec db psql -U postgres -d postgres",
+    "dev:local": "vite --mode docker",
+    "e2e:local": "playwright test -c playwright.local.config.ts"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",

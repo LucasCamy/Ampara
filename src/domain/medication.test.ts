@@ -97,3 +97,17 @@ describe('rede de apoio (+30 min)', () => {
     expect(shouldAlertPartner(med, snoozed, at('08:31'))).toBe(true)
   })
 })
+
+describe('estoque: até quando dura', () => {
+  const base: Omit<Medication, 'stockCount'> = { id: 'm', kind: 'MED', ownerId: 'A', name: 'X', dosage: '1', times: ['08:00'], weekdays: [], lowStockThreshold: 5, notifyPartnerOnDelay: false, delayMinutesThreshold: 30, updatedAt: '' }
+  it('data em que a caixa acaba e nível da barra', async () => {
+    const { stockRunsOutOn, stockLevel } = await import('./medication')
+    expect(stockRunsOutOn({ ...base, stockCount: 12 }, '2026-11-06')).toBe('2026-11-18')
+    expect(stockRunsOutOn({ ...base, stockCount: null }, '2026-11-06')).toBeNull()
+    expect(stockLevel({ ...base, stockCount: 60 })).toEqual({ ratio: 1, level: 'ok' })
+    expect(stockLevel({ ...base, stockCount: 8 })?.level).toBe('warn')
+    expect(stockLevel({ ...base, stockCount: 4 })?.level).toBe('low')
+    // duas vezes ao dia gasta o dobro
+    expect(stockRunsOutOn({ ...base, times: ['08:00', '20:00'], stockCount: 12 }, '2026-11-06')).toBe('2026-11-12')
+  })
+})

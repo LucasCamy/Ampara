@@ -1,0 +1,101 @@
+# Ampara · Supabase local para desenvolvimento e validação
+#
+#   docker compose up -d        sobe Postgres, Auth (GoTrue), REST (PostgREST) e o gateway
+#   npm run db:check            roda supabase/tests/validate.sql (criação, inserção e RLS)
+#   npm run dev:local           app em http://localhost:5173 falando com este banco
+#   docker compose down -v      derruba e apaga o banco
+#
+# Imagens oficiais do Supabase (as mesmas do projeto na nuvem) e um nginx no lugar do Kong.
+# As chaves abaixo são SÓ para desenvolvimento local (não protegem nada fora desta máquina).
+# Em produção use o projeto do supabase.com e as chaves de lá.
+
+name: ampara
+
+x-local: &local
+  POSTGRES_PASSWORD: ampara-local-postgres
+  JWT_SECRET: ampara-local-dev-jwt-secret-nao-use-em-producao-0001
+
+services:
+  db:
+    image: supabase/postgres:15.8.1.085
+    restart: unless-stopped
+    ports: ['54322:5432']
+    environment:
+      <<: *local
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_DB: postgres
+      JWT_EXP: 3600
+    volumes:
+      - ./docker/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ampara-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres', '-h', 'localhost']
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  auth:
+    image: supabase/gotrue:v2.177.0
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://localhost:54321
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:ampara-local-postgres@db:5432/postgres
+      GOTRUE_SITE_URL: http://localhost:5173
+      GOTRUE_URI_ALLOW_LIST: '*'
+      GOTRUE_DISABLE_SIGNUP: 'false'
+      GOTRUE_JWT_SECRET: ampara-local-dev-jwt-secret-nao-use-em-producao-0001
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
+      GOTRUE_EXTERNAL_PHONE_ENABLED: 'false'
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: 'false'
+      # local: sem servidor de e-mail, a conta já nasce confirmada
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:9999/health']
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  # Aplica supabase/schema.sql depois que o Auth criou auth.users (roda de novo a cada "up": o schema é idempotente)
+  migrate:
+    image: supabase/postgres:15.8.1.085
+    depends_on:
+      auth: { condition: service_healthy }
+    environment:
+      PGPASSWORD: ampara-local-postgres
+      PGOPTIONS: -c client_min_messages=warning
+    volumes:
+      - ./supabase:/supabase:ro
+    entrypoint: ['psql', '-h', 'db', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q', '-f', '/supabase/schema.sql', '-c', "notify pgrst, 'reload schema'"]
+    restart: 'no'
+
+  rest:
+    image: postgrest/postgrest:v12.2.12
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      PGRST_DB_URI: postgres://authenticator:ampara-local-postgres@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ampara-local-dev-jwt-secret-nao-use-em-producao-0001
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
+
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [auth, rest]
+    ports: ['54321:8000']
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  ampara-db:

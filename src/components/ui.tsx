@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDashed, Clock, HeartHandshake, SkipForward, SquareX, type LucideIcon } from 'lucide-react'
+import { CircleCheck, CircleDashed, Clock, HeartHandshake, Pencil, SkipForward, SquareX, type LucideIcon } from 'lucide-react'
 import { useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(' ')
@@ -84,14 +84,15 @@ export function Segmented<T extends string>({
     radios?.[(from + dir + options.length) % options.length]?.focus()
   }
   return (
-    <div className={stretch ? 'w-full' : 'max-w-full'}>
+    <div className={stretch ? 'w-full sm:w-auto' : 'max-w-full'}>
       <span id={id} className={hideLabel ? 'sr-only' : 'mb-1.5 block text-[13px] font-semibold text-muted'}>
         {label}
       </span>
       <div
         role="radiogroup"
         aria-labelledby={id}
-        className={cx('gap-1 rounded-[16px] bg-subtle p-1', stretch ? 'flex w-full' : 'inline-flex max-w-full')}
+        // stretch: colunas iguais só no celular; do sm em diante cada opção tem a largura natural do rótulo completo
+        className={cx('gap-1 rounded-[16px] bg-subtle p-1', stretch ? 'grid w-full auto-cols-fr grid-flow-col sm:inline-flex sm:w-auto' : 'inline-flex max-w-full')}
       >
         {options.map((o, i) => {
           const active = o.value === value
@@ -117,9 +118,9 @@ export function Segmented<T extends string>({
               }}
               className={cx(
                 'press inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[12px] font-semibold whitespace-nowrap',
-                size === 'sm' ? 'min-h-10 px-2.5 text-[13px]' : 'min-h-11 px-3 text-[14px]',
-                stretch ? 'flex-1 basis-0' : 'shrink',
-                active ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-muted',
+                size === 'sm' ? 'min-h-11 px-2.5 text-[13px]' : 'min-h-11 px-3 text-[14px]',
+                stretch ? 'sm:shrink-0' : 'shrink',
+                active ? 'bg-segment-active text-ink shadow-card ring-1 ring-line-strong' : 'text-muted',
               )}
             >
               {Icon ? <Icon size={16} aria-hidden className="shrink-0" /> : null}
@@ -189,6 +190,77 @@ export function ChoiceChips<T extends string>({
   )
 }
 
+/** Campo de texto padrão dos formulários: label acima, fonte 16px, alvo de 56px, erro inline acessível */
+export function TextField({
+  label,
+  optional,
+  value,
+  onChange,
+  error,
+  hint,
+  type = 'text',
+  inputMode,
+  placeholder,
+  maxLength,
+  testId,
+  autoFocus,
+  data,
+  className,
+}: {
+  label: ReactNode
+  optional?: boolean
+  value: string
+  onChange: (v: string) => void
+  error?: string
+  hint?: ReactNode
+  type?: 'text' | 'time' | 'date'
+  inputMode?: 'text' | 'numeric'
+  placeholder?: string
+  maxLength?: number
+  testId?: string
+  autoFocus?: boolean
+  /** valores, horários e datas em fonte de dados (tabular) */
+  data?: boolean
+  className?: string
+}) {
+  const id = useId()
+  const describedBy = error ? `${id}-err` : hint ? `${id}-hint` : undefined
+  return (
+    <div className={cx('min-w-0', className)}>
+      <label htmlFor={id} className="mb-2 block text-[14px] font-semibold text-ink">
+        {label}
+        {optional ? <span className="font-medium text-muted"> (opcional)</span> : null}
+      </label>
+      <input
+        id={id}
+        type={type}
+        inputMode={inputMode}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        autoComplete="off"
+        data-testid={testId}
+        data-autofocus={autoFocus ? true : undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        className={cx(
+          'min-h-14 w-full min-w-0 rounded-[16px] border bg-bg px-4 text-[16px] text-ink placeholder:text-muted',
+          data && 'font-data',
+          error ? 'border-err' : 'border-line-strong',
+        )}
+      />
+      {error ? (
+        <FieldError id={`${id}-err`}>{error}</FieldError>
+      ) : hint ? (
+        <p id={`${id}-hint`} className="mt-1.5 text-[13px] text-muted">
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export function FieldError({ children, id }: { children: ReactNode; id?: string }) {
   return (
     <p id={id} role="alert" className="mt-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-err">
@@ -234,7 +306,7 @@ export function Switch({
           aria-hidden
           className={cx(
             'absolute top-3 h-6 w-6 rounded-full shadow-card transition-transform duration-150',
-            checked ? 'translate-x-[38px] bg-on-action' : 'translate-x-[4px] bg-surface ring-1 ring-line-strong',
+            checked ? 'translate-x-[38px] bg-on-action' : 'translate-x-[4px] bg-muted',
           )}
         />
         <span className="sr-only">{checked ? 'Ativado' : 'Desativado'}</span>
@@ -276,6 +348,40 @@ export function Button({
     >
       {Icon ? <Icon size={size === 'lg' ? 20 : 18} aria-hidden /> : null}
       {children}
+    </button>
+  )
+}
+
+/** Frase com valores em reais: "R$" nunca fica no fim de uma linha com o número na de baixo */
+export function MoneyText({ children }: { children: string }) {
+  const parts = children.split(/(R\$\s?\d[\d.]*(?:,\d{2})?)/)
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1 ? (
+          <span key={i} className="whitespace-nowrap">
+            {p}
+          </span>
+        ) : (
+          p
+        ),
+      )}
+    </>
+  )
+}
+
+/** Botão de ícone "Editar" (44px), com nome acessível dizendo o que edita */
+export function EditButton({ label, onClick, testId }: { label: string; onClick: () => void; testId?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      data-testid={testId}
+      className="press hoverable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted"
+    >
+      <Pencil size={18} aria-hidden />
     </button>
   )
 }

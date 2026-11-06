@@ -59,6 +59,35 @@ Uso: quem criou o espaço vai em **Ajustes > Nuvem > Criar conta**. O par abre o
 toca em **Entrar pela nuvem > Tenho um convite** e usa o código mostrado em Ajustes. Os dados descem cifrados
 para o aparelho dele(a), e daí em diante tudo sincroniza (ao abrir, ao voltar online e a cada 30 s).
 
+### Supabase local no Docker (desenvolvimento e validação)
+
+O [`docker-compose.yml`](docker-compose.yml) sobe as imagens oficiais do Supabase: Postgres 15, Auth (GoTrue) e
+REST (PostgREST), mais um nginx como gateway em `http://localhost:54321`. O `supabase/schema.sql` é aplicado
+sozinho a cada subida (é idempotente). As chaves do compose e do `.env.docker` só valem nesta máquina.
+
+```bash
+npm run db:up
+```
+
+```bash
+npm run db:check
+```
+
+```bash
+npm run dev:local
+```
+
+| Script | O que faz |
+|---|---|
+| `npm run db:up` | Sobe o banco e aplica o schema (espera tudo ficar saudável) |
+| `npm run db:check` | Roda [`supabase/tests/validate.sql`](supabase/tests/validate.sql): estrutura, inserções e RLS com três contas (transação desfeita no fim) |
+| `npm run dev:local` | App em `http://localhost:5173` falando com o banco do Docker (`.env.docker`) |
+| `npm run e2e:local` | Playwright com dois aparelhos contra o banco real, conferindo as linhas gravadas no Postgres |
+| `npm run db:psql` | Console `psql` no banco |
+| `npm run db:down` / `db:reset` | Para / apaga e recria o banco do zero |
+
+Com o banco local as contas já nascem confirmadas (sem servidor de e-mail).
+
 ## Guia visual
 
 `/styleguide.html` mostra tokens, tipografia e estados nos dois temas.

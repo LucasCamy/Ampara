@@ -1,9 +1,10 @@
 import { Brain, CalendarDays, Inbox, Lock, Mail, Sun, User, Users, Zap } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
-import { Button, ChoiceChips, cx, FieldError } from '../../components/ui'
+import { ChoiceChips, cx, FieldError } from '../../components/ui'
 import type { TaskEffort } from '../../domain/types'
 import { addTask, type TaskDest, type TaskWhen } from '../../store/actions'
 import { usePeople } from '../../store/hooks'
+import { SHEET_FORM } from './forms'
 
 export function TaskSheet({ params, onDone }: { params: Record<string, string>; onDone: () => void }) {
   const { partner } = usePeople()
@@ -26,7 +27,7 @@ export function TaskSheet({ params, onDone }: { params: Record<string, string>; 
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-5 pt-2" noValidate>
+    <form id={SHEET_FORM.task} onSubmit={submit} className="flex flex-col gap-5 pt-2" noValidate>
       <div>
         <label htmlFor={`${id}-t`} className="mb-2 block text-[14px] font-semibold text-ink">
           O que precisa ser feito?
@@ -92,12 +93,6 @@ export function TaskSheet({ params, onDone }: { params: Record<string, string>; 
           Só eu vejo (não aparece no painel de {partner.displayName})
         </label>
       ) : null}
-
-      <div className="sticky bottom-0 -mx-1 bg-surface px-1 pt-1 pb-1">
-        <Button type="submit" variant="primary" size="lg" className="w-full" data-testid="task-save">
-          Salvar tarefa
-        </Button>
-      </div>
     </form>
   )
 }

@@ -1,3 +1,4 @@
+import { loadEnv } from 'vite'
 import { defineConfig, type Plugin } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -24,11 +25,13 @@ function csp(supabaseUrl: string | undefined): string {
   ].join('; ')
 }
 
-const cspMeta = (): Plugin => ({
+// A URL vem do .env* do modo (loadEnv), não só do process.env: senão um build com a URL no .env
+// sairia com connect-src sem o Supabase e toda chamada à nuvem seria bloqueada.
+const cspMeta = (supabaseUrl: string | undefined): Plugin => ({
   name: 'ampara-csp',
   apply: 'build',
   transformIndexHtml(html) {
-    return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp(process.env.VITE_SUPABASE_URL)}" />`)
+    return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp(supabaseUrl)}" />`)
   },
 })
 
@@ -42,12 +45,12 @@ const securityHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), cspMeta()],
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), cspMeta(loadEnv(mode, process.cwd(), 'VITE_').VITE_SUPABASE_URL?.replace(/\/+$/, ''))],
   server: { headers: securityHeaders },
   preview: { headers: securityHeaders },
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
   },
-})
+}))

@@ -1,4 +1,4 @@
-import { atTime, parseDateKey } from './dates'
+import { addDays, atTime, parseDateKey } from './dates'
 import type { DateKey, Medication, MedicationLog, PartnerId, SkipReason, TimeKey } from './types'
 
 export const SNOOZE_MS = 5 * 60 * 1000
@@ -118,6 +118,20 @@ export function stockDaysLeft(med: Medication): number | null {
   if (med.stockCount === null || med.times.length === 0) return null
   const perWeek = med.times.length * (med.weekdays.length || 7)
   return Math.floor((med.stockCount / perWeek) * 7)
+}
+
+/** Dia em que a caixa acaba no ritmo atual (null = sem controle de estoque) */
+export function stockRunsOutOn(med: Medication, today: DateKey): DateKey | null {
+  const days = stockDaysLeft(med)
+  return days === null ? null : addDays(today, days)
+}
+
+/** Nível do estoque para a barra: cheio (>= 30 dias), atenção (perto do limite) ou baixo */
+export function stockLevel(med: Medication): { ratio: number; level: 'ok' | 'warn' | 'low' } | null {
+  const days = stockDaysLeft(med)
+  if (days === null || med.stockCount === null) return null
+  const level = isLowStock(med) ? 'low' : med.stockCount <= med.lowStockThreshold * 2 || days <= 7 ? 'warn' : 'ok'
+  return { ratio: Math.max(0, Math.min(1, days / 30)), level }
 }
 
 export function skipReasonLabel(reason: SkipReason): string {

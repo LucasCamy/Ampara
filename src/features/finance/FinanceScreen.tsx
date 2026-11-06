@@ -1,7 +1,7 @@
 import { ArrowRightLeft, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Lock, ReceiptText, User, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CATEGORIES } from '../../components/categories'
-import { Button, cx, EmptyState, OwnerTag, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
+import { Button, cx, EmptyState, MoneyText, OwnerTag, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
 import { dayOfMonth, monthName, parseDateKey, toDateKey } from '../../domain/dates'
 import { computeCoupleBalance, coupleShareTotal, describeBalance, settlementPlan, shareOf, splitRuleLabel } from '../../domain/finance'
 import { formatCents } from '../../domain/format'
@@ -74,24 +74,24 @@ function CoupleTab({ month, monthLabel }: { month: string; monthLabel: string })
           Encontro de contas · {monthLabel}
         </p>
         <p className="mt-3 text-[22px] leading-snug font-bold text-ink" data-testid="balance-sentence">
-          {sentence}
+          <MoneyText>{sentence}</MoneyText>
         </p>
         <dl className="mt-4 flex flex-col gap-2">
           <div className="ledger-solid flex items-center justify-between gap-3 rounded-[14px] px-3 py-2.5">
-            <dt className="flex items-center gap-2 text-[14px] text-ink">
+            <dt className="flex min-w-0 items-center gap-2 text-[14px] text-ink">
               <CircleCheck size={17} aria-hidden className="text-ok" /> Realizado do casal ({d.balance.confirmedCount} gastos)
             </dt>
-            <dd className="font-data text-[15px] font-semibold text-ink">{formatCents(d.balance.confirmedTotalCents)}</dd>
+            <dd className="font-data shrink-0 text-[15px] font-semibold whitespace-nowrap text-ink">{formatCents(d.balance.confirmedTotalCents)}</dd>
           </div>
           <div className="ledger-dashed flex items-center justify-between gap-3 rounded-[14px] px-3 py-2.5">
-            <dt className="flex items-center gap-2 text-[14px] text-ink">
+            <dt className="flex min-w-0 items-center gap-2 text-[14px] text-ink">
               <CircleDashed size={17} aria-hidden className="text-warn" /> Previsto até dia {lastDay}
             </dt>
-            <dd className="font-data text-[15px] font-semibold text-ink">+ {formatCents(d.balance.predictedTotalCents)}</dd>
+            <dd className="font-data shrink-0 text-[15px] font-semibold whitespace-nowrap text-ink">+ {formatCents(d.balance.predictedTotalCents)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3 px-3 pt-1">
-            <dt className="text-[13px] text-muted">Sua parte no realizado deste mês</dt>
-            <dd className="font-data text-[14px] text-ink">{formatCents(d.myShare)}</dd>
+            <dt className="min-w-0 text-[13px] text-muted">Sua parte no realizado deste mês</dt>
+            <dd className="font-data shrink-0 text-[14px] whitespace-nowrap text-ink">{formatCents(d.myShare)}</dd>
           </div>
         </dl>
         <div className="mt-5">
@@ -158,7 +158,7 @@ function CoupleTab({ month, monthLabel }: { month: string; monthLabel: string })
                     <TxHeader tx={t} />
                     <p className="mt-1 text-[13px] text-muted">
                       Pago por {t.paidBy === viewer ? 'você' : profiles[t.paidBy].displayName} · {splitRuleLabel(t.splitRule, couple.ratioABps)} · parte{' '}
-                      {other === viewer ? 'sua' : `de ${profiles[other].displayName}`}: <span className="font-data text-ink">{formatCents(shareOf(t, other))}</span>
+                      {other === viewer ? 'sua' : `de ${profiles[other].displayName}`}: <span className="font-data whitespace-nowrap text-ink">{formatCents(shareOf(t, other))}</span>
                     </p>
                   </li>
                 )
@@ -169,7 +169,7 @@ function CoupleTab({ month, monthLabel }: { month: string; monthLabel: string })
                     <span className="flex items-center gap-2">
                       <ArrowRightLeft size={17} aria-hidden className="text-ok" /> Acerto registrado
                     </span>
-                    <span className="font-data">{formatCents(t.amountCents)}</span>
+                    <span className="font-data shrink-0 whitespace-nowrap">{formatCents(t.amountCents)}</span>
                   </p>
                   <p className="text-[13px] text-muted">
                     {t.paidBy === viewer ? 'Você' : profiles[t.paidBy].displayName} transferiu em {dayOfMonth(t.competenceDate)}/{t.competenceDate.slice(5, 7)}
@@ -192,7 +192,7 @@ function TxHeader({ tx, masked }: { tx: Transaction; masked?: boolean }) {
         <C.icon size={18} aria-hidden className="shrink-0 text-muted" />
         <span className="truncate">{masked ? 'Item reservado' : tx.description}</span>
       </p>
-      <span className="font-data shrink-0 text-[15px] font-semibold text-ink">{formatCents(tx.amountCents)}</span>
+      <span className="font-data shrink-0 text-[15px] font-semibold whitespace-nowrap text-ink">{formatCents(tx.amountCents)}</span>
     </div>
   )
 }
@@ -249,7 +249,7 @@ function PersonalTab({ month, owner }: { month: string; owner: 'me' | 'partner' 
           <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">
             {view.status === 'own' ? 'Meus gastos pessoais' : `Gastos pessoais de ${view.ownerName}`}
           </p>
-          <p className="font-data mt-2 text-[28px] font-semibold text-ink">{formatCents(view.totalCents)}</p>
+          <p className="font-data mt-2 text-[28px] font-semibold whitespace-nowrap text-ink">{formatCents(view.totalCents)}</p>
           <p className="text-[13px] text-muted">pagos neste mês, fora a parte no casal</p>
           {view.status === 'readonly' ? <p className="mt-2 text-[12px] text-muted">O total pode incluir itens reservados.</p> : null}
         </section>

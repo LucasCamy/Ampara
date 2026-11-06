@@ -49,7 +49,7 @@ test.describe('Ampara', () => {
     const dose = page.locator('[data-testid="dose-card"][data-med="Venvanse 30mg"]')
     await expect(dose.locator('[data-status="ok"]')).toContainText('Tomado às 08:04')
     await expect(dose).toHaveClass(/ledger-ok/)
-    await expect(dose.getByTestId('stock-line')).toContainText('Restam 11')
+    await expect(page.locator('[data-testid="med-settings"][data-med="Venvanse 30mg"]').getByTestId('stock-line')).toContainText('11 comprimidos')
     await shot(page, '04-remedios-tomado', info.project.name)
     await noHorizontalOverflow(page)
   })

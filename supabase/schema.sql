@@ -1,7 +1,7 @@
 -- Ampara · schema Supabase (PostgreSQL) com RLS
 -- Espelha src/domain/types.ts. Colunas em snake_case (o adaptador converte camelCase).
 -- IDs gerados no cliente (UUID) tornam o upsert do outbox idempotente.
--- Não aplicado automaticamente: rode no SQL Editor do seu projeto Supabase.
+-- Idempotente: pode rodar de novo (SQL Editor do Supabase ou `docker compose up`, que aplica sozinho).
 
 create table if not exists couples (
   id text primary key,
@@ -160,30 +160,56 @@ begin
   end loop;
 end $$;
 
+drop policy if exists couple_rw on couples;
 create policy couple_rw on couples for all using (id = my_couple_id()) with check (id = my_couple_id());
+drop policy if exists couple_rw on profiles;
 create policy couple_rw on profiles for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists couple_rw on events;
 create policy couple_rw on events for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists couple_rw on help_requests;
 create policy couple_rw on help_requests for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists couple_rw on nudges;
 create policy couple_rw on nudges for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists couple_rw on medication_logs;
 create policy couple_rw on medication_logs for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 
 -- Tarefas: do casal, minhas, enviadas por mim ou visíveis pelo dono (arquivadas também descem, para o
 -- arquivamento chegar ao outro aparelho; o app as esconde)
+drop policy if exists tasks_read on tasks;
 create policy tasks_read on tasks for select using (
   couple_id = my_couple_id() and (
     assigned_to is null or assigned_to = my_partner_id() or sent_by = my_partner_id() or visible_to_partner
   )
 );
-create policy tasks_write on tasks for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+-- Gravação separada por comando: uma política "for all" também vale para SELECT (políticas permissivas
+-- somam com OR) e vazaria as tarefas privadas do par. Alterar/apagar só o que a pessoa consegue ver.
+drop policy if exists tasks_write on tasks;
+drop policy if exists tasks_insert on tasks;
+create policy tasks_insert on tasks for insert with check (couple_id = my_couple_id());
+drop policy if exists tasks_update on tasks;
+create policy tasks_update on tasks for update using (
+  couple_id = my_couple_id() and (
+    assigned_to is null or assigned_to = my_partner_id() or sent_by = my_partner_id() or visible_to_partner
+  )
+) with check (couple_id = my_couple_id());
+drop policy if exists tasks_delete on tasks;
+create policy tasks_delete on tasks for delete using (
+  couple_id = my_couple_id() and (
+    assigned_to is null or assigned_to = my_partner_id() or sent_by = my_partner_id() or visible_to_partner
+  )
+);
 
 -- Remédios: meus, rotinas da casa, ou do par com rede de apoio ligada
+drop policy if exists meds_read on medications;
 create policy meds_read on medications for select using (
   couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id() or notify_partner_on_delay)
 );
+drop policy if exists meds_write on medications;
 create policy meds_write on medications for all using (couple_id = my_couple_id() and (owner_id is null or owner_id = my_partner_id()))
   with check (couple_id = my_couple_id());
 
 -- Privacidade financeira (doc 04, seção 4): espelho de src/domain/privacy.ts
+drop policy if exists tx_read on transactions;
 create policy tx_read on transactions for select using (
   couple_id = my_couple_id() and (
     created_by = my_partner_id()
@@ -197,6 +223,7 @@ create policy tx_read on transactions for select using (
   )
 );
 -- Só o autor grava lançamentos pessoais; gastos do casal qualquer um dos dois
+drop policy if exists tx_write on transactions;
 create policy tx_write on transactions for all using (
   couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id())
 ) with check (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()));
@@ -204,6 +231,8 @@ create policy tx_write on transactions for all using (
 -- =====================================================================
 -- Iteração 3: nuvem entre aparelhos (pareamento por convite + exclusão lógica)
 -- =====================================================================
+-- No Supabase o pgcrypto fica no schema "extensions" (digest() não está em public): as funções
+-- que usam digest() incluem "extensions" no search_path.
 create extension if not exists pgcrypto;
 
 -- Exclusão lógica: remoções (ex.: Desfazer) chegam ao outro aparelho pelo pull incremental
@@ -229,6 +258,7 @@ create table if not exists couple_invites (
 );
 alter table couple_invites enable row level security; -- sem política: só as funções abaixo acessam
 alter table couple_members enable row level security;
+drop policy if exists members_read on couple_members;
 create policy members_read on couple_members for select using (couple_id = my_couple_id());
 
 -- Cria o espaço na nuvem: quem chama vira o Parceiro A
@@ -244,7 +274,7 @@ end $$;
 
 -- Registra o convite do par (o código em texto claro nunca é gravado)
 create or replace function create_invite(p_code text)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public, extensions as $$
 declare v_couple text := my_couple_id(); v_partner text;
 begin
   if v_couple is null then raise exception 'not paired'; end if;
@@ -257,7 +287,7 @@ end $$;
 
 -- Entra no espaço com o convite: devolve o casal e qual parceiro a pessoa é
 create or replace function join_couple(p_code text)
-returns table (couple_id text, partner_id text) language plpgsql security definer set search_path = public as $$
+returns table (couple_id text, partner_id text) language plpgsql security definer set search_path = public, extensions as $$
 declare v_inv couple_invites;
 begin
   if auth.uid() is null then raise exception 'not authenticated'; end if;
@@ -297,3 +327,14 @@ begin
     execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
   end loop;
 end $$;
+
+-- =====================================================================
+-- Iteração 5: cadastro de remédios, rotinas e compromissos pelo app
+-- =====================================================================
+-- Compromisso pode ser "conta que vence" (marcador triangular no calendário)
+alter table events drop constraint if exists events_kind_check;
+alter table events add constraint events_kind_check check (kind in ('COUPLE', 'HEALTH', 'PERSONAL', 'BILL'));
+-- Rotina da casa continua confirmável por qualquer um (owner_id nulo); "responsável" é só referência
+alter table medications add column if not exists assignee text check (assignee in ('A', 'B'));
+-- Unidade do estoque (comprimidos, unidades, sachês...)
+alter table medications add column if not exists stock_unit text;

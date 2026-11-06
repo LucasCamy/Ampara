@@ -1,7 +1,7 @@
-import { ChevronLeft, ChevronRight, Inbox, ListPlus, Mail, MoveRight, Sun } from 'lucide-react'
+import { CalendarPlus, ChevronLeft, ChevronRight, Inbox, ListPlus, Mail, MoveRight, Sun } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { TaskRow } from '../../components/domain'
-import { Button, cx, EmptyState, OwnerTag, Segmented, StatusBadge, Title } from '../../components/ui'
+import { Button, cx, EditButton, EmptyState, OwnerTag, Segmented, StatusBadge, Title } from '../../components/ui'
 import { addDays, dayOfMonth, monthGrid, monthName, parseDateKey, relativeDayLabel, toDateKey, weekDays, weekdayLong, weekdayShort } from '../../domain/dates'
 import { formatCents } from '../../domain/format'
 import { isScheduledOn } from '../../domain/medication'
@@ -58,11 +58,14 @@ export function AgendaScreen() {
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <Title anchor="Agenda e tarefas," rest="no tempo certo." />
+        <Button variant="primary" size="compact" icon={CalendarPlus} onClick={() => ui.openSheet('event', { date: view === 'INBOX' ? today : cursor })} data-testid="agenda-new-event">
+          Compromisso
+        </Button>
       </div>
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-        <div className="w-full lg:w-auto lg:min-w-[440px]">
+        <div className="w-full sm:w-auto">
         <Segmented<View>
           label="Visão da agenda"
           value={view}
@@ -127,19 +130,22 @@ interface ViewData {
 
 function EventRow({ e }: { e: CalendarEvent }) {
   const { viewer, partner } = usePeople()
-  const kind = e.kind === 'COUPLE' ? 'Do casal' : e.kind === 'HEALTH' ? 'Saúde' : 'Compromisso'
+  const kind = e.kind === 'HEALTH' ? 'Saúde / remédio' : e.kind === 'BILL' ? 'Conta que vence' : 'Compromisso'
   return (
-    <div className="flex items-start gap-3 rounded-[16px] border border-line bg-surface p-3">
-      <span className="font-data min-w-[92px] pt-0.5 text-[13px] text-muted">
-        {e.start} a {e.end}
-      </span>
-      <div className="min-w-0">
-        <p className="text-[15px] font-semibold text-ink">{e.title}</p>
+    <div className="flex items-start gap-3 rounded-[16px] border border-line bg-surface p-3" data-testid="event-row">
+      <div className="min-w-0 flex-1">
+        <p className="font-data text-[13px] text-muted">
+          {e.start} a {e.end}
+        </p>
+        <p className="text-[15px] font-semibold break-words text-ink">{e.title}</p>
         <div className="mt-0.5 flex flex-wrap gap-x-3">
           <OwnerTag tone={toneOf(e.ownerId)}>{ownerLabel(e.ownerId, viewer, partner)}</OwnerTag>
           <span className="text-[12px] text-muted">{kind}</span>
         </div>
       </div>
+      <span className="-my-2 -mr-2">
+        <EditButton label={`Editar compromisso ${e.title}`} onClick={() => ui.openSheet('event', { id: e.id })} testId="event-edit" />
+      </span>
     </div>
   )
 }
@@ -155,7 +161,7 @@ function DayView({ day, today, tasks, events, bills, meds }: ViewData & { day: D
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
-      <section aria-labelledby="sem-horario">
+      <section aria-labelledby="sem-horario" className="min-w-0">
         <h2 id="sem-horario" className="mb-2 text-[15px] font-bold text-ink">
           Demandas do dia <span className="font-medium text-muted">· sem horário fixo</span>
         </h2>
@@ -179,7 +185,7 @@ function DayView({ day, today, tasks, events, bills, meds }: ViewData & { day: D
               <li key={b.id} className="ledger-dashed flex items-center justify-between gap-2 rounded-[16px] bg-surface p-3">
                 <span className="text-[15px] font-semibold text-ink">Vence: {b.description}</span>
                 <StatusBadge kind="pending">
-                  <span className="font-data">{formatCents(b.amountCents)}</span> previsto
+                  <span className="font-data whitespace-nowrap">{formatCents(b.amountCents)}</span> previsto
                 </StatusBadge>
               </li>
             ))}
@@ -187,7 +193,7 @@ function DayView({ day, today, tasks, events, bills, meds }: ViewData & { day: D
         )}
       </section>
 
-      <section aria-labelledby="linha-tempo">
+      <section aria-labelledby="linha-tempo" className="min-w-0">
         <h2 id="linha-tempo" className="mb-2 text-[15px] font-bold text-ink">
           Linha do tempo <span className="font-medium text-muted">· 07:00 às 23:00</span>
         </h2>
@@ -248,7 +254,7 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
   const { viewer } = usePeople()
   const days = weekDays(day)
   return (
-    <ol className="grid gap-3 lg:grid-cols-7 lg:gap-2">
+    <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7 2xl:gap-2">
       {days.map((d) => {
         const ts = tasksForDay(tasks, d)
         const evs = events.filter((e) => e.date === d).sort((a, b) => a.start.localeCompare(b.start))
@@ -256,21 +262,27 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
         const { load } = dayLoad(ts, evs, bs, d)
         return (
           <li key={d} className={cx('card flex min-w-0 flex-col gap-2 p-3', d === today && 'ring-2 ring-action')} data-testid="week-day">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[14px] font-bold text-ink">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <p className="min-w-0 text-[14px] font-bold text-ink">
                 {weekdayShort(d)} <span className="font-data text-muted">{dayOfMonth(d)}</span>
                 {d === today ? <span className="ml-1 text-[12px] font-semibold text-action">hoje</span> : null}
               </p>
               <LoadMeter load={load} />
             </div>
             {evs.map((e) => (
-              <p key={e.id} className="rounded-[12px] bg-subtle px-2 py-1.5 text-[13px] text-ink">
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => ui.openSheet('event', { id: e.id })}
+                aria-label={`Editar compromisso ${e.title}, ${e.start}`}
+                className="press hoverable min-h-11 min-w-0 rounded-[12px] bg-subtle px-2 py-1.5 text-left text-[13px] break-words text-ink"
+              >
                 <span className="font-data text-muted">{e.start}</span> {e.title}
-              </p>
+              </button>
             ))}
             {bs.map((b) => (
-              <p key={b.id} className="ledger-dashed rounded-[12px] px-2 py-1.5 text-[13px] text-ink">
-                Vence {b.description} · <span className="font-data">{formatCents(b.amountCents)}</span>
+              <p key={b.id} className="ledger-dashed min-w-0 rounded-[12px] px-2 py-1.5 text-[13px] break-words text-ink">
+                Vence {b.description} · <span className="font-data whitespace-nowrap">{formatCents(b.amountCents)}</span>
               </p>
             ))}
             <ul className="flex flex-col gap-2 lg:hidden">
@@ -280,7 +292,7 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
             </ul>
             <ul className="hidden flex-col gap-1 lg:flex">
               {ts.map((t) => (
-                <li key={t.id} className={cx('rounded-[12px] border px-2 pt-1.5 text-[13px]', t.status === 'DONE' ? 'border-ok pb-1.5 text-muted line-through' : 'border-line text-ink')}>
+                <li key={t.id} className={cx('min-w-0 rounded-[12px] border px-2 pt-1.5 text-[13px] break-words', t.status === 'DONE' ? 'border-ok pb-1.5 text-muted line-through' : 'border-line text-ink')}>
                   {t.title}
                   {t.status === 'PENDING' ? (
                     <span className="-mx-1 flex">
@@ -289,7 +301,7 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
                         onClick={() => postponeTask(t.id)}
                         aria-label={`Adiar para amanhã: ${t.title}`}
                         title="Adiar para amanhã"
-                        className="press hoverable inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-action"
+                        className="press hoverable inline-flex h-11 w-11 items-center justify-center rounded-[10px] text-action"
                       >
                         <MoveRight size={16} aria-hidden />
                       </button>
@@ -299,7 +311,7 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
                           onClick={() => sendTaskToPartner(t.id)}
                           aria-label={`Enviar para meu amor: ${t.title}`}
                           title="Enviar para meu amor"
-                          className="press hoverable inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-action"
+                          className="press hoverable inline-flex h-11 w-11 items-center justify-center rounded-[10px] text-action"
                         >
                           <Mail size={16} aria-hidden />
                         </button>
@@ -328,7 +340,7 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
       <div>
         <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted" aria-label="Legenda">
           <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-couple" /> Compromisso do casal
+            <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-couple" /> Compromisso
           </span>
           <span className="inline-flex items-center gap-1.5">
             <svg aria-hidden width="11" height="10" viewBox="0 0 11 10" className="text-warn">
@@ -348,10 +360,10 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
           ))}
           {grid.map((d) => {
             const inMonth = parseDateKey(d).getMonth() === month
-            const couple = events.some((e) => e.date === d && e.kind === 'COUPLE')
-            const bill = bills.some((b) => b.competenceDate === d)
+            const couple = events.some((e) => e.date === d && (e.kind === 'COUPLE' || e.kind === 'PERSONAL'))
+            const bill = bills.some((b) => b.competenceDate === d) || events.some((e) => e.date === d && e.kind === 'BILL')
             const health = events.some((e) => e.date === d && e.kind === 'HEALTH')
-            const marks = [couple && 'compromisso do casal', bill && 'conta vence', health && 'saúde'].filter(Boolean).join(', ')
+            const marks = [couple && 'compromisso', bill && 'conta vence', health && 'saúde'].filter(Boolean).join(', ')
             const selected = d === day
             return (
               <button
@@ -381,7 +393,7 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
           })}
         </div>
       </div>
-      <section aria-labelledby="dia-sel">
+      <section aria-labelledby="dia-sel" className="min-w-0">
         <h2 id="dia-sel" className="mb-2 text-[16px] font-bold text-ink first-letter:uppercase">
           {relativeDayLabel(day, today)} · {dayOfMonth(day)} de {monthName(day)}
         </h2>
@@ -396,7 +408,7 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
               <div key={b.id} className="ledger-dashed flex items-center justify-between gap-2 rounded-[16px] bg-surface p-3">
                 <span className="text-[15px] font-semibold text-ink">Vence: {b.description}</span>
                 <StatusBadge kind="pending">
-                  <span className="font-data">{formatCents(b.amountCents)}</span> previsto
+                  <span className="font-data whitespace-nowrap">{formatCents(b.amountCents)}</span> previsto
                 </StatusBadge>
               </div>
             ))}

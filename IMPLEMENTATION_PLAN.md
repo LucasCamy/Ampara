@@ -37,6 +37,71 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 6 (2026-11-06): editar e excluir cadastros, estoque legível
+
+- **Editar** remédio (só os próprios), rotina (qualquer um) e compromisso (do casal ou próprio): as mesmas gavetas
+  abrem com `params.id`, título "Editar ..." e botão "Salvar alterações". Pontos de entrada: lápis no card de
+  estoque, no card da rotina e no compromisso (Dia/Mês) ou toque no compromisso (Semana).
+- **Excluir** dentro da gaveta de edição, na hora, com Toast + Desfazer (regra 8). Vai para a fila como DELETE
+  (exclusão lógica na nuvem). Doses já registradas ficam no histórico.
+- **Vários horários** (1 a 4, sem repetir, salvos em ordem) em remédio e rotina: sem isso, editar um item com
+  duas doses perderia horários. A edição preserva o que o formulário não mostra (dias do remédio, limites).
+- Item excluído no outro aparelho com a gaveta aberta: a gaveta mostra "Este item não existe mais".
+- **Estoque:** texto único "12 comprimidos · dá para uns 12 dias (até 18/11)" + barra de nível; selo "Estoque baixo"
+  quando chega no limite; o card da dose só mostra o estoque quando está acabando (sem repetição na tela).
+- `MoneyText` mantém "R$" junto do número em frases (resumo de Finanças e Toasts).
+- Pendente da análise: quantidade de reposição por caixa (hoje "Repor 30"), dias da semana para remédio, junção
+  do dock com a navegação no celular, tom da dose muito atrasada, divisão do bundle, realtime e push.
+
+## Iteração 5 (2026-11-06): auditoria de QA e novos cadastros
+
+**Correções da auditoria**
+- Gavetas: o botão de salvar saiu da área de rolagem e foi para o `footer` do `<Sheet>` (`form="<id>"`, ids em
+  `src/features/sheets/forms.ts`). Acabou a fresta onde o conteúdo vazava em 360px.
+- Semana da Agenda: grade progressiva `md:2 / xl:4 / 2xl:7`, carga do dia quebra linha, textos com `break-words`.
+- `Segmented stretch`: colunas iguais só abaixo de 640px; do `sm` em diante cada opção tem a largura natural
+  ("Caixa de Entrada" inteiro).
+- Valores em R$ com `whitespace-nowrap` (não quebra entre "R$" e o número).
+- Modo escuro: token novo `--segment-active` (mais claro que o trilho nos dois temas) + `ring-line-strong` no item
+  ativo; bolinha do `Switch` desligado em `bg-muted`.
+- Alvos: nada abaixo de 44px (`Segmented sm`, pílula de sync, ícones da semana). Regra 7 do AGENTS.md atualizada.
+- Engrenagem do topo com estado ativo; "Testar agora" dos atalhos abre a gaveta pelo store (`ui.launchQuick`), sem
+  recarregar a página (a sessão não cai).
+- `scripts/audit-responsive.mjs` agora cobre 360/390/1024/1280, claro e escuro (pelo botão do app), cards
+  estourando, alvos < 44px, botão de salvar dentro da rolagem e as 7 gavetas; sai com código 1 se achar problema.
+
+**Cadastros novos** (regras puras em `src/domain/catalog.ts`, actions `addMedication`, `addRoutine`, `addEvent`)
+- Divergências do pedido, por causa do modelo existente: remédios e rotinas são a mesma coleção (`meds`, tabela
+  `medications`) e compromissos são `events`; não existem entidades `routines` nem `calendar_events`.
+- Rotina continua sem dono (`owner_id` nulo, qualquer um confirma, como diz a tela). "Responsável" virou o campo
+  `assignee` (só referência). Se usasse `owner_id`, o RLS esconderia a rotina do par.
+- Em vez de um texto livre `recurrenceLabel`: dias da semana (Todo dia, Dias úteis, Fim de semana ou escolher)
+  + instrução livre. Assim a rotina aparece só nos dias certos.
+- Compromisso: tipo "Conta que vence" virou `EventKind` `BILL` (triângulo no calendário). Schema: constraint de
+  `events.kind`, colunas `medications.assignee` e `medications.stock_unit` (aplicado e validado no Docker).
+
+## Iteração 4 (2026-11-06): Supabase real no Docker
+
+- `docker-compose.yml` com as imagens oficiais (Postgres 15.8, GoTrue, PostgREST) e nginx como gateway em `:54321`;
+  serviço `migrate` aplica `supabase/schema.sql` (agora idempotente) depois que o Auth cria `auth.users`.
+- `supabase/tests/validate.sql` (`npm run db:check`): 14 verificações com três contas reais no Postgres.
+- `e2e/real-supabase.spec.ts` (`npm run e2e:local`): dois aparelhos contra o banco real, build de produção com CSP.
+- **Bugs que só o banco real mostrou (corrigidos):**
+  1. `create_invite`/`join_couple` quebravam no Supabase: `digest()` do pgcrypto fica no schema `extensions`, fora
+     do `search_path = public`. Parear pela nuvem falharia em produção.
+  2. `tasks_write` era `for all`: no Postgres isso também vale para SELECT (políticas permissivas somam com OR) e
+     vazava as tarefas privadas do par. Separado em insert/update/delete. O simulado só olhava a política de leitura.
+  3. Laço de sincronização: `syncNow` sempre criava um array novo de `outbox`, a assinatura disparava outro `syncNow`
+     250 ms depois, sem fim (~36 requisições/s com a nuvem ligada). Agora devolve o mesmo estado quando nada mudou.
+  4. Par que **reabre** a aba pessoal: os lançamentos antigos não mudam no servidor e o pull incremental nunca os
+     trazia. O pull agora rebaixa os lançamentos quando a aba do par passa de fechada para aberta.
+  5. CSP do build lia só `process.env`: com a URL no `.env`, o `connect-src` saía sem o Supabase e o navegador
+     bloquearia a nuvem. Agora usa `loadEnv` do modo.
+  6. O aparelho compartilhado enviava a tarefa privada do par (o servidor recusava com 403). `enqueueAll` espelha
+     `tasks_read`.
+- **Pendente:** realtime; logs de dose (`medication_logs`) de remédio sem rede de apoio ainda descem para o par
+  (só status e horário, sem nome do remédio).
+
 ## Iteração 3 (2026-11-06): nuvem entre aparelhos
 
 - **Supabase Auth via REST** (sem SDK): criar conta, entrar, renovar (voo único, com rotação) e revogar.
@@ -48,8 +113,8 @@
 - **Bugs encontrados pelos testes de dois aparelhos e corrigidos:** atualização perdida no pull (mudança feita durante
   o download era desfeita), fila presa para sempre com itens que o servidor recusa (itens do par) e a política de
   leitura de tarefas que impedia o arquivamento de chegar ao outro aparelho.
-- **Pendente:** aplicar o `schema.sql` num Supabase real e repetir `e2e/cloud.spec.ts` contra ele; realtime (hoje é
-  sincronização periódica de 30 s).
+- ~~Pendente: aplicar o `schema.sql` num Supabase real~~ (feito na iteração 4); realtime (hoje é sincronização
+  periódica de 30 s).
 
 ## Iteração 2 (2026-11-06): autenticação, responsividade e dependências
 

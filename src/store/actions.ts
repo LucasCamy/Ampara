@@ -1,3 +1,15 @@
+import {
+  buildEvent,
+  buildMedication,
+  buildRoutine,
+  hasErrors,
+  validateEvent,
+  validateMedication,
+  validateRoutine,
+  type EventInput,
+  type MedicationInput,
+  type RoutineInput,
+} from '../domain/catalog'
 import { addDays, toDateKey } from '../domain/dates'
 import { buildSettlement, computeCoupleBalance, computeShares, defaultSplitRule, nonPayerShare } from '../domain/finance'
 import { formatCents } from '../domain/format'
@@ -327,6 +339,84 @@ export function restock(medId: string, amount: number) {
   if (!med || med.stockCount === null) return
   const undo = transact((tx) => tx.put('meds', { ...med, stockCount: med.stockCount! + amount, updatedAt: nowIso() }))
   ui.toast(`+${amount} unidades em ${med.name}`, { undo })
+}
+
+/* ---------- Cadastros: remédio, rotina, compromisso ---------- */
+
+/** "08:00", "08:00 e 20:00", "08:00, 14:00 e 20:00" */
+const listTimes = (times: string[]) => (times.length <= 1 ? (times[0] ?? '') : `${times.slice(0, -1).join(', ')} e ${times[times.length - 1]}`)
+const dayMonth = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
+
+/** Remédio que quem está usando pode editar/excluir: só os próprios */
+const ownMed = (id: string) => {
+  const m = dataStore.get().meds[id]
+  return m && m.kind === 'MED' && m.ownerId === viewer() ? m : null
+}
+const routineOf = (id: string) => {
+  const m = dataStore.get().meds[id]
+  return m && m.kind === 'ROUTINE' ? m : null
+}
+/** Compromisso visível para quem está usando: do casal ou próprio */
+const editableEvent = (id: string) => {
+  const e = dataStore.get().events[id]
+  return e && (e.ownerId === null || e.ownerId === viewer()) ? e : null
+}
+
+/**
+ * Salva remédio novo (sem id) ou a edição de um existente (com id), no nome de quem está com a sessão aberta.
+ * Devolve o id, ou null se a entrada for inválida ou o remédio não puder ser editado por esta pessoa.
+ */
+export function saveMedication(input: MedicationInput, id?: string): string | null {
+  if (hasErrors(validateMedication(input))) return null
+  const prev = id ? ownMed(id) : undefined
+  if (id && !prev) return null
+  const med = buildMedication(input, viewer(), uuid(), nowIso(), prev ?? undefined)
+  const undo = transact((tx) => tx.put('meds', med))
+  const support = med.notifyPartnerOnDelay ? ' · com rede de apoio' : ''
+  ui.toast(prev ? `Remédio atualizado · ${med.name}` : `Remédio salvo · ${med.name} às ${listTimes(med.times)}${support}`, { undo })
+  return med.id
+}
+
+export function saveRoutine(input: RoutineInput, id?: string): string | null {
+  if (hasErrors(validateRoutine(input))) return null
+  const prev = id ? routineOf(id) : undefined
+  if (id && !prev) return null
+  const routine = buildRoutine(input, viewer(), uuid(), nowIso(), prev ?? undefined)
+  const undo = transact((tx) => tx.put('meds', routine))
+  ui.toast(prev ? `Rotina atualizada · ${routine.name}` : `Rotina salva · ${routine.name} às ${listTimes(routine.times)}`, { undo })
+  return routine.id
+}
+
+export function saveEvent(input: EventInput, id?: string): string | null {
+  if (hasErrors(validateEvent(input))) return null
+  const prev = id ? editableEvent(id) : undefined
+  if (id && !prev) return null
+  const ev = buildEvent(input, viewer(), uuid(), nowIso(), prev ?? undefined)
+  const undo = transact((tx) => tx.put('events', ev))
+  ui.toast(`${prev ? 'Compromisso atualizado' : 'Compromisso salvo'} · ${dayMonth(ev.date)} das ${ev.start} às ${ev.end}`, { undo })
+  return ev.id
+}
+
+export const addMedication = (input: MedicationInput) => saveMedication(input)
+export const addRoutine = (input: RoutineInput) => saveRoutine(input)
+export const addEvent = (input: EventInput) => saveEvent(input)
+
+/** Excluir na hora, com Desfazer (regra 8). Registros de doses antigas ficam no histórico. */
+export function deleteMedication(id: string): boolean {
+  const med = dataStore.get().meds[id]
+  const allowed = med && (med.kind === 'ROUTINE' || med.ownerId === viewer())
+  if (!med || !allowed) return false
+  const undo = transact((tx) => tx.remove('meds', id))
+  ui.toast(`${med.kind === 'ROUTINE' ? 'Rotina excluída' : 'Remédio excluído'} · ${med.name}`, { undo, tone: 'info' })
+  return true
+}
+
+export function deleteEvent(id: string): boolean {
+  const ev = editableEvent(id)
+  if (!ev) return false
+  const undo = transact((tx) => tx.remove('events', id))
+  ui.toast(`Compromisso excluído · ${ev.title}`, { undo, tone: 'info' })
+  return true
 }
 
 /* ---------- Apoio do par ---------- */

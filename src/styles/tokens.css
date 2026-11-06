@@ -11,6 +11,8 @@
   --bg: #f7f6f2;
   --surface: #ffffff;
   --subtle: #eef1f6;
+  /* item ativo de menus segmentados: sempre mais claro que o trilho (--subtle) */
+  --segment-active: #ffffff;
   --selected: #e3ece8;
   --night: #0f172a;
   --on-night: #f1f5f9;
@@ -73,6 +75,7 @@
   --bg: #0a0f1d;
   --surface: #131b2e;
   --subtle: #1c2740;
+  --segment-active: #2c3a5a;
   --selected: #1e352f;
   --night: #f1f5f9;
   --on-night: #0a0f1d;

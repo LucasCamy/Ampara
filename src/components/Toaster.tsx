@@ -1,7 +1,7 @@
 import { CircleCheck, Clock, Info, Undo2, X } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ui, useUi } from '../store/ui'
-import { cx } from './ui'
+import { cx, MoneyText } from './ui'
 
 /** Toast no topo com [Desfazer] por 5 s (ARQ-D). aria-live para leitores de tela. */
 export function Toaster() {
@@ -26,7 +26,7 @@ export function Toaster() {
               className="pointer-events-auto flex w-full max-w-[520px] items-center gap-3 rounded-[18px] bg-night py-2 pr-2 pl-4 text-on-night shadow-float"
             >
               <Icon size={18} aria-hidden className="shrink-0" />
-              <p className="min-w-0 flex-1 text-[14px] leading-snug font-medium">{t.message}</p>
+              <p className="min-w-0 flex-1 text-[14px] leading-snug font-medium"><MoneyText>{t.message}</MoneyText></p>
               {t.undo ? (
                 <button
                   type="button"

@@ -36,12 +36,18 @@ export async function syncNow() {
   try {
     const result = await flushOutbox(dataStore.get().outbox, currentAdapter(), isOnline())
     const syncedIds = new Set(result.outbox.filter((e) => e.status === 'SYNCED').map((e) => e.id))
-    // mescla: entradas criadas durante o envio continuam pendentes
-    dataStore.set((s) => ({
-      ...s,
-      outbox: s.outbox.map((e) => (syncedIds.has(e.id) ? { ...e, status: 'SYNCED' as const } : e)),
-      lastSyncedAt: result.synced > 0 ? new Date().toISOString() : s.lastSyncedAt,
-    }))
+    // mescla: entradas criadas durante o envio continuam pendentes.
+    // Sem nada novo marcado, devolve o MESMO estado: um array novo de outbox dispararia a assinatura
+    // abaixo e o syncNow de novo, num laço sem fim (achado no teste contra o Supabase real).
+    dataStore.set((s) => {
+      let touched = false
+      const outbox = s.outbox.map((e) => {
+        if (!syncedIds.has(e.id) || e.status === 'SYNCED') return e
+        touched = true
+        return { ...e, status: 'SYNCED' as const }
+      })
+      return touched ? { ...s, outbox, lastSyncedAt: new Date().toISOString() } : s
+    })
     // depois de subir, desce o que o par mudou
     if (cloud) await pull().catch(() => undefined)
   } finally {

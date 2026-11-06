@@ -26,8 +26,7 @@ function useQuickLaunch() {
       const v = params.get(k)
       if (v) extra[k] = v
     }
-    if (kind === 'med' || kind === 'sos') ui.setTab('hoje')
-    ui.openSheet(kind, extra)
+    ui.launchQuick(kind, extra)
     params.delete('quick')
     for (const k of ['title', 'amount', 'scope']) params.delete(k)
     const qs = params.toString()

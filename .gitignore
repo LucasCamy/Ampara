@@ -6,3 +6,4 @@ playwright-report
 .env.local
 *.log
 .claude/settings.local.json
+dist-local

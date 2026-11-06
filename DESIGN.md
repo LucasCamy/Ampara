@@ -26,6 +26,7 @@
 | `--bg` | `#F7F6F2` | `#0A0F1D` | Fundo da página |
 | `--surface` | `#FFFFFF` | `#131B2E` | Cards, sheets, módulos 28px |
 | `--subtle` | `#EEF1F6` | `#1C2740` | Chips inativos, trilhos de abas |
+| `--segment-active` | `#FFFFFF` | `#2C3A5A` | Item ativo do menu segmentado (sempre mais claro que o trilho, com `ring-line-strong`) |
 | `--selected` | `#E3ECE8` | `#1E352F` | Item/filtro ativo |
 | `--ink` | `#0F172A` | `#F1F5F9` | Texto primário, âncora do título bicolor |
 | `--muted` | `#526077` | `#94A3B8` | Texto secundário, complemento do título |

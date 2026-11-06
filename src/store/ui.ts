@@ -2,7 +2,7 @@ import type { PartnerId } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 export type Tab = 'hoje' | 'agenda' | 'rotinas' | 'financas' | 'ajustes'
-export type SheetKind = 'task' | 'expense' | 'med' | 'sos'
+export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'newMed' | 'routine' | 'event'
 export type Theme = 'light' | 'dark'
 
 export interface SheetState {
@@ -91,6 +91,11 @@ export const ui = {
   },
   openSheet(kind: SheetKind, params: Record<string, string> = {}) {
     uiStore.set((s) => ({ ...s, sheet: { kind, params } }))
+  },
+  /** Mesmo comportamento dos atalhos ?quick=, sem recarregar a página (a sessão em memória continua aberta) */
+  launchQuick(kind: SheetKind, params: Record<string, string> = {}) {
+    if (kind === 'med' || kind === 'sos') ui.setTab('hoje')
+    ui.openSheet(kind, params)
   },
   closeSheet() {
     uiStore.set((s) => (s.sheet ? { ...s, sheet: null } : s))

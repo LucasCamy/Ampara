@@ -3,7 +3,7 @@ import { validatePassword } from '../auth/vault'
 import { applyRemote, purgeUnauthorized } from '../domain/merge'
 import type { SyncAdapter } from '../domain/outbox'
 import { buildEmpty, uuid } from '../domain/seed'
-import type { CollectionName, DataState, PartnerId } from '../domain/types'
+import type { CollectionName, DataState, PartnerId, Profile } from '../domain/types'
 import { createStore, useStore } from '../store/createStore'
 import { dataStore, enqueueAll } from '../store/data'
 import {
@@ -145,10 +145,25 @@ export async function pull(): Promise<number> {
     for (const m of rows) if (!cursor || m.syncedAt > cursor) cursor = m.syncedAt
     if (rows.length) batches.push({ c, rows })
   }
+  // O par REABRIU a aba pessoal: os lançamentos antigos dele não mudaram (synced_at ficou atrás do cursor),
+  // então o pull incremental nunca os traria. Nesse caso baixa os lançamentos inteiros de novo.
+  const who = authStore.get().who
+  const local = dataStore.get().profiles
+  const reopened = batches
+    .find((b) => b.c === 'profiles')
+    ?.rows.some(({ entity }) => {
+      const p = entity as Profile
+      return p.id !== who && p.sharePersonalFinances && !local[p.id]?.sharePersonalFinances
+    })
+  if (reopened) {
+    const all = (await pullRows(cfg, token, 'transactions', space, null)).map((r) => fromRow('transactions', r))
+    const rest = batches.filter((b) => b.c !== 'transactions')
+    batches.length = 0
+    batches.push(...rest, { c: 'transactions', rows: all })
+  }
   if (secret !== from) return 0 // sessão fechada ou trocada durante o download
   // 2) aplica de uma vez sobre o estado MAIS RECENTE (evita atualização perdida de quem editou no meio)
   let changed = 0
-  const who = authStore.get().who
   const single = isSingleDevice()
   dataStore.set((cur) => {
     let state = cur
