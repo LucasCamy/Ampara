@@ -4,6 +4,7 @@ import { changeMyPassword, lock, reinvitePartner, useAuth, wipeDevice } from '..
 import { validatePassword } from '../../auth/vault'
 import { Button, cx, FieldError, SectionHeader, StatusBadge } from '../../components/ui'
 import { ui } from '../../store/ui'
+import { publishInvite } from '../../sync/cloud'
 
 type Panel = null | 'password' | 'reinvite' | 'wipe'
 
@@ -126,7 +127,13 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           <form
             className="mt-4 flex flex-col gap-3 rounded-[18px] bg-subtle p-3"
             noValidate
-            onSubmit={(e) => run(e, async () => setInvite(await reinvitePartner(current)))}
+            onSubmit={(e) =>
+              run(e, async () => {
+                const code = await reinvitePartner(current)
+                await publishInvite(code)
+                setInvite(code)
+              })
+            }
           >
             <p className="text-[14px] text-ink">Use quando {partnerName} esquecer a senha. Confirme com a sua senha.</p>
             <PwInput label="Sua senha" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />

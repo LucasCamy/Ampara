@@ -37,7 +37,7 @@ src/
   domain/      regras puras e testadas (finance, privacy, medication, outbox, tasks, dates, format)
   store/       stores externos (data, ui, clock) com useSyncExternalStore; ações estáveis
   auth/        cofre cifrado, sessão, convite do par (crypto, vault, session)
-  sync/        adaptadores de sincronização (loopback local e Supabase via REST)
+  sync/        motor da fila, nuvem (cloud.ts: conta, pareamento, push/pull) e cliente REST do Supabase (remote.ts)
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
   features/    telas: today, agenda, routines, finance, settings, sheets, shell
   styles/      tokens.css (fonte única de cor, raio, sombra e motion)
@@ -63,9 +63,12 @@ public/        manifest.webmanifest, ícones, sw.js
 10. **Nada antes do login.** Nenhuma tela lê dados sem sessão aberta. Nunca gravar dados ou senha em texto claro;
     toda gravação passa por `src/auth/session.ts`. Quem está usando (`viewer`) vem da sessão, não de preferência.
     Trocar de pessoa, apagar dados e gerar convite exigem senha.
-11. **Mobile primeiro de verdade.** Menus (`Segmented`) precisam caber em 360px: use `stretch` e `shortLabel`.
+11. **Nuvem.** Escrever no estado depois de algo assíncrono sempre com `dataStore.set((cur) => ...)` sobre o estado
+    atual, nunca com uma cópia lida antes (evita atualização perdida). Políticas novas no `schema.sql` precisam do
+    espelho em `e2e/fake-supabase.ts`.
+12. **Mobile primeiro de verdade.** Menus (`Segmented`) precisam caber em 360px: use `stretch` e `shortLabel`.
     Rode `scripts/audit-responsive.mjs` depois de mexer em layout.
-12. **Privacidade é regra de domínio.** Qualquer leitura de transações para um visualizador passa por
+13. **Privacidade é regra de domínio.** Qualquer leitura de transações para um visualizador passa por
     `src/domain/privacy.ts`. Nunca filtrar privacidade só na UI.
 
 ## Desempenho

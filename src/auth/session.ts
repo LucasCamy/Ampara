@@ -7,8 +7,11 @@ import {
   AuthError,
   changePassword as rewrap,
   claimInvite,
+  createSingleVault,
   createVault,
   isVault,
+  openCloud,
+  sealCloud,
   lockoutMs,
   readData,
   reinvite,
@@ -33,7 +36,9 @@ const IDLE_MS = 15 * 60_000
 export interface PersonHeader {
   name: string
   pronoun: Pronoun
-  status: 'active' | 'invited'
+  status: 'active' | 'invited' | 'absent'
+  /** a pessoa conectou a conta da nuvem neste aparelho */
+  cloud: boolean
 }
 
 export type AuthStatus = 'loading' | 'setup' | 'welcome' | 'locked' | 'unlocked'
@@ -84,8 +89,8 @@ function saveVault(v: Vault) {
 }
 
 const headerOf = (v: Vault): Record<PartnerId, PersonHeader> => ({
-  A: { name: v.people.A.name, pronoun: v.people.A.pronoun, status: v.people.A.status },
-  B: { name: v.people.B.name, pronoun: v.people.B.pronoun, status: v.people.B.status },
+  A: { name: v.people.A.name, pronoun: v.people.A.pronoun, status: v.people.A.status, cloud: !!v.people.A.cloud },
+  B: { name: v.people.B.name, pronoun: v.people.B.pronoun, status: v.people.B.status, cloud: !!v.people.B.cloud },
 })
 
 function legacyData(): DataState | null {
@@ -140,6 +145,60 @@ function broadcast(type: 'lock' | 'wipe') {
   channel?.postMessage({ type })
 }
 
+/* ---------- avisos de sessão (a nuvem escuta para conectar/desconectar) ---------- */
+
+const listeners = new Set<() => void>()
+export const onSessionChange = (fn: () => void) => {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+const emit = () => listeners.forEach((fn) => fn())
+
+/** Esta pessoa é a única com acesso neste aparelho (o par usa o próprio celular)? */
+export const isSingleDevice = () => {
+  const s = authStore.get()
+  return !!s.who && s.people?.[s.who === 'A' ? 'B' : 'A'].status === 'absent'
+}
+
+/* ---------- segredo da nuvem da pessoa conectada (cifrado com a chave de dados) ---------- */
+
+export async function readCloudSecret(): Promise<string | null> {
+  const who = authStore.get().who
+  const v = loadVault() ?? vault
+  if (!who || !v || !key) return null
+  try {
+    return await openCloud(v, key, who)
+  } catch {
+    return null
+  }
+}
+
+export async function writeCloudSecret(secret: string | null): Promise<void> {
+  const who = authStore.get().who
+  const k = key
+  if (!who || !k) return
+  writeChain = writeChain.then(async () => {
+    const v = loadVault() ?? vault
+    if (!v || key !== k) return
+    const next = await sealCloud(v, k, who, secret)
+    saveVault(next)
+    authStore.set((s) => ({ ...s, people: headerOf(next) }))
+  })
+  await writeChain
+}
+
+/** Aparelho novo entrando pela nuvem: cria o cofre só com esta pessoa e a mesma senha da conta */
+export async function setupFromCloud(input: { who: PartnerId; password: string; data: DataState; remember: boolean; cloudSecret: string }) {
+  const A = input.data.profiles.A!
+  const B = input.data.profiles.B!
+  const people = { A: { name: A.displayName, pronoun: A.pronoun }, B: { name: B.displayName, pronoun: B.pronoun } }
+  const created = await createSingleVault(input.who, people, input.password, input.data)
+  const v = await sealCloud(created.vault, created.key, input.who, input.cloudSecret)
+  saveVault(v)
+  localStorage.removeItem(LEGACY_PLAINTEXT_KEY)
+  await openSession(input.who, created.key, v, input.remember)
+}
+
 /* ---------- abrir / fechar sessão ---------- */
 
 async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boolean, welcomeInvite: string | null = null) {
@@ -154,10 +213,12 @@ async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boo
   authStore.set((s) => ({ ...s, status: welcomeInvite ? 'welcome' : 'unlocked', welcomeInvite, who, preselect: null, people: headerOf(v), remembered: remember }))
   if (remember) await rememberSession({ who, key: k, expiresAt: Date.now() + REMEMBER_MS })
   else await forgetSession()
+  emit()
 }
 
 function closeSession(preselect: PartnerId | null) {
   key = null
+  emit()
   dataStore.set(() => buildEmpty(new Date()))
   ui.closeSheet()
   uiStore.set((s) => ({ ...s, toasts: [] }))

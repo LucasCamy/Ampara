@@ -9,11 +9,13 @@ import { deriveKek, fromB64, generateDek, inviteCode, normalizeInvite, open, PBK
 export interface PersonSlot {
   name: string
   pronoun: Pronoun
-  /** invited = ainda não criou senha; o slot está embrulhado pelo código de convite */
-  status: 'active' | 'invited'
+  /** invited = ainda não criou senha (embrulho pelo convite); absent = usa o próprio aparelho, não entra neste */
+  status: 'active' | 'invited' | 'absent'
   salt: string
   iterations: number
   wrapped: string
+  /** sessão da nuvem (refresh token) cifrada com a chave de dados; só existe se a pessoa conectou */
+  cloud?: Sealed
 }
 
 export interface Vault {
@@ -103,6 +105,7 @@ async function kekFor(slot: PersonSlot, secret: string) {
 /** Abre a sessão de uma pessoa. Mensagem genérica: não revela se o erro foi pessoa ou senha. */
 export async function unlockVault(vault: Vault, who: PartnerId, password: string): Promise<CryptoKey> {
   const slot = vault.people[who]
+  if (slot.status === 'absent') throw new AuthError('NOT_ACTIVATED', 'Esta pessoa usa o próprio aparelho.')
   if (slot.status !== 'active') throw new AuthError('NOT_ACTIVATED', 'Primeiro acesso: use o código de convite para criar a senha.')
   try {
     return await unwrapDek(slot.wrapped, await kekFor(slot, password))
@@ -185,4 +188,37 @@ export async function reinvite(vault: Vault, by: PartnerId, password: string, ta
   const slot = vault.people[target]
   const next = await slotFor(slot.name, slot.pronoun, dek, normalizeInvite(invite), 'invited', slot.iterations)
   return { vault: { ...vault, people: { ...vault.people, [target]: next } }, invite }
+}
+
+/** Aparelho novo que entrou pela nuvem: só a pessoa que entrou tem acesso aqui */
+export async function createSingleVault(
+  who: PartnerId,
+  people: Record<PartnerId, { name: string; pronoun: Pronoun }>,
+  password: string,
+  data: DataState,
+  iterations = PBKDF2_ITERATIONS,
+): Promise<{ vault: Vault; key: CryptoKey }> {
+  const dek = await generateDek()
+  const other: PartnerId = who === 'A' ? 'B' : 'A'
+  const slots = {
+    [who]: await slotFor(people[who].name, people[who].pronoun, dek, password, 'active', iterations),
+    [other]: { name: people[other].name, pronoun: people[other].pronoun, status: 'absent', salt: '', iterations, wrapped: '' },
+  } as Record<PartnerId, PersonSlot>
+  const key = await sessionKeyFrom(dek)
+  const vault: Vault = { v: 1, createdAt: new Date().toISOString(), rev: 0, people: slots, data: { iv: '', ct: '' } }
+  return { vault: await writeData(vault, key, data), key }
+}
+
+const cloudAad = (who: PartnerId) => `ampara:cloud:${who}`
+
+export async function sealCloud(vault: Vault, key: CryptoKey, who: PartnerId, secret: string | null): Promise<Vault> {
+  const slot = { ...vault.people[who] }
+  if (secret === null) delete slot.cloud
+  else slot.cloud = await seal(key, secret, cloudAad(who))
+  return { ...vault, people: { ...vault.people, [who]: slot } }
+}
+
+export async function openCloud(vault: Vault, key: CryptoKey, who: PartnerId): Promise<string | null> {
+  const sealed = vault.people[who].cloud
+  return sealed ? open(key, sealed, cloudAad(who)) : null
 }

@@ -1,6 +1,6 @@
 import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
 import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
-import type { Collections, CollectionName, DataState } from '../domain/types'
+import type { Collections, CollectionName, DataState, Medication, PartnerId, Transaction } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 /** Chave antiga (dados em texto claro, versão sem login). Migrada para o cofre e apagada no cadastro. */
@@ -85,4 +85,33 @@ export function resetData() {
     inviteCode: cur.couple.couple?.inviteCode ?? '',
   })
   dataStore.set(() => seed)
+}
+
+/** Coloca todas as entidades na fila (primeira subida ao conectar a nuvem). Não altera nenhum dado. */
+/**
+ * Só o que esta pessoa pode gravar no servidor (espelho de tx_write e meds_write):
+ * lançamentos pessoais e remédios do par sobem pelo aparelho do par.
+ */
+export function enqueueAll(who: PartnerId) {
+  const nowMs = Date.now()
+  const mine = (c: CollectionName, e: unknown) => {
+    if (c === 'transactions') {
+      const t = e as Transaction
+      return t.scope === 'COUPLE' || t.createdBy === who
+    }
+    if (c === 'meds') {
+      const m = e as Medication
+      return m.ownerId === null || m.ownerId === who
+    }
+    return true
+  }
+  dataStore.set((s) => {
+    let outbox = s.outbox
+    for (const c of ['couple', 'profiles', 'tasks', 'events', 'meds', 'medLogs', 'transactions', 'helpRequests', 'nudges'] as CollectionName[]) {
+      for (const [id, entity] of Object.entries(s[c])) {
+        if (mine(c, entity)) outbox = enqueue(outbox, makeEntry(c, id, 'UPSERT', entity, nowMs, uuid()))
+      }
+    }
+    return { ...s, outbox }
+  })
 }

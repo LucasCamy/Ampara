@@ -36,6 +36,8 @@ export default defineConfig({
     url: 'http://localhost:4173',
     reuseExistingServer: true,
     timeout: 180_000,
+    // build com nuvem apontando para o Supabase simulado dos testes (e2e/fake-supabase.ts)
+    env: { VITE_SUPABASE_URL: 'http://fake-supabase.test', VITE_SUPABASE_ANON_KEY: 'anon-key-de-teste' },
   },
   projects,
 })

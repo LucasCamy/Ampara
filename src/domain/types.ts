@@ -10,11 +10,14 @@ export type SplitMode = '50_50' | 'PROPORTIONAL'
 
 export interface Couple {
   id: 'couple'
+  /** Identificador do espaço na nuvem (couple_id no Supabase). Só existe após conectar. */
+  spaceId?: string
   inviteCode: string
   pairedAt: string
   splitMode: SplitMode
   /** Parte do Parceiro A em pontos-base (6000 = 60%) usada na divisão proporcional */
   ratioABps: number
+  updatedAt?: string
 }
 
 export interface Profile {

@@ -1,8 +1,9 @@
-import { CircleCheck, Copy, Eye, EyeOff, KeyRound, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react'
+import { CircleCheck, Cloud, Copy, Eye, EyeOff, KeyRound, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { activate, enterApp, login, lockedUntil, setup, useAuth, type PersonHeader } from '../../auth/session'
 import { validatePassword } from '../../auth/vault'
-import { Button, ChoiceChips, cx, FieldError, Switch, Title } from '../../components/ui'
+import { Button, ChoiceChips, cx, FieldError, Segmented, Switch, Title } from '../../components/ui'
+import { enterFromCloud, useCloud } from '../../sync/cloud'
 import type { PartnerId, Pronoun, SplitMode } from '../../domain/types'
 import { ThemeToggle } from '../shell/TopBar'
 
@@ -105,6 +106,90 @@ const PRONOUNS: { value: Pronoun; label: string }[] = [
 /* ---------- T01: criar o espaço do casal ---------- */
 
 export function SetupScreen() {
+  const cloudOn = useCloud((s) => s.configured)
+  const [viaCloud, setViaCloud] = useState(false)
+  if (viaCloud) return <CloudEntryScreen onBack={() => setViaCloud(false)} />
+  return <LocalSetup cloudOn={cloudOn} onCloud={() => setViaCloud(true)} />
+}
+
+/* ---------- Aparelho novo: entrar pela nuvem ---------- */
+
+function CloudEntryScreen({ onBack }: { onBack: () => void }) {
+  const [mode, setMode] = useState<'invite' | 'signin'>('invite')
+  const [code, setCode] = useState('')
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [remember, setRemember] = useState(true)
+  const [errors, setErrors] = useState<Record<string, string | null>>({})
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    const next: Record<string, string | null> = {
+      email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? null : 'Informe um e-mail válido.',
+      pw: mode === 'invite' ? validatePassword(pw) : pw ? null : 'Digite a senha.',
+      pw2: mode === 'invite' && pw !== pw2 ? 'As senhas não são iguais.' : null,
+      code: mode === 'invite' && code.replace(/[^a-z0-9]/gi, '').length !== 10 ? 'O código tem 10 letras e números.' : null,
+    }
+    setErrors(next)
+    if (Object.values(next).some(Boolean)) return
+    setBusy(true)
+    try {
+      await enterFromCloud({ mode: mode === 'invite' ? 'signup' : 'signin', email, password: pw, remember, ...(mode === 'invite' ? { inviteCode: code } : {}) })
+    } catch (err) {
+      setErrors({ form: err instanceof Error ? err.message : 'Não foi possível entrar.' })
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Shell>
+      <Title size="xl" anchor="Entrar pela nuvem." rest="Seus dados descem cifrados para este celular." />
+      <form onSubmit={submit} noValidate className="module mt-6 flex flex-col gap-4 p-4 sm:p-6" data-testid="cloud-entry-form">
+        <Segmented<'invite' | 'signin'>
+          label="Como você vai entrar"
+          value={mode}
+          onChange={setMode}
+          stretch
+          size="sm"
+          options={[
+            { value: 'invite', label: 'Tenho um convite', testId: 'cloud-entry-invite' },
+            { value: 'signin', label: 'Já tenho conta', testId: 'cloud-entry-signin' },
+          ]}
+        />
+        {mode === 'invite' ? (
+          <TextField label="Código de convite do seu par" value={code} onChange={setCode} error={errors.code} autoComplete="one-time-code" testId="cloud-entry-code" maxLength={14} />
+        ) : null}
+        <TextField label="Seu e-mail" value={email} onChange={setEmail} error={errors.email} autoComplete="email" testId="cloud-entry-email" maxLength={254} />
+        <TextField
+          label={mode === 'invite' ? 'Crie sua senha' : 'Sua senha'}
+          type="password"
+          value={pw}
+          onChange={setPw}
+          error={errors.pw}
+          hint={mode === 'invite' ? 'Pelo menos 10 caracteres. Vale para a conta e para abrir o app neste celular.' : undefined}
+          autoComplete={mode === 'invite' ? 'new-password' : 'current-password'}
+          testId="cloud-entry-password"
+          maxLength={128}
+        />
+        {mode === 'invite' ? (
+          <TextField label="Repita a senha" type="password" value={pw2} onChange={setPw2} error={errors.pw2} autoComplete="new-password" testId="cloud-entry-password2" maxLength={128} />
+        ) : null}
+        <Switch checked={remember} onChange={setRemember} label="Manter conectado neste aparelho (14 dias)" />
+        {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+        <Button type="submit" variant="primary" size="lg" icon={Cloud} disabled={busy} className="w-full" data-testid="cloud-entry-submit">
+          {busy ? 'Baixando com segurança...' : 'Entrar'}
+        </Button>
+      </form>
+      <Button variant="ghost" className="mt-4 w-full" onClick={onBack}>
+        Voltar e criar um espaço novo
+      </Button>
+    </Shell>
+  )
+}
+
+function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => void }) {
   const hasLegacy = useAuth((s) => s.hasLegacyData)
   const [name, setName] = useState('')
   const [pronoun, setPronoun] = useState<Pronoun>('ele')
@@ -151,6 +236,16 @@ export function SetupScreen() {
       <p className="mt-3 text-[15px] text-muted">
         Tudo fica cifrado neste aparelho. Sem a senha, ninguém abre os dados de vocês, nem quem pegar o celular.
       </p>
+      {cloudOn ? (
+        <div className="card mt-5 flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="min-w-0 flex-1 basis-[200px] text-[14px] text-ink">
+            <strong>Seu par já usa o Ampara?</strong> Entre com o convite ou com sua conta.
+          </p>
+          <Button variant="quiet" icon={Cloud} onClick={onCloud} data-testid="setup-cloud">
+            Entrar pela nuvem
+          </Button>
+        </div>
+      ) : null}
       <form onSubmit={submit} noValidate className="module mt-6 flex flex-col gap-5 p-4 sm:p-6" data-testid="setup-form">
         <div className="flex flex-col gap-4">
           <h2 className="text-[16px] font-bold text-ink">Você</h2>
@@ -294,13 +389,23 @@ export function LoginScreen() {
               <UserRound size={20} aria-hidden className={cx('shrink-0', active ? 'text-action' : 'text-muted')} />
               <span className="min-w-0">
                 <span className="block truncate text-[16px] font-bold text-ink">{people[id].name}</span>
-                <span className="block text-[12px] text-muted">{people[id].status === 'invited' ? 'Primeiro acesso' : 'Com senha'}</span>
+                <span className="block text-[12px] text-muted">{people[id].status === 'invited' ? 'Primeiro acesso' : people[id].status === 'absent' ? 'Outro aparelho' : 'Com senha'}</span>
               </span>
             </button>
           )
         })}
       </div>
-      {person.status === 'active' ? <PasswordForm key={who} who={who} person={person} /> : <ActivateForm key={who} who={who} person={person} />}
+      {person.status === 'active' ? (
+        <PasswordForm key={who} who={who} person={person} />
+      ) : person.status === 'absent' ? (
+        <section className="module mt-4 p-4 sm:p-6" data-testid="login-absent">
+          <p className="text-[15px] text-ink">
+            <strong>{person.name}</strong> usa o Ampara no próprio celular. Neste aparelho só entra quem criou o acesso aqui.
+          </p>
+        </section>
+      ) : (
+        <ActivateForm key={who} who={who} person={person} />
+      )}
     </Shell>
   )
 }

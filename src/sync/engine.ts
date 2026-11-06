@@ -2,7 +2,8 @@ import { flushOutbox, pendingEntries } from '../domain/outbox'
 import { createStore, useStore } from '../store/createStore'
 import { dataStore } from '../store/data'
 import { uiStore } from '../store/ui'
-import { pickAdapter } from './adapters'
+import { loopbackAdapter } from './adapters'
+import { cloudAdapter, isCloudConnected, pull, setSyncTrigger, startCloud } from './cloud'
 
 export interface SyncState {
   networkOnline: boolean
@@ -16,8 +17,9 @@ export const syncStore = createStore<SyncState>({
 
 export const isOnline = () => syncStore.get().networkOnline && !uiStore.get().forcedOffline
 
-const adapter = pickAdapter()
-export const adapterName = adapter.name
+/** Conectado à nuvem: Supabase. Senão: simulação local (os dados ficam só neste aparelho). */
+const currentAdapter = () => (isCloudConnected() ? cloudAdapter : loopbackAdapter)
+export const adapterName = () => (isCloudConnected() ? 'Supabase (nuvem)' : 'só neste aparelho')
 
 let running = false
 let again = false
@@ -27,11 +29,12 @@ export async function syncNow() {
     again = true
     return
   }
-  if (!isOnline() || pendingEntries(dataStore.get().outbox).length === 0) return
+  const cloud = isCloudConnected()
+  if (!isOnline() || (!cloud && pendingEntries(dataStore.get().outbox).length === 0)) return
   running = true
   syncStore.set((s) => ({ ...s, syncing: true }))
   try {
-    const result = await flushOutbox(dataStore.get().outbox, adapter, isOnline())
+    const result = await flushOutbox(dataStore.get().outbox, currentAdapter(), isOnline())
     const syncedIds = new Set(result.outbox.filter((e) => e.status === 'SYNCED').map((e) => e.id))
     // mescla: entradas criadas durante o envio continuam pendentes
     dataStore.set((s) => ({
@@ -39,6 +42,8 @@ export async function syncNow() {
       outbox: s.outbox.map((e) => (syncedIds.has(e.id) ? { ...e, status: 'SYNCED' as const } : e)),
       lastSyncedAt: result.synced > 0 ? new Date().toISOString() : s.lastSyncedAt,
     }))
+    // depois de subir, desce o que o par mudou
+    if (cloud) await pull().catch(() => undefined)
   } finally {
     running = false
     syncStore.set((s) => ({ ...s, syncing: false }))
@@ -53,6 +58,8 @@ let started = false
 export function startSync() {
   if (started) return
   started = true
+  setSyncTrigger(() => void syncNow())
+  startCloud()
   window.addEventListener('online', () => {
     syncStore.set((s) => ({ ...s, networkOnline: true }))
     void syncNow()

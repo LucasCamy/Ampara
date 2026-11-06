@@ -167,9 +167,10 @@ create policy couple_rw on help_requests for all using (couple_id = my_couple_id
 create policy couple_rw on nudges for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 create policy couple_rw on medication_logs for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 
--- Tarefas: do casal, minhas, enviadas por mim ou visíveis pelo dono
+-- Tarefas: do casal, minhas, enviadas por mim ou visíveis pelo dono (arquivadas também descem, para o
+-- arquivamento chegar ao outro aparelho; o app as esconde)
 create policy tasks_read on tasks for select using (
-  couple_id = my_couple_id() and status <> 'ARCHIVED' and (
+  couple_id = my_couple_id() and (
     assigned_to is null or assigned_to = my_partner_id() or sent_by = my_partner_id() or visible_to_partner
   )
 );
@@ -199,3 +200,100 @@ create policy tx_read on transactions for select using (
 create policy tx_write on transactions for all using (
   couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id())
 ) with check (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()));
+
+-- =====================================================================
+-- Iteração 3: nuvem entre aparelhos (pareamento por convite + exclusão lógica)
+-- =====================================================================
+create extension if not exists pgcrypto;
+
+-- Exclusão lógica: remoções (ex.: Desfazer) chegam ao outro aparelho pelo pull incremental
+do $$
+declare t text;
+begin
+  foreach t in array array['tasks','events','medications','medication_logs','transactions','help_requests','nudges'] loop
+    execute format('alter table %I add column if not exists deleted boolean not null default false', t);
+    execute format('create index if not exists %I on %I (couple_id, updated_at)', 'idx_' || t || '_pull', t);
+  end loop;
+end $$;
+alter table couples add column if not exists updated_at timestamptz not null default now();
+alter table couples add column if not exists invite_code text;
+alter table couples alter column invite_code drop not null;
+
+-- Convites guardam só o hash do código; valem 7 dias e uma vez
+create table if not exists couple_invites (
+  code_hash text primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  partner_id text not null check (partner_id in ('A', 'B')),
+  expires_at timestamptz not null default now() + interval '7 days',
+  used_at timestamptz
+);
+alter table couple_invites enable row level security; -- sem política: só as funções abaixo acessam
+alter table couple_members enable row level security;
+create policy members_read on couple_members for select using (couple_id = my_couple_id());
+
+-- Cria o espaço na nuvem: quem chama vira o Parceiro A
+create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer)
+returns text language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if exists (select 1 from couple_members where user_id = auth.uid()) then raise exception 'already paired'; end if;
+  insert into couples (id, split_mode, ratio_a_bps) values (p_couple_id, p_split_mode, p_ratio_a_bps);
+  insert into couple_members (couple_id, user_id, partner_id) values (p_couple_id, auth.uid(), 'A');
+  return p_couple_id;
+end $$;
+
+-- Registra o convite do par (o código em texto claro nunca é gravado)
+create or replace function create_invite(p_code text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_couple text := my_couple_id(); v_partner text;
+begin
+  if v_couple is null then raise exception 'not paired'; end if;
+  v_partner := case my_partner_id() when 'A' then 'B' else 'A' end;
+  if exists (select 1 from couple_members where couple_id = v_couple and partner_id = v_partner) then raise exception 'partner already joined'; end if;
+  delete from couple_invites where couple_id = v_couple;
+  insert into couple_invites (code_hash, couple_id, partner_id)
+  values (encode(digest(upper(regexp_replace(p_code, '[^A-Za-z0-9]', '', 'g')), 'sha256'), 'hex'), v_couple, v_partner);
+end $$;
+
+-- Entra no espaço com o convite: devolve o casal e qual parceiro a pessoa é
+create or replace function join_couple(p_code text)
+returns table (couple_id text, partner_id text) language plpgsql security definer set search_path = public as $$
+declare v_inv couple_invites;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  select * into v_inv from couple_invites
+   where code_hash = encode(digest(upper(regexp_replace(p_code, '[^A-Za-z0-9]', '', 'g')), 'sha256'), 'hex')
+     and used_at is null and expires_at > now()
+   for update;
+  if not found then raise exception 'invalid invite'; end if;
+  insert into couple_members (couple_id, user_id, partner_id) values (v_inv.couple_id, auth.uid(), v_inv.partner_id);
+  update couple_invites set used_at = now() where code_hash = v_inv.code_hash;
+  return query select v_inv.couple_id, v_inv.partner_id;
+end $$;
+
+-- Quem sou eu no espaço (usado ao entrar em um aparelho novo)
+create or replace function my_membership()
+returns table (couple_id text, partner_id text) language sql stable security definer set search_path = public as $$
+  select couple_id, partner_id from couple_members where user_id = auth.uid()
+$$;
+
+revoke all on function create_couple(text, text, integer), create_invite(text), join_couple(text), my_membership() from public, anon;
+grant execute on function create_couple(text, text, integer), create_invite(text), join_couple(text), my_membership() to authenticated;
+
+-- Cursor de pull carimbado pelo servidor: relógios diferentes entre aparelhos não fazem perder alterações.
+-- updated_at continua sendo o relógio de quem editou (usado para "última edição vence").
+create or replace function touch_synced_at() returns trigger language plpgsql as $$
+begin
+  new.synced_at := clock_timestamp();
+  return new;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['couples','profiles','tasks','events','medications','medication_logs','transactions','help_requests','nudges'] loop
+    execute format('alter table %I add column if not exists synced_at timestamptz not null default clock_timestamp()', t);
+    execute format('drop trigger if exists trg_%I_synced on %I', t, t);
+    execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
+  end loop;
+end $$;

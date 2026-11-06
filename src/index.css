@@ -73,6 +73,11 @@
   textarea {
     font-size: 16px;
   }
+  /* o app já tem o próprio botão de mostrar senha */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
+  }
   :focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;

@@ -37,6 +37,20 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 3 (2026-11-06): nuvem entre aparelhos
+
+- **Supabase Auth via REST** (sem SDK): criar conta, entrar, renovar (voo único, com rotação) e revogar.
+- **Pareamento por convite no servidor:** RPCs `create_couple`, `create_invite` (só hash), `join_couple`, `my_membership`.
+- **Aparelho novo:** "Entrar pela nuvem" baixa o espaço e cria o cofre local só com aquela pessoa (o par aparece como
+  "Outro aparelho"); o refresh token fica cifrado no cofre.
+- **Pull incremental** por `synced_at` do servidor, merge LWW com "dose tomada vence", exclusão lógica e limpeza de
+  cópias quando o par fecha a aba pessoal.
+- **Bugs encontrados pelos testes de dois aparelhos e corrigidos:** atualização perdida no pull (mudança feita durante
+  o download era desfeita), fila presa para sempre com itens que o servidor recusa (itens do par) e a política de
+  leitura de tarefas que impedia o arquivamento de chegar ao outro aparelho.
+- **Pendente:** aplicar o `schema.sql` num Supabase real e repetir `e2e/cloud.spec.ts` contra ele; realtime (hoje é
+  sincronização periódica de 30 s).
+
 ## Iteração 2 (2026-11-06): autenticação, responsividade e dependências
 
 - **Autenticação obrigatória** (decisão do usuário): cofre local cifrado, convite do par, sessão lembrada,

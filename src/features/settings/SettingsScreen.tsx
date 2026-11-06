@@ -4,6 +4,7 @@ import { Button, ChoiceChips, cx, SectionHeader, StatusBadge, Switch, Title } fr
 import type { PartnerId } from '../../domain/types'
 import { useAuth } from '../../auth/session'
 import { SecuritySection } from './SecuritySection'
+import { CloudSection } from './CloudSection'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
 import { useCouple, usePeople } from '../../store/hooks'
@@ -57,7 +58,7 @@ export function SettingsScreen() {
               <StatusBadge kind="ok">Vocês dois já têm senha própria</StatusBadge>
             )}
             <p className="mt-2 text-[13px] text-muted">
-              Sincronização: {adapterName}. Para ver a visão de {partner.displayName} neste aparelho, toque no nome no topo: o app pede a senha.
+              Sincronização: {adapterName()}. Para ver a visão de {partner.displayName} neste aparelho, toque no nome no topo: o app pede a senha.
             </p>
             <div className="mt-4">
               <NameField key={`${viewer}-${profiles[viewer].displayName}`} id={viewer} value={profiles[viewer].displayName} label="Seu nome" />
@@ -65,6 +66,8 @@ export function SettingsScreen() {
           </section>
 
           <SecuritySection partnerName={partner.displayName} />
+
+          <CloudSection />
 
           <section className="module p-4 sm:p-5" aria-labelledby="divisao">
             <SectionHeader id="divisao" title="Divisão padrão" rest="· gastos do casal" />

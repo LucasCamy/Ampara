@@ -5,7 +5,8 @@ export const test = base.extend<{ errors: string[] }>({
   errors: async ({ page }, provide) => {
     const errors: string[] = []
     page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text())
+      // 4xx esperados do Supabase simulado (senha errada, RLS recusando) não são bugs do app
+      if (m.type() === 'error' && !m.location().url.startsWith('http://fake-supabase.test')) errors.push(m.text())
     })
     page.on('pageerror', (e) => errors.push(String(e)))
     await provide(errors)

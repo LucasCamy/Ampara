@@ -44,10 +44,20 @@ Instale pela Tela de Início (Safari > Compartilhar > Adicionar à Tela de Iníc
 
 ## Sincronização
 
-Sem configuração, o app usa um adaptador local que simula o servidor (toque no status de sync no topo
-para simular o modo offline e ver a fila crescer). Para sincronizar de verdade entre dois aparelhos:
-crie um projeto Supabase, rode [`supabase/schema.sql`](supabase/schema.sql) e preencha `.env`
-a partir de `.env.example`.
+Sem servidor configurado, tudo fica só neste aparelho (cifrado) e o app funciona normalmente.
+Para **um celular para cada pessoa**, ligue a nuvem (Supabase):
+
+1. Crie um projeto em [supabase.com](https://supabase.com) (plano gratuito serve).
+2. No **SQL Editor**, rode o arquivo [`supabase/schema.sql`](supabase/schema.sql) inteiro.
+3. Em **Authentication > Providers > Email**, deixe e-mail e senha ligados. Se "Confirm email" estiver ligado,
+   cada pessoa confirma pelo link antes do primeiro acesso.
+4. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+   (Project Settings > API). A chave anônima é pública por desenho; quem protege os dados é o RLS.
+5. `npm run build` e publique o `dist/` (o `public/_headers` já traz os cabeçalhos de segurança).
+
+Uso: quem criou o espaço vai em **Ajustes > Nuvem > Criar conta**. O par abre o Ampara no próprio celular,
+toca em **Entrar pela nuvem > Tenho um convite** e usa o código mostrado em Ajustes. Os dados descem cifrados
+para o aparelho dele(a), e daí em diante tudo sincroniza (ao abrir, ao voltar online e a cada 30 s).
 
 ## Guia visual
 

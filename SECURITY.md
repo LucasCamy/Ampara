@@ -33,6 +33,22 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 6. **Recuperação:** sem servidor não existe "esqueci a senha" por e-mail. Quem está com acesso confirma a própria
    senha (step-up) e gera **novo convite** para o par; a senha antiga do par deixa de funcionar.
 
+## Nuvem (um celular para cada)
+
+1. **Conta por pessoa** no Supabase Auth (e-mail + senha, enviados só ao servidor por HTTPS).
+2. **Pareamento:** quem cria o espaço chama `create_couple`; o convite vai ao servidor por `create_invite`, que guarda
+   **só o SHA-256** do código, válido por 7 dias e uma vez. O par entra com `join_couple`. O convite em texto claro
+   nunca é enviado em uma linha de tabela (o teste E2E confere).
+3. **Tokens:** access token só em memória; refresh token cifrado dentro do cofre local da pessoa (AES-GCM com a chave
+   de dados e AAD por pessoa). Renovação em voo único (o Supabase rotaciona o refresh token). Desconectar revoga no
+   servidor; bloquear o app tira o token da memória.
+4. **Gravação só com token de usuário:** sem sessão, a fila espera. Cada pessoa só sobe o que pode gravar (lançamentos
+   pessoais e remédios do par ficam para o aparelho do par, espelhando `tx_write` e `meds_write`).
+5. **Descida:** cursor `synced_at` carimbado pelo servidor (relógios diferentes não fazem perder alterações);
+   conflito = última edição vence, exceto dose tomada, que sempre vence. Remoções viajam como exclusão lógica.
+6. **Autorização vencida:** se o par fecha a aba pessoal, o servidor para de entregar e o aparelho de uma pessoa só
+   apaga as cópias antigas (`purgeUnauthorized`, coberto por teste unitário e E2E).
+
 ## Mapeamento das classes da skill
 
 | Classe (nome na skill) | Estado | Onde |
@@ -48,7 +64,9 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 | Clickjacking | confirmado no `vite preview` / needs_validation na hospedagem | `vite.config.ts` e `public/_headers`; conferir os cabeçalhos no provedor real |
 | postMessage origin and source trust | não se aplica | Sem `postMessage`; `BroadcastChannel` é restrito à mesma origem |
 | Ordinary CSRF | não se aplica | Supabase usa token `Authorization: Bearer`, não cookie |
-| Missing tenant or owner enforcement / Policy and query disagreement | needs_validation | `supabase/schema.sql` (RLS por `couple_id`, `tx_read` espelha `src/domain/privacy.ts`); aplicar e testar num projeto Supabase real |
+| Missing tenant or owner enforcement / Policy and query disagreement | confirmado no simulado / needs_validation no Postgres | `supabase/schema.sql` (RLS por `couple_id`, `tx_read` espelha `src/domain/privacy.ts`); E2E de dois aparelhos com `e2e/fake-supabase.ts` |
+| Account linking and identity collision | confirmado | Conta que já pertence a outra pessoa ou espaço é recusada e deslogada (`connect()`); convite é de uso único e amarrado ao parceiro certo |
+| Stale authorization and derived copy use | confirmado | `purgeUnauthorized` ao fechar a aba pessoal; tokens saem da memória ao bloquear |
 | API-key exposure and unsafe transport | confirmado | Só a chave anônima pública vai ao cliente; o adaptador recusa gravar sem token de usuário |
 | Export and backup scope expansion / Import and restore | confirmado | Não há exportação; "Restaurar exemplo" e "Apagar dados" só existem dentro da sessão, o último com senha |
 
@@ -62,6 +80,9 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 - **Troca de senha** reembrulha a DEK, mas não a troca: uma cópia antiga do cofre continua abrindo com a senha
   antiga. Rotacionar a DEK exige as duas senhas.
 - **Se as duas pessoas esquecerem a senha**, os dados deste aparelho não podem ser recuperados (por desenho).
-- **Login no servidor** (Supabase Auth com e-mail) ainda não está ligado: precisa de um projeto Supabase. O schema
-  e o adaptador já esperam um token de usuário.
+- **Nuvem testada contra um Supabase simulado** (`e2e/fake-supabase.ts`, que reproduz as políticas do schema).
+  Falta rodar o `schema.sql` num Postgres/Supabase real e repetir os fluxos: até lá, RLS e RPCs são `needs_validation`.
+- **Sem realtime:** a descida acontece ao abrir, ao voltar online, ao sincronizar e a cada 30 s com o app aberto.
+- **Tarefa que vira privada** depois de sincronizada continua no aparelho do par até ser arquivada (o RLS só
+  impede leituras novas).
 - `style-src 'unsafe-inline'` permanece porque o Motion anima por atributo `style`.
