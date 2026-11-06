@@ -395,3 +395,77 @@ alter table events add constraint events_kind_check check (kind in ('COUPLE', 'H
 alter table medications add column if not exists assignee text check (assignee in ('A', 'B'));
 -- Unidade do estoque (comprimidos, unidades, sachês...)
 alter table medications add column if not exists stock_unit text;
+
+-- =====================================================================
+-- Iteração 9: ciclo menstrual (dado de saúde; espelho de src/domain/cycle.ts)
+-- =====================================================================
+-- Ajustes: um por pessoa, legíveis pelo casal para o par saber na hora que o compartilhamento mudou
+-- (uma linha que some não avisa ninguém). Com share NONE a linha não diz nada: janela nula (check abaixo)
+-- e durações mascaradas pelo app. GENTLE = o par vê só a janela publicada; FULL = vê também os registros.
+-- Só a dona grava.
+create table if not exists cycle_settings (
+  id text not null check (id in ('A', 'B')),
+  couple_id text not null references couples (id) on delete cascade,
+  share text not null default 'NONE' check (share in ('NONE', 'GENTLE', 'FULL')),
+  cycle_days integer not null default 28 check (cycle_days between 20 and 45),
+  period_days integer not null default 5 check (period_days between 2 and 10),
+  suggest_calm boolean not null default true,
+  sensitive_from date,
+  sensitive_to date,
+  updated_at timestamptz not null default now(),
+  primary key (couple_id, id),
+  -- "Só eu vejo" nunca publica a janela
+  check (share <> 'NONE' or (sensitive_from is null and sensitive_to is null))
+);
+
+create table if not exists cycle_logs (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  start_date date not null,
+  end_date date,
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  check (end_date is null or end_date >= start_date)
+);
+create index if not exists idx_cycle_logs_pull on cycle_logs (couple_id, updated_at);
+
+alter table cycle_settings enable row level security;
+alter table cycle_logs enable row level security;
+
+drop policy if exists cycle_settings_read on cycle_settings;
+create policy cycle_settings_read on cycle_settings for select using (couple_id = my_couple_id());
+drop policy if exists cycle_settings_insert on cycle_settings;
+create policy cycle_settings_insert on cycle_settings for insert with check (couple_id = my_couple_id() and id = my_partner_id());
+drop policy if exists cycle_settings_update on cycle_settings;
+create policy cycle_settings_update on cycle_settings for update using (couple_id = my_couple_id() and id = my_partner_id())
+  with check (couple_id = my_couple_id() and id = my_partner_id());
+drop policy if exists cycle_settings_delete on cycle_settings;
+create policy cycle_settings_delete on cycle_settings for delete using (couple_id = my_couple_id() and id = my_partner_id());
+
+-- Registros: da dona, ou do par só com "Tudo" (a subconsulta passa pelo RLS de cycle_settings)
+drop policy if exists cycle_logs_read on cycle_logs;
+create policy cycle_logs_read on cycle_logs for select using (
+  couple_id = my_couple_id() and (
+    owner_id = my_partner_id() or exists (
+      select 1 from cycle_settings s where s.couple_id = cycle_logs.couple_id and s.id = cycle_logs.owner_id and s.share = 'FULL'
+    )
+  )
+);
+drop policy if exists cycle_logs_insert on cycle_logs;
+create policy cycle_logs_insert on cycle_logs for insert with check (couple_id = my_couple_id() and owner_id = my_partner_id());
+drop policy if exists cycle_logs_update on cycle_logs;
+create policy cycle_logs_update on cycle_logs for update using (couple_id = my_couple_id() and owner_id = my_partner_id())
+  with check (couple_id = my_couple_id() and owner_id = my_partner_id());
+drop policy if exists cycle_logs_delete on cycle_logs;
+create policy cycle_logs_delete on cycle_logs for delete using (couple_id = my_couple_id() and owner_id = my_partner_id());
+
+do $$
+declare t text;
+begin
+  foreach t in array array['cycle_settings','cycle_logs'] loop
+    execute format('alter table %I add column if not exists synced_at timestamptz not null default clock_timestamp()', t);
+    execute format('drop trigger if exists trg_%I_synced on %I', t, t);
+    execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
+  end loop;
+end $$;

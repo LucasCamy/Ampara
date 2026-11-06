@@ -1,6 +1,10 @@
 import { addDays, parseDateKey, toDateKey } from './dates'
+import { defaultCycleSettings, publishedForecast } from './cycle'
 import { computeShares } from './finance'
+import { COLLECTIONS } from './types'
 import type {
+  CycleLog,
+  CycleSettings,
   Couple,
   Pronoun,
   CalendarEvent,
@@ -163,6 +167,17 @@ export function buildSeed(now: Date): DataState {
     },
   ]
 
+  // Ciclo de exemplo da Parceira B: dia 23 de 28 (semana de mais cuidado), compartilhado só como aviso
+  const cycleLogs: CycleLog[] = [78, 50, 22].map((ago) => ({
+    id: uuid(),
+    ownerId: 'B',
+    startDate: addDays(today, -ago),
+    endDate: addDays(today, -ago + 4),
+    updatedAt: iso,
+  }))
+  const cycleB: CycleSettings = { ...defaultCycleSettings('B', iso), share: 'GENTLE' }
+  Object.assign(cycleB, publishedForecast(cycleLogs, cycleB, today))
+
   return {
     schemaVersion: 1,
     couple: {
@@ -179,9 +194,21 @@ export function buildSeed(now: Date): DataState {
     transactions: byId(transactions),
     helpRequests: byId(helpRequests),
     nudges: {},
+    cycleSettings: { B: cycleB },
+    cycleLogs: byId(cycleLogs),
     outbox: [],
     lastSyncedAt: iso,
   }
+}
+
+/**
+ * Cofre gravado por uma versão anterior do app: coleções novas ainda não existem nele.
+ * Completa com coleções vazias (nunca apaga nada do que veio).
+ */
+export function normalizeState(state: DataState): DataState {
+  const missing = COLLECTIONS.filter((c) => !state[c] || typeof state[c] !== 'object')
+  if (!missing.length) return state
+  return { ...state, ...Object.fromEntries(missing.map((c) => [c, {}])) }
 }
 
 export interface CoupleIdentity {
@@ -211,5 +238,17 @@ export function withIdentity(state: DataState, id: CoupleIdentity): DataState {
 /** Estado sem lançamentos: casal recém-criado que não quer dados de exemplo */
 export function buildEmpty(now: Date): DataState {
   const seed = buildSeed(now)
-  return { ...seed, tasks: {}, events: {}, meds: {}, medLogs: {}, transactions: {}, helpRequests: {}, nudges: {}, outbox: [] }
+  return {
+    ...seed,
+    tasks: {},
+    events: {},
+    meds: {},
+    medLogs: {},
+    transactions: {},
+    helpRequests: {},
+    nudges: {},
+    cycleSettings: {},
+    cycleLogs: {},
+    outbox: [],
+  }
 }

@@ -77,6 +77,12 @@ export class FakeSupabase {
     if (table === 'tasks') return row.assigned_to == null || row.assigned_to === m.partner_id || row.sent_by === m.partner_id || row.visible_to_partner === true
     if (table === 'medications') return row.owner_id == null || row.owner_id === m.partner_id || row.notify_partner_on_delay === true
     if (table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
+    // cycle_settings_read / cycle_logs_read
+    if (table === 'cycle_settings') return true
+    if (table === 'cycle_logs') {
+      if (row.owner_id === m.partner_id) return true
+      return this.table('cycle_settings').get(`${m.couple_id}|${String(row.owner_id)}`)?.share === 'FULL'
+    }
     if (table === 'medication_logs') {
       // logs_read: a dose segue o remédio (subconsulta sob o RLS de medications)
       const med = this.table('medications').get(String(row.medication_id))
@@ -92,6 +98,8 @@ export class FakeSupabase {
     if (table === 'transactions') return row.scope === 'COUPLE' || row.created_by === m.partner_id
     if (table === 'medications' || table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
     if (table === 'medication_logs' || table === 'tasks') return this.canRead(table, row, m)
+    if (table === 'cycle_settings') return row.id === m.partner_id
+    if (table === 'cycle_logs') return row.owner_id === m.partner_id
     return true
   }
 
@@ -171,7 +179,7 @@ export class FakeSupabase {
     // PostgREST
     const tableName = path.replace('/rest/v1/', '')
     const t = this.table(tableName)
-    const keyOf = (row: Row) => (tableName === 'profiles' ? `${String(row.couple_id)}|${String(row.id)}` : String(row.id))
+    const keyOf = (row: Row) => (tableName === 'profiles' || tableName === 'cycle_settings' ? `${String(row.couple_id)}|${String(row.id)}` : String(row.id))
     if (!me) return json(403, { message: 'not a member' })
 
     if (req.method() === 'GET') {

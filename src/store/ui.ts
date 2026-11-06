@@ -2,7 +2,7 @@ import type { PartnerId } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 export type Tab = 'hoje' | 'agenda' | 'rotinas' | 'financas' | 'ajustes'
-export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'newMed' | 'routine' | 'event'
+export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'newMed' | 'routine' | 'event' | 'period' | 'cycleSetup'
 export type Theme = 'light' | 'dark'
 
 export interface SheetState {

@@ -10,6 +10,8 @@ export const SHEET_FORM = {
   newMed: 'sheet-form-new-med',
   routine: 'sheet-form-routine',
   event: 'sheet-form-event',
+  period: 'sheet-form-period',
+  cycleSetup: 'sheet-form-cycle-setup',
 } as const satisfies Partial<Record<SheetKind, string>>
 
 export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: string }>> = {
@@ -18,4 +20,6 @@ export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: st
   newMed: { label: 'Salvar remédio', testId: 'new-med-save' },
   routine: { label: 'Salvar rotina', testId: 'routine-save' },
   event: { label: 'Salvar compromisso', testId: 'event-save' },
+  period: { label: 'Salvar registro', testId: 'period-save' },
+  cycleSetup: { label: 'Salvar durações', testId: 'cycle-setup-save' },
 }

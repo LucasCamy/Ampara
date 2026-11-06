@@ -2,6 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     { "name": "ampara-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--port", "5173", "--strictPort"], "port": 5173 },
+    { "name": "ampara-dev-2", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--port", "5180", "--strictPort"], "port": 5180 },
     { "name": "ampara-local-db", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev:local", "--", "--port", "5175", "--strictPort"], "port": 5175 }
   ]
 }

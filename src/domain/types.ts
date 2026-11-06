@@ -167,6 +167,38 @@ export interface Nudge {
   updatedAt: string
 }
 
+/**
+ * Ciclo menstrual (dado de saúde sensível). Só a dona grava.
+ * NONE = o par não vê nada; GENTLE = o par vê só a semana de mais cuidado; FULL = o par vê o ciclo.
+ */
+export type CycleShare = 'NONE' | 'GENTLE' | 'FULL'
+
+export interface CycleLog {
+  id: string
+  ownerId: PartnerId
+  /** primeiro dia da menstruação */
+  startDate: DateKey
+  /** último dia; null = ainda não marcou o fim (vale a duração típica) */
+  endDate: DateKey | null
+  updatedAt: string
+}
+
+export interface CycleSettings {
+  /** = dona (um por pessoa) */
+  id: PartnerId
+  share: CycleShare
+  /** duração típica do ciclo (dias), usada até haver histórico suficiente */
+  cycleDays: number
+  /** duração típica da menstruação (dias) */
+  periodDays: number
+  /** sugerir Bateria Mental mais leve na fase pré-menstrual */
+  suggestCalm: boolean
+  /** previsão publicada para o par (só com GENTLE ou FULL), recalculada pela dona a cada registro */
+  sensitiveFrom: DateKey | null
+  sensitiveTo: DateKey | null
+  updatedAt: string
+}
+
 export type OutboxOperation = 'UPSERT' | 'DELETE'
 export type OutboxStatus = 'PENDING' | 'SYNCED' | 'FAILED'
 
@@ -192,9 +224,26 @@ export interface Collections {
   transactions: Record<string, Transaction>
   helpRequests: Record<string, HelpRequest>
   nudges: Record<string, Nudge>
+  cycleSettings: Record<string, CycleSettings>
+  cycleLogs: Record<string, CycleLog>
 }
 
 export type CollectionName = keyof Collections
+
+/** Todas as coleções, na ordem de sincronização (casal e perfis primeiro; ajustes antes dos registros) */
+export const COLLECTIONS: CollectionName[] = [
+  'couple',
+  'profiles',
+  'tasks',
+  'events',
+  'meds',
+  'medLogs',
+  'transactions',
+  'helpRequests',
+  'nudges',
+  'cycleSettings',
+  'cycleLogs',
+]
 
 export interface DataState extends Collections {
   schemaVersion: 1

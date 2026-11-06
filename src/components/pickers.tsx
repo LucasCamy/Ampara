@@ -1,6 +1,6 @@
 import { CalendarDays, Clock } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
-import { dateShortcuts, longDateLabel, toDateKey, TIME_SHORTCUTS } from '../domain/dates'
+import { dateShortcuts, longDateLabel, pastDateShortcuts, toDateKey, TIME_SHORTCUTS } from '../domain/dates'
 import { isDateKey, isTimeKey } from '../domain/catalog'
 import { useNow } from '../store/clock'
 import { cx, FieldError } from './ui'
@@ -140,6 +140,7 @@ export function DateField({
   error,
   testId,
   className,
+  past,
 }: {
   label: ReactNode
   value: string
@@ -147,6 +148,8 @@ export function DateField({
   error?: string
   testId: string
   className?: string
+  /** atalhos para trás (Hoje, Ontem, Anteontem) em vez de para frente */
+  past?: boolean
 }) {
   const id = useId()
   const today = toDateKey(useNow())
@@ -168,7 +171,7 @@ export function DateField({
         value={value}
         onPick={onChange}
         testId={`${testId}-shortcuts`}
-        items={dateShortcuts(today)}
+        items={past ? pastDateShortcuts(today) : dateShortcuts(today)}
         data={false}
       />
     </FieldShell>

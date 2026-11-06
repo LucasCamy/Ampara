@@ -14,7 +14,7 @@ export const ENERGY: Record<EnergyLevel, { icon: LucideIcon; short: string; labe
   OVERLOAD: { icon: BatteryLow, short: '10%', label: '10% Sobrecarga', partner: 'modo sobrecarga' },
 }
 
-export function BatterySelector({ compactLabels = false }: { compactLabels?: boolean }) {
+export function BatterySelector({ compactLabels = false, fill = false }: { compactLabels?: boolean; fill?: boolean }) {
   const { me } = usePeople()
   return (
     <Segmented<EnergyLevel>
@@ -23,6 +23,7 @@ export function BatterySelector({ compactLabels = false }: { compactLabels?: boo
       onChange={setEnergy}
       size="sm"
       stretch
+      fill={fill}
       options={(['FULL', 'MEDIUM', 'OVERLOAD'] as EnergyLevel[]).map((v) => ({
         value: v,
         icon: ENERGY[v].icon,
@@ -94,6 +95,9 @@ export function ThemeToggle() {
   )
 }
 
+/** Primeiro nome: "Julia Aparecida Beliz" vira "Julia" onde o espaço é curto */
+const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name
+
 export function PerspectiveSwitch({ compact = false }: { compact?: boolean }) {
   const { profiles, viewer } = usePeople()
   return (
@@ -105,9 +109,10 @@ export function PerspectiveSwitch({ compact = false }: { compact?: boolean }) {
       }}
       size="sm"
       stretch
+      fill={compact}
       options={[
-        { value: 'A', label: compact ? profiles.A.displayName : `Visão: ${profiles.A.displayName}`, shortLabel: profiles.A.displayName, testId: 'viewer-A', ariaLabel: viewer === 'A' ? `Usando como ${profiles.A.displayName}` : `Entrar como ${profiles.A.displayName} (pede a senha)` },
-        { value: 'B', label: compact ? profiles.B.displayName : `Visão: ${profiles.B.displayName}`, shortLabel: profiles.B.displayName, testId: 'viewer-B', ariaLabel: viewer === 'B' ? `Usando como ${profiles.B.displayName}` : `Entrar como ${profiles.B.displayName} (pede a senha)` },
+        { value: 'A', label: compact ? firstName(profiles.A.displayName) : `Visão: ${firstName(profiles.A.displayName)}`, shortLabel: firstName(profiles.A.displayName), testId: 'viewer-A', ariaLabel: viewer === 'A' ? `Usando como ${profiles.A.displayName}` : `Entrar como ${profiles.A.displayName} (pede a senha)` },
+        { value: 'B', label: compact ? firstName(profiles.B.displayName) : `Visão: ${firstName(profiles.B.displayName)}`, shortLabel: firstName(profiles.B.displayName), testId: 'viewer-B', ariaLabel: viewer === 'B' ? `Usando como ${profiles.B.displayName}` : `Entrar como ${profiles.B.displayName} (pede a senha)` },
       ]}
     />
   )

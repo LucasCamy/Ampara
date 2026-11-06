@@ -132,7 +132,18 @@ export const TABLES: Record<CollectionName, string> = {
   transactions: 'transactions',
   helpRequests: 'help_requests',
   nudges: 'nudges',
+  cycleSettings: 'cycle_settings',
+  cycleLogs: 'cycle_logs',
 }
+
+/** Tabelas com chave (couple_id, id): um registro por pessoa */
+const PER_PERSON = new Set<CollectionName>(['profiles', 'cycleSettings'])
+
+/**
+ * Tabela que o servidor ainda não tem (app publicado antes do schema.sql novo ser aplicado).
+ * PostgREST responde 404 (PGRST205) ou repassa o 42P01 do Postgres.
+ */
+export const isMissingTable = (e: unknown) => e instanceof RemoteError && (e.status === 404 || e.code === 'PGRST205' || e.code === '42P01')
 
 const snake = (k: string) => k.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`)
 const camel = (k: string) => k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
@@ -146,7 +157,11 @@ export function toRow(collection: CollectionName, entity: unknown, spaceId: stri
   }
   const row: Record<string, unknown> = { couple_id: spaceId, deleted: false }
   for (const [k, v] of Object.entries(e)) row[snake(k)] = v
-  if (collection === 'profiles') delete row.deleted
+  if (PER_PERSON.has(collection)) delete row.deleted
+  // ciclo com "Só eu vejo": o par lê a linha (para saber que fechou), mas ela não diz nada além disso
+  if (collection === 'cycleSettings' && e.share === 'NONE') {
+    Object.assign(row, { cycle_days: 28, period_days: 5, suggest_calm: true, sensitive_from: null, sensitive_to: null })
+  }
   return row
 }
 
@@ -166,7 +181,7 @@ export function fromRow(collection: CollectionName, row: Record<string, unknown>
 }
 
 export async function upsertRow(cfg: RemoteConfig, token: string, collection: CollectionName, row: Record<string, unknown>) {
-  const conflict = collection === 'profiles' ? '?on_conflict=couple_id,id' : ''
+  const conflict = PER_PERSON.has(collection) ? '?on_conflict=couple_id,id' : ''
   await call(cfg, `/rest/v1/${TABLES[collection]}${conflict}`, {
     method: 'POST',
     token,
@@ -177,7 +192,7 @@ export async function upsertRow(cfg: RemoteConfig, token: string, collection: Co
 
 /** Exclusão lógica: o outro aparelho fica sabendo pelo pull */
 export async function softDelete(cfg: RemoteConfig, token: string, collection: CollectionName, id: string, spaceId: string) {
-  if (collection === 'couple' || collection === 'profiles') return
+  if (collection === 'couple' || PER_PERSON.has(collection)) return
   await call(cfg, `/rest/v1/${TABLES[collection]}?id=eq.${encodeURIComponent(id)}&couple_id=eq.${encodeURIComponent(spaceId)}`, {
     method: 'PATCH',
     token,

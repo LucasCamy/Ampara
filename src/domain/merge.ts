@@ -1,4 +1,5 @@
-import type { CalendarEvent, CollectionName, DataState, Medication, MedicationLog, PartnerId, Task, Transaction } from './types'
+import { canViewCycleLog } from './cycle'
+import type { CalendarEvent, CollectionName, CycleLog, CycleSettings, DataState, Medication, MedicationLog, PartnerId, Task, Transaction } from './types'
 
 export interface RemoteRow<T = unknown> {
   entity: T
@@ -46,7 +47,7 @@ export function applyRemote(state: DataState, collection: CollectionName, rows: 
 }
 
 /** Ids que o servidor ainda mostra para quem está usando (consulta só de ids, sem cursor) */
-export type VisibleIds = Partial<Record<'tasks' | 'events' | 'meds', ReadonlySet<string>>>
+export type VisibleIds = Partial<Record<'tasks' | 'events' | 'meds' | 'cycleSettings' | 'cycleLogs', ReadonlySet<string>>>
 
 export interface PurgeOptions {
   /** ids visíveis no servidor agora; sem isso, só as regras locais valem */
@@ -66,6 +67,7 @@ export interface PurgeOptions {
  * - tarefas: privada do par ou sumida do servidor;
  * - compromissos: "Meu · só você vê" do par ou sumido do servidor;
  * - remédios: do par sem rede de apoio ou sumido do servidor; as doses dele saem junto;
+ * - ciclo: ajustes do par com "Só eu vejo" e registros do par sem "Tudo" (ou sumidos do servidor);
  * - fila: mudanças pendentes de itens que saíram (o servidor recusaria para sempre).
  * O que é meu nunca sai.
  */
@@ -86,6 +88,11 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const keepEvent = (e: CalendarEvent) => e.ownerId === owner || (e.ownerId === null && onServer('events', e))
   const keepMed = (m: Medication) =>
     m.ownerId === owner || ((m.ownerId === null || m.notifyPartnerOnDelay) && onServer('meds', m))
+  const partnerCycle = state.cycleSettings[partner]
+  // a linha de ajustes do par é sempre legível (diz NONE quando fechou); a tela filtra por canViewCycleSettings
+  const keepCycleSettings = (s: CycleSettings) => s.id === owner || onServer('cycleSettings', s)
+  const keepCycleLog = (l: CycleLog) =>
+    l.ownerId === owner || (canViewCycleLog(l, owner, partnerCycle) && onServer('cycleLogs', l))
 
   const removed = new Set<string>()
   const filter = <T extends { id: string }>(map: Record<string, T>, keep: (x: T) => boolean): Record<string, T> => {
@@ -100,9 +107,14 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const events = filter(state.events, keepEvent)
   const meds = filter(state.meds, keepMed)
   const medLogs = meds === state.meds ? state.medLogs : filter(state.medLogs, (l) => !removed.has(l.medicationId))
-  if (!removed.size) return state
+  const cycleLogs = filter(state.cycleLogs, keepCycleLog)
+  // ajustes têm id = pessoa ('A'/'B'), igual ao do perfil: não entram em `removed` (que limpa a fila por id)
+  const cycleSettings = Object.values(state.cycleSettings).every(keepCycleSettings)
+    ? state.cycleSettings
+    : Object.fromEntries(Object.values(state.cycleSettings).filter(keepCycleSettings).map((s) => [s.id, s]))
+  if (!removed.size && cycleSettings === state.cycleSettings) return state
   const logIds = Object.keys(state.medLogs).filter((id) => !medLogs[id])
   for (const id of logIds) removed.add(id)
   const outbox = state.outbox.filter((e) => !removed.has(e.entityId))
-  return { ...state, transactions, tasks, events, meds, medLogs, outbox }
+  return { ...state, transactions, tasks, events, meds, medLogs, cycleLogs, cycleSettings, outbox }
 }

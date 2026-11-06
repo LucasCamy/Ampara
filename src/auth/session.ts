@@ -1,4 +1,4 @@
-import { buildEmpty, buildSeed, withIdentity } from '../domain/seed'
+import { buildEmpty, buildSeed, normalizeState, withIdentity } from '../domain/seed'
 import type { DataState, PartnerId, Pronoun, SplitMode } from '../domain/types'
 import { createStore, useStore } from '../store/createStore'
 import { dataStore, LEGACY_PLAINTEXT_KEY } from '../store/data'
@@ -97,7 +97,7 @@ function legacyData(): DataState | null {
   try {
     const raw = localStorage.getItem(LEGACY_PLAINTEXT_KEY)
     const parsed = raw ? (JSON.parse(raw) as DataState) : null
-    return parsed?.schemaVersion === 1 ? parsed : null
+    return parsed?.schemaVersion === 1 ? normalizeState(parsed) : null
   } catch {
     return null
   }

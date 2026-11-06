@@ -64,6 +64,7 @@ export function Segmented<T extends string>({
   onChange,
   size = 'md',
   stretch,
+  fill,
   hideLabel = true,
 }: {
   label: string
@@ -73,6 +74,8 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void
   size?: 'sm' | 'md'
   stretch?: boolean
+  /** colunas iguais ocupando toda a largura em qualquer tela (barra lateral, cartões estreitos) */
+  fill?: boolean
   hideLabel?: boolean
 }) {
   const id = useId()
@@ -84,7 +87,7 @@ export function Segmented<T extends string>({
     radios?.[(from + dir + options.length) % options.length]?.focus()
   }
   return (
-    <div className={stretch ? 'w-full sm:w-auto' : 'max-w-full'}>
+    <div className={fill ? 'w-full' : stretch ? 'w-full sm:w-auto' : 'max-w-full'}>
       <span id={id} className={hideLabel ? 'sr-only' : 'mb-1.5 block text-[13px] font-semibold text-muted'}>
         {label}
       </span>
@@ -92,7 +95,10 @@ export function Segmented<T extends string>({
         role="radiogroup"
         aria-labelledby={id}
         // stretch: colunas iguais só no celular; do sm em diante cada opção tem a largura natural do rótulo completo
-        className={cx('gap-1 rounded-[16px] bg-subtle p-1', stretch ? 'grid w-full auto-cols-fr grid-flow-col sm:inline-flex sm:w-auto' : 'inline-flex max-w-full')}
+        className={cx(
+          'gap-1 rounded-[16px] bg-subtle p-1',
+          fill ? 'grid w-full auto-cols-fr grid-flow-col' : stretch ? 'grid w-full auto-cols-fr grid-flow-col sm:inline-flex sm:w-auto' : 'inline-flex max-w-full',
+        )}
       >
         {options.map((o, i) => {
           const active = o.value === value
@@ -119,7 +125,7 @@ export function Segmented<T extends string>({
               className={cx(
                 'press inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[12px] font-semibold whitespace-nowrap',
                 size === 'sm' ? 'min-h-11 px-2.5 text-[13px]' : 'min-h-11 px-3 text-[14px]',
-                stretch ? 'sm:shrink-0' : 'shrink',
+                fill ? 'px-1.5' : stretch ? 'sm:shrink-0' : 'shrink',
                 active ? 'bg-segment-active text-ink shadow-card ring-1 ring-line-strong' : 'text-muted',
               )}
             >

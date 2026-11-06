@@ -112,4 +112,29 @@ describe('merge de sincronização', () => {
       expect(purgeUnauthorized(clean, 'A')).toBe(clean)
     })
   })
+  describe('ciclo do par', () => {
+    const fullB = { ...base, cycleSettings: { B: { ...base.cycleSettings.B!, share: 'FULL' as const } } }
+    const logIds = Object.keys(base.cycleLogs)
+
+    it('com "Tudo" o aparelho do Lucas guarda os registros dela', () => {
+      expect(Object.keys(purgeUnauthorized(fullB, 'A').cycleLogs)).toEqual(logIds)
+    })
+
+    it('ela voltou para "Só o aviso": os registros saem, a janela fica', () => {
+      const s = purgeUnauthorized(base, 'A')
+      expect(s.cycleLogs).toEqual({})
+      expect(s.cycleSettings.B?.sensitiveFrom).toBe(base.cycleSettings.B?.sensitiveFrom)
+    })
+
+    it('registro sumido do servidor sai mesmo com a cópia antiga dizendo "Tudo"', () => {
+      const s = purgeUnauthorized(fullB, 'A', { visible: { cycleLogs: new Set([logIds[0]!]) } })
+      expect(Object.keys(s.cycleLogs)).toEqual([logIds[0]])
+    })
+
+    it('o ciclo da própria pessoa nunca sai', () => {
+      const s = purgeUnauthorized(base, 'B', { visible: { cycleLogs: new Set(), cycleSettings: new Set() } })
+      expect(s.cycleLogs).toBe(base.cycleLogs)
+      expect(s.cycleSettings).toBe(base.cycleSettings)
+    })
+  })
 })

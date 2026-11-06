@@ -14,7 +14,7 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -32,10 +32,10 @@ begin
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('tasks','events','medications','medication_logs','transactions');
+     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 11 tabelas, RLS ligado em todas, 6 funções'
+\echo 'ok  estrutura: 13 tabelas, RLS ligado em todas, 6 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -272,6 +272,65 @@ do $$ begin
   assert (select count(*) from medication_logs) = 0, 'FALHOU: doses continuaram visíveis depois de desligar a rede de apoio';
 end $$;
 \echo 'ok  rede de apoio desligada: remédio e doses somem para ela; dono não troca de pessoa'
+
+-- ---------------------------------------------------------------- 6b. ciclo menstrual (dado de saúde)
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+insert into cycle_settings (id, couple_id, share) values ('B', 'space-teste', 'NONE');
+insert into cycle_logs (id, couple_id, owner_id, start_date, end_date) values
+  ('55555555-0000-4000-8000-000000000001', 'space-teste', 'B', current_date - 22, current_date - 18);
+do $$ begin
+  begin
+    update cycle_settings set sensitive_from = current_date, sensitive_to = current_date + 6 where id = 'B';
+    raise exception 'FALHOU: "Só eu vejo" publicou a janela';
+  exception when check_violation then null;
+  end;
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select count(*) from cycle_settings where share <> 'NONE' or sensitive_from is not null) = 0, 'FALHOU: Lucas leu algo do ciclo com "Só eu vejo"';
+  assert (select count(*) from cycle_logs) = 0, 'FALHOU: Lucas leu registros do ciclo dela';
+  begin
+    insert into cycle_logs (id, couple_id, owner_id, start_date) values ('55555555-0000-4000-8000-000000000009', 'space-teste', 'B', current_date);
+    raise exception 'FALHOU: Lucas gravou registro de ciclo em nome dela';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+update cycle_settings set share = 'GENTLE', sensitive_from = current_date, sensitive_to = current_date + 6 where id = 'B';
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select count(*) from cycle_settings where sensitive_from is not null) = 1, 'FALHOU: com aviso Lucas não vê a semana de cuidado';
+  assert (select count(*) from cycle_logs) = 0, 'FALHOU: com aviso Lucas viu as datas da menstruação';
+end $$;
+-- tentativa de mudar os ajustes dela: o RLS filtra (0 linhas), sem erro
+update cycle_settings set share = 'NONE', sensitive_from = null, sensitive_to = null where id = 'B';
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select share from cycle_settings where id = 'B') = 'GENTLE', 'FALHOU: Lucas alterou os ajustes do ciclo dela';
+end $$;
+update cycle_settings set share = 'FULL' where id = 'B';
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select count(*) from cycle_logs) = 1, 'FALHOU: com "Tudo" Lucas não vê o registro';
+end $$;
+\echo 'ok  ciclo: "Só eu vejo" esconde tudo, aviso mostra só a janela, "Tudo" mostra os registros; só a dona grava'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

@@ -13,6 +13,7 @@ import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
 import { possessive, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
+import { CycleTodayCards } from '../cycle/CycleSection'
 import { ENERGY } from '../shell/TopBar'
 
 const HELP_TYPE = {
@@ -87,6 +88,7 @@ export function TodayScreen() {
 
   const secondary = (
     <>
+      <CycleTodayCards />
       {d.nudges.map((n) => (
         <section key={n.id} className="module ledger-dashed p-4 sm:p-5" aria-label="Lembrete carinhoso">
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">

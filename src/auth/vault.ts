@@ -1,4 +1,5 @@
 import type { DataState, PartnerId, Pronoun } from '../domain/types'
+import { normalizeState } from '../domain/seed'
 import { deriveKek, fromB64, generateDek, inviteCode, normalizeInvite, open, PBKDF2_ITERATIONS, randomBytes, seal, toB64, unwrapDek, wrapDek, type Sealed } from './crypto'
 
 /**
@@ -145,7 +146,7 @@ export async function changePassword(vault: Vault, who: PartnerId, current: stri
 }
 
 export async function readData(vault: Vault, key: CryptoKey): Promise<DataState> {
-  return JSON.parse(await open(key, vault.data, DATA_AAD)) as DataState
+  return normalizeState(JSON.parse(await open(key, vault.data, DATA_AAD)) as DataState)
 }
 
 /** Grava os dados cifrados e sincroniza os nomes do cabeçalho com os perfis */

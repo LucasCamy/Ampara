@@ -37,6 +37,28 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 9 (2026-11-06): ciclo menstrual com privacidade e barra lateral
+
+- **Ciclo menstrual** (aba Remédios › Ciclo; opcional, para quem menstrua). Registro do 1º dia em 1 toque
+  ("Menstruação começou", atalhos Hoje/Ontem/Anteontem), "Terminou hoje" com 1 toque, correção e exclusão com
+  Desfazer. Previsão pela mediana dos últimos 6 ciclos (sem histórico: duração informada, padrão 28/5). Fases:
+  menstruação, folicular, janela fértil, lútea, pré-menstrual (7 dias antes) e atrasada. Não é orientação médica.
+- **TDAH:** na semana pré-menstrual o Hoje sugere a Bateria em 50% (nunca muda sozinho; "Hoje não" fica só em
+  memória, sem gravar a data em claro).
+- **Privacidade (regra de domínio, `src/domain/cycle.ts`):** "Só eu vejo" (padrão), "Só o aviso" (o par vê só a
+  semana de mais cuidado, publicada pela dona em `cycle_settings.sensitive_from/to`) e "Tudo" (o par vê fase e
+  registros). RLS em `cycle_settings`/`cycle_logs`; só a dona grava. A linha de ajustes é legível pelo casal para o
+  par saber na hora que fechou: com "Só eu vejo" a janela é nula (check no banco) e as durações vão mascaradas.
+  Abrir "Tudo" depois rebaixa os registros antigos (mesmo caso da aba pessoal reaberta); fechar tira as cópias no
+  aparelho de uma pessoa só (`purgeUnauthorized`).
+- **Cofre antigo:** `normalizeState` completa coleções novas ao abrir (nada é apagado).
+- **Publicação antes do schema:** tabela ausente no servidor (PostgREST 404/42P01) não trava o sync; a fila
+  daquela coleção espera. Em produção, aplique o `schema.sql` novo (ConfigMap `ampara-sql` + reiniciar `ampara-rest`).
+- **Barra lateral:** "Visão de quem está usando" e "Minha bateria mental" ocupam a largura toda (`Segmented fill`)
+  e mostram o primeiro nome (nomes longos estouravam).
+- Validação: 107 testes de domínio, `db:check` com o caso do ciclo (3 contas), E2E do ciclo em 8 projetos
+  (+ nuvem com dois aparelhos em 2), suíte E2E completa e `audit-responsive` sem problemas.
+
 ## Iteração 6 (2026-11-06): editar e excluir cadastros, estoque legível
 
 - **Editar** remédio (só os próprios), rotina (qualquer um) e compromisso (do casal ou próprio): as mesmas gavetas

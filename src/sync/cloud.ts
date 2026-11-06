@@ -3,12 +3,13 @@ import { validatePassword } from '../auth/vault'
 import { applyRemote, purgeUnauthorized, type VisibleIds } from '../domain/merge'
 import type { SyncAdapter } from '../domain/outbox'
 import { buildEmpty, uuid } from '../domain/seed'
-import type { CollectionName, DataState, PartnerId, Profile } from '../domain/types'
+import { COLLECTIONS, type CollectionName, type CycleSettings, type DataState, type PartnerId, type Profile } from '../domain/types'
 import { createStore, useStore } from '../store/createStore'
 import { dataStore, enqueueAll } from '../store/data'
 import {
   friendlyAuthError,
   fromRow,
+  isMissingTable,
   listIds,
   pullRows,
   refresh,
@@ -56,7 +57,31 @@ let secret: CloudSecret | null = null
 let trigger: () => void = () => undefined
 export const setSyncTrigger = (fn: () => void) => (trigger = fn)
 
-const COLLECTIONS: CollectionName[] = ['couple', 'profiles', 'tasks', 'events', 'meds', 'medLogs', 'transactions', 'helpRequests', 'nudges']
+/** Coleções que o servidor ainda não tem (schema antigo): não travam o resto da sincronização */
+const missingTables = new Set<CollectionName>()
+
+/** Baixa uma coleção; tabela ausente no servidor vira lista vazia (o app novo pode chegar antes do schema) */
+async function pullSafe(c: CollectionName, token: string, space: string, since: string | null) {
+  if (!cfg || missingTables.has(c)) return []
+  try {
+    return await pullRows(cfg, token, c, space, since)
+  } catch (e) {
+    if (!isMissingTable(e)) throw e
+    missingTables.add(c)
+    return []
+  }
+}
+
+async function listIdsSafe(c: CollectionName, token: string, space: string): Promise<Set<string> | undefined> {
+  if (!cfg || missingTables.has(c)) return undefined
+  try {
+    return await listIds(cfg, token, c, space)
+  } catch (e) {
+    if (!isMissingTable(e)) throw e
+    missingTables.add(c)
+    return undefined
+  }
+}
 
 async function persist() {
   if (!secret) return writeCloudSecret(null)
@@ -116,12 +141,18 @@ export const cloudAdapter: SyncAdapter = {
     if (!cfg || !token || !space) return []
     const accepted: string[] = []
     for (const e of batch) {
+      // tabela ainda não existe no servidor: fica na fila até o schema novo ser aplicado
+      if (missingTables.has(e.entityType)) continue
       try {
         if (e.operation === 'DELETE') await softDelete(cfg, token, e.entityType, e.entityId, space)
         else await upsertRow(cfg, token, e.entityType, toRow(e.entityType, e.payload, space))
         accepted.push(e.id)
       } catch (err) {
         if (!(err instanceof RemoteError) || err.code === 'network' || err.status === 401) break
+        if (isMissingTable(err)) {
+          missingTables.add(e.entityType)
+          continue
+        }
         // 403/409/400: o servidor recusou (ex.: item do par). Não fica preso na fila para sempre.
         accepted.push(e.id)
       }
@@ -147,7 +178,7 @@ export async function pull(): Promise<number> {
   let cursor = from.cursor
   const batches: { c: CollectionName; rows: ReturnType<typeof fromRow>[] }[] = []
   for (const c of COLLECTIONS) {
-    const rows = (await pullRows(cfg, token, c, space, from.cursor)).map((r) => fromRow(c, r))
+    const rows = (await pullSafe(c, token, space, from.cursor)).map((r) => fromRow(c, r))
     for (const m of rows) if (!cursor || m.syncedAt > cursor) cursor = m.syncedAt
     if (rows.length) batches.push({ c, rows })
   }
@@ -167,9 +198,29 @@ export async function pull(): Promise<number> {
     batches.length = 0
     batches.push(...rest, { c: 'transactions', rows: all })
   }
+  // Mesmo caso no ciclo: o par passou a compartilhar "Tudo" e os registros antigos não mudaram
+  const localCycle = dataStore.get().cycleSettings
+  const cycleOpened = batches
+    .find((b) => b.c === 'cycleSettings')
+    ?.rows.some(({ entity, deleted }) => {
+      const s = entity as CycleSettings
+      return !deleted && s.id !== who && s.share === 'FULL' && localCycle[s.id]?.share !== 'FULL'
+    })
+  if (cycleOpened) {
+    const all = (await pullSafe('cycleLogs', token, space, null)).map((r) => fromRow('cycleLogs', r))
+    const rest = batches.filter((b) => b.c !== 'cycleLogs')
+    batches.length = 0
+    batches.push(...rest, { c: 'cycleLogs', rows: all })
+  }
   // ids que o servidor ainda mostra: o pull incremental nunca avisa que algo deixou de ser visível
   const visible: VisibleIds = single
-    ? { tasks: await listIds(cfg, token, 'tasks', space), events: await listIds(cfg, token, 'events', space), meds: await listIds(cfg, token, 'meds', space) }
+    ? {
+        tasks: await listIds(cfg, token, 'tasks', space),
+        events: await listIds(cfg, token, 'events', space),
+        meds: await listIds(cfg, token, 'meds', space),
+        cycleSettings: await listIdsSafe('cycleSettings', token, space),
+        cycleLogs: await listIdsSafe('cycleLogs', token, space),
+      }
     : {}
   if (secret !== from) return 0 // sessão fechada ou trocada durante o download
   // 2) aplica de uma vez sobre o estado MAIS RECENTE (evita atualização perdida de quem editou no meio)
@@ -271,7 +322,7 @@ async function downloadAll(token: string, space: string): Promise<DataState> {
   let state: DataState = { ...base, outbox: [] }
   let cursor: string | null = null
   for (const c of COLLECTIONS) {
-    const rows = (await pullRows(cfg, token, c, space, null)).map((r) => fromRow(c, r))
+    const rows = (await pullSafe(c, token, space, null)).map((r) => fromRow(c, r))
     for (const m of rows) if (!cursor || m.syncedAt > cursor) cursor = m.syncedAt
     const live = rows.filter((r) => !r.deleted)
     // aparelho vazio: o servidor é a única fonte, as entidades entram como vieram

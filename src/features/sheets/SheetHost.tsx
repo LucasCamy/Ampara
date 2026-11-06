@@ -9,6 +9,8 @@ import { ExpenseSheet } from './ExpenseSheet'
 import { SHEET_FORM, SHEET_SUBMIT } from './forms'
 import { MedSheet } from './MedSheet'
 import { NewMedSheet } from './NewMedSheet'
+import { PeriodSheet } from './PeriodSheet'
+import { CycleSetupSheet } from './CycleSetupSheet'
 import { RoutineSheet } from './RoutineSheet'
 import { SosSheet } from './SosSheet'
 import { TaskSheet } from './TaskSheet'
@@ -21,12 +23,15 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
   newMed: { title: 'Novo remédio', description: 'Nome, dose e horário. O lembrete em dois estágios já vem pronto.' },
   routine: { title: 'Nova rotina da casa', description: 'Coisas que qualquer um pode confirmar: lixo, gato, plantas.' },
   event: { title: 'Novo compromisso', description: 'Com dia e horário. Aparece na linha do tempo e no calendário.' },
+  period: { title: 'Menstruação começou', description: 'Só o primeiro dia já basta. O app calcula o resto.' },
+  cycleSetup: { title: 'Duração do seu ciclo', description: 'Usada na previsão enquanto o histórico é curto.' },
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
   newMed: { title: 'Editar remédio', description: 'Mudou a dose ou o horário? Ajuste aqui. Doses já registradas ficam no histórico.' },
   routine: { title: 'Editar rotina', description: 'Qualquer um de vocês pode ajustar ou excluir.' },
   event: { title: 'Editar compromisso', description: 'Mudou o dia ou o horário? Ajuste aqui.' },
+  period: { title: 'Corrigir registro', description: 'Ajuste as datas ou exclua. A previsão se recalcula sozinha.' },
 }
 
 /** Assina o uiStore.sheet e, só em modo edição, se o item ainda existe (pode ter sido excluído no outro aparelho) */
@@ -34,7 +39,9 @@ export function SheetHost() {
   const sheet = useUi((s) => s.sheet)
   const close = useCallback(() => ui.closeSheet(), [])
   const editId = sheet?.params.id
-  const exists = useData((d) => !editId || (sheet?.kind === 'event' ? !!d.events[editId] : !!d.meds[editId]))
+  const exists = useData(
+    (d) => !editId || (sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : !!d.meds[editId]),
+  )
   const editing = !!editId
   const meta = sheet ? ((editing && EDIT_TITLES[sheet.kind]) || TITLES[sheet.kind]) : null
   const base = sheet && exists ? SHEET_SUBMIT[sheet.kind] : undefined
@@ -67,6 +74,8 @@ export function SheetHost() {
       {sheet?.kind === 'newMed' && exists ? <NewMedSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'routine' && exists ? <RoutineSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'event' && exists ? <EventSheet key={editId ?? 'new'} params={sheet.params} onDone={close} /> : null}
+      {sheet?.kind === 'period' && exists ? <PeriodSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'cycleSetup' ? <CycleSetupSheet onDone={close} /> : null}
     </Sheet>
   )
 }

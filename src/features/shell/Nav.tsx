@@ -91,7 +91,7 @@ export function Sidebar() {
       </div>
       <div>
         <p className="mb-1.5 px-1 text-[12px] font-semibold text-muted">Minha bateria mental</p>
-        <BatterySelector compactLabels />
+        <BatterySelector compactLabels fill />
       </div>
       <nav aria-label="Navegação principal">
         <ul className="flex flex-col gap-1">

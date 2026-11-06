@@ -12,6 +12,7 @@ import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
 import { toneOf, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
+import { CycleSection } from '../cycle/CycleSection'
 
 const WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
@@ -196,6 +197,8 @@ export function RoutinesScreen() {
               </ul>
             )}
           </section>
+
+          <CycleSection />
         </div>
       </div>
     </div>

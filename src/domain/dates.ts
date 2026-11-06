@@ -106,6 +106,15 @@ export function dateShortcuts(today: DateKey): DateShortcut[] {
   ]
 }
 
+/** Atalhos para datas que já passaram (registro do ciclo): Hoje, Ontem, Anteontem */
+export function pastDateShortcuts(today: DateKey): DateShortcut[] {
+  return [
+    { value: today, label: 'Hoje', ariaLabel: `Hoje, ${longDateLabel(today)}` },
+    { value: addDays(today, -1), label: 'Ontem', ariaLabel: `Ontem, ${longDateLabel(addDays(today, -1))}` },
+    { value: addDays(today, -2), label: 'Anteontem', ariaLabel: `Anteontem, ${longDateLabel(addDays(today, -2))}` },
+  ]
+}
+
 /** Horários sugeridos nas gavetas (chips abaixo do campo) */
 export const TIME_SHORTCUTS: TimeKey[] = ['08:00', '12:00', '18:00', '20:00']
 
