@@ -76,7 +76,7 @@ for (const w of WIDTHS) {
     // tema pelo próprio botão do app: o uiStore regrava data-theme a cada mudança
     if ((await p.evaluate(() => document.documentElement.dataset.theme)) !== scheme) await p.locator('[data-testid="theme-toggle"]:visible').first().click()
     if ((await p.evaluate(() => document.documentElement.dataset.theme)) !== scheme) report.push(`[${w}] não consegui trocar para o tema ${scheme}`)
-    for (const tab of ['hoje', 'agenda', 'rotinas', 'financas', 'ajustes']) {
+    for (const tab of ['hoje', 'agenda', 'nos', 'rotinas', 'financas', 'ajustes']) {
       await p.evaluate((t) => (location.hash = '#/' + t), tab)
       const views = tab === 'agenda' ? ['agenda-DAY', 'agenda-WEEK', 'agenda-MONTH', 'agenda-INBOX'] : tab === 'financas' ? ['fin-US', 'fin-MINE', 'fin-PARTNER'] : [null]
       for (const v of views) {

@@ -4,6 +4,7 @@ import { computeShares } from './finance'
 import { COLLECTIONS } from './types'
 import type {
   CycleLog,
+  ShoppingItem,
   CycleSettings,
   Couple,
   Pronoun,
@@ -175,6 +176,20 @@ export function buildSeed(now: Date): DataState {
     endDate: addDays(today, -ago + 4),
     updatedAt: iso,
   }))
+  const shop = (title: string, category: ShoppingItem['category'], addedBy: PartnerId, quantity: string | null = null): ShoppingItem => ({
+    id: uuid(),
+    title,
+    quantity,
+    category,
+    addedBy,
+    checked: false,
+    checkedBy: null,
+    sourceMedicationId: null,
+    createdAt: iso,
+    updatedAt: iso,
+  })
+  const shopping: ShoppingItem[] = [shop('Leite', 'MARKET', 'B', '2'), shop('Café', 'MARKET', 'A'), shop('Pão de forma', 'MARKET', 'A'), shop('Sabão de roupa', 'HOME', 'B')]
+
   const cycleB: CycleSettings = { ...defaultCycleSettings('B', iso), share: 'GENTLE' }
   Object.assign(cycleB, publishedForecast(cycleLogs, cycleB, today))
 
@@ -196,6 +211,7 @@ export function buildSeed(now: Date): DataState {
     nudges: {},
     cycleSettings: { B: cycleB },
     cycleLogs: byId(cycleLogs),
+    shoppingItems: byId(shopping),
     outbox: [],
     lastSyncedAt: iso,
   }
@@ -249,6 +265,7 @@ export function buildEmpty(now: Date): DataState {
     nudges: {},
     cycleSettings: {},
     cycleLogs: {},
+    shoppingItems: {},
     outbox: [],
   }
 }

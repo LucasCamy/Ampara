@@ -134,6 +134,7 @@ export const TABLES: Record<CollectionName, string> = {
   nudges: 'nudges',
   cycleSettings: 'cycle_settings',
   cycleLogs: 'cycle_logs',
+  shoppingItems: 'shopping_items',
 }
 
 /** Tabelas com chave (couple_id, id): um registro por pessoa */

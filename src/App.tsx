@@ -10,6 +10,7 @@ import { LoadingScreen, LoginScreen, SetupScreen, WelcomeScreen } from './featur
 import { useAuth } from './auth/session'
 import { SheetHost } from './features/sheets/SheetHost'
 import { TodayScreen } from './features/today/TodayScreen'
+import { UsScreen } from './features/us/UsScreen'
 import { ui, useUi, type SheetKind } from './store/ui'
 
 const QUICK_KINDS: Record<string, SheetKind> = { task: 'task', expense: 'expense', med: 'med', sos: 'sos' }
@@ -41,6 +42,8 @@ function Screen() {
       return <TodayScreen />
     case 'agenda':
       return <AgendaScreen />
+    case 'nos':
+      return <UsScreen />
     case 'rotinas':
       return <RoutinesScreen />
     case 'financas':

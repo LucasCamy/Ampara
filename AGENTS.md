@@ -42,7 +42,7 @@ src/
   auth/        cofre cifrado, sessão, convite do par (crypto, vault, session)
   sync/        motor da fila, nuvem (cloud.ts: conta, pareamento, push/pull) e cliente REST do Supabase (remote.ts)
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
-  features/    telas: today, agenda, routines, cycle, finance, settings, sheets, shell
+  features/    telas: today, agenda, us (aba Nós), routines, cycle, finance, settings, sheets, shell
   styles/      tokens.css (fonte única de cor, raio, sombra e motion)
 supabase/      schema.sql (idempotente, RLS da privacidade) e tests/validate.sql
 docker/       roles do Postgres e gateway nginx do docker-compose.yml

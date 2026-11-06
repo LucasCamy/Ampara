@@ -474,3 +474,35 @@ end $$;
 -- Iteração 10: anticoncepcional em cartela (comprimidos + pausa); null = remédio comum
 -- =====================================================================
 alter table medications add column if not exists pack jsonb;
+
+-- =====================================================================
+-- Iteração 11: lista de compras do casal (qualquer um dos dois adiciona, marca e tira)
+-- =====================================================================
+create table if not exists shopping_items (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  title text not null check (length(title) between 1 and 60),
+  quantity text check (quantity is null or length(quantity) <= 20),
+  category text not null check (category in ('MARKET', 'PHARMACY', 'HOME', 'OTHER')),
+  added_by text not null check (added_by in ('A', 'B')),
+  checked boolean not null default false,
+  checked_by text check (checked_by in ('A', 'B')),
+  source_medication_id uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_shopping_items_pull on shopping_items (couple_id, updated_at);
+alter table shopping_items enable row level security;
+
+drop policy if exists shopping_read on shopping_items;
+create policy shopping_read on shopping_items for select using (couple_id = my_couple_id());
+drop policy if exists shopping_insert on shopping_items;
+create policy shopping_insert on shopping_items for insert with check (couple_id = my_couple_id() and added_by in ('A', 'B'));
+drop policy if exists shopping_update on shopping_items;
+create policy shopping_update on shopping_items for update using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists shopping_delete on shopping_items;
+create policy shopping_delete on shopping_items for delete using (couple_id = my_couple_id());
+drop trigger if exists trg_shopping_items_synced on shopping_items;
+create trigger trg_shopping_items_synced before insert or update on shopping_items for each row execute function touch_synced_at();

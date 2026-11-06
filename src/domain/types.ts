@@ -208,6 +208,25 @@ export interface CycleSettings {
   updatedAt: string
 }
 
+/** Lista de compras do casal (qualquer um adiciona e marca) */
+export type ShopCategory = 'MARKET' | 'PHARMACY' | 'HOME' | 'OTHER'
+
+export interface ShoppingItem {
+  id: string
+  title: string
+  /** "2", "1 kg", "3 un" (texto livre curto). null = sem quantidade */
+  quantity: string | null
+  category: ShopCategory
+  addedBy: PartnerId
+  /** no carrinho */
+  checked: boolean
+  checkedBy: PartnerId | null
+  /** remédio que gerou o item (estoque baixo) */
+  sourceMedicationId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type OutboxOperation = 'UPSERT' | 'DELETE'
 export type OutboxStatus = 'PENDING' | 'SYNCED' | 'FAILED'
 
@@ -235,6 +254,7 @@ export interface Collections {
   nudges: Record<string, Nudge>
   cycleSettings: Record<string, CycleSettings>
   cycleLogs: Record<string, CycleLog>
+  shoppingItems: Record<string, ShoppingItem>
 }
 
 export type CollectionName = keyof Collections
@@ -252,6 +272,7 @@ export const COLLECTIONS: CollectionName[] = [
   'nudges',
   'cycleSettings',
   'cycleLogs',
+  'shoppingItems',
 ]
 
 export interface DataState extends Collections {

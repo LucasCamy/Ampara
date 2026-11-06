@@ -14,7 +14,7 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -32,10 +32,10 @@ begin
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs');
+     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 13 tabelas, RLS ligado em todas, 6 funções'
+\echo 'ok  estrutura: 14 tabelas, RLS ligado em todas, 6 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -331,6 +331,37 @@ do $$ begin
   assert (select count(*) from cycle_logs) = 1, 'FALHOU: com "Tudo" Lucas não vê o registro';
 end $$;
 \echo 'ok  ciclo: "Só eu vejo" esconde tudo, aviso mostra só a janela, "Tudo" mostra os registros; só a dona grava'
+
+-- ---------------------------------------------------------------- 6c. lista de compras do casal
+-- (Lucas continua logado) adiciona; ela marca no carrinho; alguém de fora não vê nem altera
+insert into shopping_items (id, couple_id, title, category, added_by) values
+  ('66666666-0000-4000-8000-000000000001', 'space-teste', 'Leite', 'MARKET', 'A');
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+update shopping_items set checked = true, checked_by = 'B' where id = '66666666-0000-4000-8000-000000000001';
+do $$ begin
+  assert (select checked from shopping_items where id = '66666666-0000-4000-8000-000000000001'), 'FALHOU: ela não marcou o item do casal';
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"cccccccc-0000-4000-8000-00000000000c","role":"authenticated"}', true) as _ \gset
+update shopping_items set title = 'invadido';
+do $$ begin
+  assert (select count(*) from shopping_items) = 0, 'FALHOU: conta de fora viu a lista de compras';
+  begin
+    insert into shopping_items (id, couple_id, title, category, added_by) values ('66666666-0000-4000-8000-000000000002', 'space-teste', 'x', 'OTHER', 'A');
+    raise exception 'FALHOU: conta de fora gravou na lista do casal';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+do $$ begin
+  assert (select title from shopping_items where id = '66666666-0000-4000-8000-000000000001') = 'Leite', 'FALHOU: conta de fora alterou a lista';
+end $$;
+\echo 'ok  lista de compras: os dois editam; conta de fora não vê nem grava'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

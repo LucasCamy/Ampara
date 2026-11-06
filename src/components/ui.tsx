@@ -97,7 +97,11 @@ export function Segmented<T extends string>({
         // stretch: colunas iguais só no celular; do sm em diante cada opção tem a largura natural do rótulo completo
         className={cx(
           'gap-1 rounded-[16px] bg-subtle p-1',
-          fill ? 'grid w-full auto-cols-fr grid-flow-col' : stretch ? 'grid w-full auto-cols-fr grid-flow-col sm:inline-flex sm:w-auto' : 'inline-flex max-w-full',
+          fill
+            ? options.length > 3
+              ? 'grid w-full grid-cols-2'
+              : 'grid w-full auto-cols-fr grid-flow-col'
+            : stretch ? 'grid w-full auto-cols-fr grid-flow-col sm:inline-flex sm:w-auto' : 'inline-flex max-w-full',
         )}
       >
         {options.map((o, i) => {

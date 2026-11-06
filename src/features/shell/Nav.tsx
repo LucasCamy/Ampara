@@ -1,4 +1,4 @@
-import { CalendarDays, CircleCheck, LifeBuoy, ListPlus, Pill, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
+import { CalendarDays, CircleCheck, Heart, LifeBuoy, ListPlus, Pill, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/ui'
 import { ui, useUi, type SheetKind, type Tab } from '../../store/ui'
 import { BatterySelector, LockButton, PerspectiveSwitch, SyncPill, ThemeToggle } from './TopBar'
@@ -6,6 +6,7 @@ import { BatterySelector, LockButton, PerspectiveSwitch, SyncPill, ThemeToggle }
 export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'hoje', label: 'Hoje', icon: Sun },
   { id: 'agenda', label: 'Agenda', icon: CalendarDays },
+  { id: 'nos', label: 'Nós', icon: Heart },
   { id: 'rotinas', label: 'Remédios', icon: Pill },
   { id: 'financas', label: 'Finanças', icon: Wallet },
 ]
@@ -21,7 +22,7 @@ export function BottomNav() {
   const tab = useUi((s) => s.tab)
   return (
     <nav aria-label="Navegação principal" className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface lg:hidden">
-      <ul className="mx-auto grid max-w-[720px] grid-cols-4">
+      <ul className="mx-auto grid max-w-[720px] grid-cols-5">
         {TABS.map((t) => {
           const active = tab === t.id
           return (

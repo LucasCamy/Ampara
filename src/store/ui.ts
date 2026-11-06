@@ -1,7 +1,7 @@
 import type { PartnerId } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
-export type Tab = 'hoje' | 'agenda' | 'rotinas' | 'financas' | 'ajustes'
+export type Tab = 'hoje' | 'agenda' | 'nos' | 'rotinas' | 'financas' | 'ajustes'
 export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'newMed' | 'routine' | 'event' | 'period' | 'cycleSetup'
 export type Theme = 'light' | 'dark'
 
@@ -28,7 +28,7 @@ export interface UiState {
 }
 
 const PREFS_KEY = 'ampara:prefs'
-const TABS: Tab[] = ['hoje', 'agenda', 'rotinas', 'financas', 'ajustes']
+const TABS: Tab[] = ['hoje', 'agenda', 'nos', 'rotinas', 'financas', 'ajustes']
 
 function loadPrefs(): Partial<UiState> {
   try {

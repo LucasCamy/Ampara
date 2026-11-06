@@ -37,6 +37,19 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 11 (2026-11-06): aba "Nós" e lista de compras
+
+- Nova aba **Nós** (5ª na navegação; cabe em 360px) para o que é do casal: lista de compras agora; presentes,
+  check-in e caixinhas nas próximas iterações.
+- **Lista de compras** compartilhada: captura em uma linha com quantidade ("2 kg arroz", "leite x3", "ovos 1 dz"),
+  Enter adiciona e mantém o foco, repetido (sem acento/maiúscula) não entra, agrupada por Mercado/Farmácia/Casa/
+  Outros, "pedido por" e "pego por". Marcar troca na hora (anti-flick); "Terminei a compra" tira o carrinho com
+  Desfazer; "Registrar o gasto" abre a gaveta de gasto preenchida. Remédio meu ou da casa acabando vira atalho
+  "Repor ...".
+- Banco: `shopping_items` com RLS por comando (só o casal lê e grava). `Segmented fill` com 4 opções vira 2x2.
+- Observado uma vez: `pill.spec` falhou na suíte completa e passou em 24 repetições isoladas e na suíte seguinte
+  (instável sob carga; acompanhar).
+
 ## Iteração 10 (2026-11-06): anticoncepcional em cartela
 
 - Remédio com `pack` (21+7, 24+4 ou 28 contínua) ancorado no 1º comprimido; as cartelas seguintes se repetem
