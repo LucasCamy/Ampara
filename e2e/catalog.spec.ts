@@ -131,3 +131,52 @@ test('Editar e excluir remédio, rotina e compromisso (com Desfazer)', async ({ 
   await expect(page.getByTestId('event-row').filter({ hasText: 'Jantar com a família' })).toHaveCount(0)
   await noHorizontalOverflow(page)
 })
+
+/** Data e hora com a cara do app: ícone Lucide, atalhos em chips e término acompanhando o início */
+test('Atalhos de data e hora nas gavetas', async ({ page, errors }, info) => {
+  void errors
+  await at(page, '07:30') // quinta, 05/11
+  await open(page)
+
+  await goTab(page, 'agenda')
+  await page.getByTestId('agenda-new-event').click()
+  const ev = page.getByTestId('sheet-event')
+  await ev.getByTestId('event-title').fill('Feira do bairro')
+
+  const dates = ev.getByTestId('event-date-shortcuts')
+  await expect(dates.getByRole('button')).toHaveText(['Hoje', 'Amanhã', 'Sáb 7/11'])
+  await expect(dates.getByRole('button', { name: /^Hoje/ })).toHaveAttribute('aria-pressed', 'true')
+  await dates.getByRole('button', { name: 'sábado, 7 de novembro' }).click()
+  await expect(ev.getByTestId('event-date')).toHaveValue('2026-11-07')
+  await expect(ev.getByText('sábado, 7 de novembro')).toBeVisible()
+
+  // início leva o término junto (mantém 1 h); duração a partir do início
+  await ev.getByTestId('event-start-shortcuts').getByRole('button', { name: '09:00' }).click()
+  await expect(ev.getByTestId('event-end')).toHaveValue('10:00')
+  await expect(ev.getByTestId('event-end-shortcuts').getByRole('button', { name: /\+1 h/ })).toHaveAttribute('aria-pressed', 'true')
+  await ev.getByTestId('event-end-shortcuts').getByRole('button', { name: '+2 h, termina às 11:00' }).click()
+  await expect(ev.getByTestId('event-end')).toHaveValue('11:00')
+  await noHorizontalOverflow(page)
+  await shot(page, '32-atalhos-data-hora', info.project.name)
+  await ev.getByTestId('event-save').click()
+  await expect(ev).toBeHidden()
+  await expect(page.getByText('Compromisso salvo · 07/11 das 09:00 às 11:00')).toBeVisible()
+
+  // remédio: o atalho vale para o horário tocado por último
+  await goTab(page, 'rotinas')
+  await page.getByTestId('add-med').click()
+  const med = page.getByTestId('sheet-newMed')
+  await med.getByTestId('new-med-name').fill('Ômega 3')
+  await med.getByTestId('new-med-dosage').fill('1 cápsula')
+  await med.getByTestId('new-med-time-shortcuts').getByRole('button', { name: '08:00' }).click()
+  await med.getByTestId('new-med-time-add').click()
+  await med.getByTestId('new-med-time-shortcuts').getByRole('button', { name: '20:00' }).click()
+  await expect(med.getByTestId('new-med-time-0')).toHaveValue('08:00')
+  await expect(med.getByTestId('new-med-time-1')).toHaveValue('20:00')
+  await med.getByTestId('new-med-time-0').focus()
+  await med.getByTestId('new-med-time-shortcuts').getByRole('button', { name: '12:00' }).click()
+  await expect(med.getByTestId('new-med-time-0')).toHaveValue('12:00')
+  await noHorizontalOverflow(page)
+  await med.getByTestId('new-med-save').click()
+  await expect(page.getByText(/Remédio salvo · Ômega 3 às 12:00/)).toBeVisible()
+})

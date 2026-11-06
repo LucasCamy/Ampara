@@ -80,3 +80,38 @@ export function greeting(now: Date): string {
   if (h < 18) return 'Boa tarde'
   return 'Boa noite'
 }
+
+/** "sexta-feira, 13 de novembro" (rótulo por extenso abaixo do campo de data) */
+export function longDateLabel(key: DateKey): string {
+  return `${weekdayLong(key)}, ${dayOfMonth(key)} de ${monthName(key)}`
+}
+
+/** Soma minutos sem virar o dia: o compromisso termina no mesmo dia (máximo 23:59) */
+export function addMinutesToTime(time: TimeKey, minutes: number): TimeKey {
+  const total = Math.min(Math.max(minutesOf(time) + minutes, 0), 23 * 60 + 59)
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`
+}
+
+export type DateShortcut = { value: DateKey; label: string; ariaLabel: string }
+
+/** Atalhos de data: Hoje, Amanhã e o próximo sábado depois de amanhã */
+export function dateShortcuts(today: DateKey): DateShortcut[] {
+  const tomorrow = addDays(today, 1)
+  let sat = addDays(today, 2)
+  while (parseDateKey(sat).getDay() !== 6) sat = addDays(sat, 1)
+  return [
+    { value: today, label: 'Hoje', ariaLabel: `Hoje, ${longDateLabel(today)}` },
+    { value: tomorrow, label: 'Amanhã', ariaLabel: `Amanhã, ${longDateLabel(tomorrow)}` },
+    { value: sat, label: `Sáb ${dayOfMonth(sat)}/${pad(parseDateKey(sat).getMonth() + 1)}`, ariaLabel: longDateLabel(sat) },
+  ]
+}
+
+/** Horários sugeridos nas gavetas (chips abaixo do campo) */
+export const TIME_SHORTCUTS: TimeKey[] = ['08:00', '12:00', '18:00', '20:00']
+
+/** Durações sugeridas para o término, a partir do início */
+export const DURATION_SHORTCUTS = [
+  { minutes: 30, label: '+30 min' },
+  { minutes: 60, label: '+1 h' },
+  { minutes: 120, label: '+2 h' },
+] as const

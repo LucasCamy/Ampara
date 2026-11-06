@@ -153,6 +153,28 @@
     color: var(--on-action);
   }
 
+  /* Data e hora: o seletor nativo continua (roda do iOS, diálogo do Android), mas o ícone é o do app.
+     O indicador do navegador fica invisível sobre o ícone Lucide, então tocar no ícone abre o seletor. */
+  .picker-input {
+    position: relative;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .picker-input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 3rem;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .picker-input::-webkit-date-and-time-value {
+    text-align: left;
+  }
+
   .no-scrollbar {
     scrollbar-width: none;
   }

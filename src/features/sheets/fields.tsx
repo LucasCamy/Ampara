@@ -1,9 +1,14 @@
 import { Plus, Trash2, X } from 'lucide-react'
-import { useId } from 'react'
-import { Button, cx, FieldError } from '../../components/ui'
+import { useId, useState } from 'react'
+import { PickerInput, QuickChips } from '../../components/pickers'
+import { Button, FieldError } from '../../components/ui'
 import { MAX_TIMES } from '../../domain/catalog'
+import { TIME_SHORTCUTS } from '../../domain/dates'
 
-/** Um ou mais horários (HH:MM). Cada campo tem alvo de 56px; remover e adicionar têm 48px. */
+/**
+ * Um ou mais horários (HH:MM). Cada campo tem alvo de 56px; remover e adicionar têm 48px.
+ * Os atalhos valem para o último horário em que a pessoa tocou (ou o último da lista).
+ */
 export function TimesField({
   label = 'Horários',
   times,
@@ -18,6 +23,9 @@ export function TimesField({
   testId: string
 }) {
   const id = useId()
+  const [active, setActive] = useState<number | null>(null)
+  const target = active !== null && active < times.length ? active : times.length - 1
+  const setAt = (i: number, v: string) => onChange(times.map((x, j) => (j === i ? v : x)))
   const next = () => {
     const last = times[times.length - 1] ?? '08:00'
     const h = (Number(last.slice(0, 2)) + 4) % 24
@@ -29,22 +37,23 @@ export function TimesField({
       <ul className="flex flex-col gap-2">
         {times.map((t, i) => (
           <li key={i} className="flex items-center gap-2">
-            <input
+            <PickerInput
               type="time"
               value={t}
-              aria-label={times.length > 1 ? `Horário ${i + 1}` : 'Horário'}
-              aria-invalid={error ? true : undefined}
-              data-testid={`${testId}-${i}`}
-              onChange={(e) => onChange(times.map((x, j) => (j === i ? e.target.value : x)))}
-              className={cx(
-                'font-data min-h-14 w-full max-w-[200px] min-w-0 rounded-[16px] border bg-bg px-4 text-[16px] text-ink',
-                error ? 'border-err' : 'border-line-strong',
-              )}
+              ariaLabel={times.length > 1 ? `Horário ${i + 1}` : 'Horário'}
+              invalid={!!error}
+              testId={`${testId}-${i}`}
+              onFocus={() => setActive(i)}
+              onChange={(v) => setAt(i, v)}
+              className="w-full max-w-[200px]"
             />
             {times.length > 1 ? (
               <button
                 type="button"
-                onClick={() => onChange(times.filter((_, j) => j !== i))}
+                onClick={() => {
+                  onChange(times.filter((_, j) => j !== i))
+                  setActive(null)
+                }}
                 aria-label={`Remover o horário ${t || i + 1}`}
                 className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-muted"
               >
@@ -54,6 +63,13 @@ export function TimesField({
           </li>
         ))}
       </ul>
+      <QuickChips
+        label={times.length > 1 ? `Horários sugeridos para o horário ${target + 1}` : 'Horários sugeridos'}
+        value={times[target] ?? ''}
+        onPick={(v) => setAt(target, v)}
+        items={TIME_SHORTCUTS.map((v) => ({ value: v, label: v }))}
+        testId={`${testId}-shortcuts`}
+      />
       {times.length < MAX_TIMES ? (
         <Button size="sm" variant="ghost" icon={Plus} className="mt-1 -ml-2" onClick={() => onChange([...times, next()])} data-testid={`${testId}-add`}>
           Outro horário

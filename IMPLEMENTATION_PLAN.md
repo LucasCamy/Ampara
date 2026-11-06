@@ -53,6 +53,19 @@
 - Pendente da análise: quantidade de reposição por caixa (hoje "Repor 30"), dias da semana para remédio, junção
   do dock com a navegação no celular, tom da dose muito atrasada, divisão do bundle, realtime e push.
 
+## Iteração 7 (2026-11-06): data e hora com a cara do app
+
+- Decisão: manter o seletor nativo (roda do iOS, diálogo do Android, teclado e leitor de tela de graça) e
+  personalizar só a moldura. `src/components/pickers.tsx`: `PickerInput` (moldura do `TextField`, `font-data`,
+  ícone Lucide no lugar do indicador do navegador, que fica invisível por cima dele em `.picker-input`),
+  `DateField`, `TimeField` e `QuickChips`.
+- Atalhos em chips (`aria-pressed`, `min-h-11`, sem transição): data Hoje / Amanhã / próximo sábado; início
+  09:00 / 14:00 / 19:00; término +30 min / +1 h / +2 h a partir do início; horários de remédio e rotina
+  08:00 / 12:00 / 18:00 / 20:00, aplicados ao último horário tocado.
+- Mudar o início leva o término junto, mantendo a duração. A data mostra o dia por extenso como dica.
+- Domínio: `dateShortcuts`, `longDateLabel`, `addMinutesToTime` (sem passar da meia-noite) em `dates.ts`, com testes.
+- Calendário próprio em gaveta fica para depois, só se o nativo ainda incomodar no computador.
+
 ## Iteração 5 (2026-11-06): auditoria de QA e novos cadastros
 
 **Correções da auditoria**
