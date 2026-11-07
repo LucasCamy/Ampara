@@ -65,7 +65,7 @@ export function AgendaScreen() {
         </Button>
       </div>
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-        <div className="w-full sm:w-auto">
+        <div className="w-full lg:w-auto">
         <Segmented<View>
           label="Visão da agenda"
           value={view}
@@ -85,6 +85,7 @@ export function AgendaScreen() {
           value={scope}
           onChange={setScope}
           size="sm"
+          stretch
           options={[
             { value: 'ALL', label: 'Todos' },
             { value: 'MINE', label: 'Meu' },

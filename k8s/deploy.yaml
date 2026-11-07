@@ -215,7 +215,7 @@ spec:
             # Cadastro fechado: o app é só do casal. Para criar uma conta nova (ex.: o par entrando pela primeira vez),
             # mude para "false", aplique, crie a conta e volte para "true".
             - name: GOTRUE_DISABLE_SIGNUP
-              value: "true"
+              value: "false"
             - name: GOTRUE_JWT_SECRET
               valueFrom:
                 secretKeyRef:

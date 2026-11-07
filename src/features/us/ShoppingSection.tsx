@@ -1,6 +1,6 @@
-import { Check, CircleDashed, Pill, Plus, ReceiptText, ShoppingCart, X } from 'lucide-react'
+import { Check, CircleDashed, Home, Package, Pill, Plus, ReceiptText, ShoppingBasket, ShoppingCart, X, type LucideIcon } from 'lucide-react'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
-import { Button, cx, EmptyState, FieldError, SectionHeader, Segmented } from '../../components/ui'
+import { Button, ChoiceChips, cx, EmptyState, FieldError, SectionHeader } from '../../components/ui'
 import { isLowStock } from '../../domain/medication'
 import { findDuplicate, SHOP_CATEGORY, SHOP_ORDER, shoppingView } from '../../domain/shopping'
 import type { ShopCategory, ShoppingItem } from '../../domain/types'
@@ -8,6 +8,8 @@ import { useData } from '../../store/data'
 import { usePeople } from '../../store/hooks'
 import { addShoppingItem, finishShopping, removeShoppingItem, toggleShoppingItem } from '../../store/shoppingActions'
 import { ui } from '../../store/ui'
+
+const SHOP_ICON: Record<ShopCategory, LucideIcon> = { MARKET: ShoppingBasket, PHARMACY: Pill, HOME: Home, OTHER: Package }
 
 export function ShoppingSection() {
   const { viewer, profiles } = usePeople()
@@ -77,13 +79,11 @@ export function ShoppingSection() {
           </p>
         )}
         <div className="mt-3">
-          <Segmented<ShopCategory>
+          <ChoiceChips<ShopCategory>
             label="Onde comprar"
             value={category}
             onChange={setCategory}
-            size="sm"
-            fill
-            options={SHOP_ORDER.map((c) => ({ value: c, label: SHOP_CATEGORY[c].label, testId: `shop-cat-${c}` }))}
+            options={SHOP_ORDER.map((c) => ({ value: c, label: SHOP_CATEGORY[c].label, icon: SHOP_ICON[c], testId: `shop-cat-${c}` }))}
           />
         </div>
       </form>

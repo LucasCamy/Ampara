@@ -31,29 +31,34 @@ export function FinanceScreen() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <div className="mb-4">
         <Title anchor={`Finanças de ${label},`} rest={month === current ? 'claras e leves.' : month > current ? 'o que vem por aí.' : 'como foi.'} />
-        <div className="flex items-center gap-1" role="group" aria-label="Mês">
-          <button type="button" onClick={() => step(-1)} aria-label="Mês anterior" data-testid="month-prev" className="press hoverable inline-flex h-11 w-11 items-center justify-center rounded-full text-ink">
-            <ChevronLeft size={20} aria-hidden />
-          </button>
-          {month !== current ? (
-            <Button size="sm" variant="quiet" onClick={() => setMonth(current)} data-testid="month-today">
-              Mês atual
-            </Button>
-          ) : null}
-          <button type="button" onClick={() => step(1)} aria-label="Próximo mês" data-testid="month-next" className="press hoverable inline-flex h-11 w-11 items-center justify-center rounded-full text-ink">
-            <ChevronRight size={20} aria-hidden />
-          </button>
-        </div>
+      </div>
+      {/* mesmo navegador da Agenda: setas com borda e o mês no meio */}
+      <div className="mb-4 flex items-center gap-2" role="group" aria-label="Mês">
+        <button type="button" onClick={() => step(-1)} aria-label="Mês anterior" data-testid="month-prev" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
+          <ChevronLeft size={20} aria-hidden />
+        </button>
+        <p className="min-w-0 flex-1 text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite" data-testid="month-label">
+          {monthTitle(month, '')}
+        </p>
+        <button type="button" onClick={() => step(1)} aria-label="Próximo mês" data-testid="month-next" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
+          <ChevronRight size={20} aria-hidden />
+        </button>
+        {month !== current ? (
+          <Button size="sm" variant="quiet" onClick={() => setMonth(current)} data-testid="month-today" className="shrink-0">
+            Mês atual
+          </Button>
+        ) : null}
       </div>
       <div className="mb-5">
         <Segmented<FinTab>
           label="Escopo financeiro"
           value={tab}
           onChange={setTab}
+          stretch
           options={[
-            { value: 'US', label: 'Do casal (Nós)', icon: Users, testId: 'fin-US' },
+            { value: 'US', label: 'Do casal (Nós)', shortLabel: 'Casal', icon: Users, testId: 'fin-US' },
             { value: 'MINE', label: 'Meu', icon: User, testId: 'fin-MINE' },
             { value: 'PARTNER', label: possessive(partner), icon: User, testId: 'fin-PARTNER' },
           ]}

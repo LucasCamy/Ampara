@@ -73,6 +73,7 @@ export function Segmented<T extends string>({
   options: { value: T; label: ReactNode; shortLabel?: ReactNode; icon?: LucideIcon; testId?: string; ariaLabel?: string }[]
   onChange: (v: T) => void
   size?: 'sm' | 'md'
+  /** seletor de página: colunas iguais na largura toda até o tablet; no computador (com barra lateral), largura natural */
   stretch?: boolean
   /** colunas iguais ocupando toda a largura em qualquer tela (barra lateral, cartões estreitos) */
   fill?: boolean
@@ -87,25 +88,23 @@ export function Segmented<T extends string>({
     radios?.[(from + dir + options.length) % options.length]?.focus()
   }
   return (
-    <div className={fill ? 'w-full' : stretch ? 'w-full sm:w-auto' : 'max-w-full'}>
+    <div className={fill ? 'w-full' : stretch ? 'w-full lg:w-auto' : 'max-w-full'}>
       <span id={id} className={hideLabel ? 'sr-only' : 'mb-1.5 block text-[13px] font-semibold text-muted'}>
         {label}
       </span>
       <div
         role="radiogroup"
         aria-labelledby={id}
-        // stretch: colunas iguais só no celular; do sm em diante cada opção tem a largura natural do rótulo completo
+        // stretch: colunas iguais até o tablet; no computador cada opção tem a largura natural do rótulo completo
         className={cx(
           'gap-1 rounded-[16px] bg-subtle p-1',
-          fill
-            ? options.length > 3
-              ? 'grid w-full grid-cols-2'
-              : 'grid w-full auto-cols-fr grid-flow-col'
-            : stretch ? 'grid w-full auto-cols-fr grid-flow-col sm:inline-flex sm:w-auto' : 'inline-flex max-w-full',
+          fill ? 'grid w-full auto-cols-fr grid-flow-col' : stretch ? 'grid w-full auto-cols-fr grid-flow-col lg:inline-flex lg:w-auto' : 'inline-flex max-w-full',
         )}
       >
         {options.map((o, i) => {
           const active = o.value === value
+          // divisória fina entre duas opções não selecionadas: cada opção se lê como opção
+          const divider = i > 0 && !active && options[i - 1]?.value !== value
           const Icon = o.icon
           return (
             <button
@@ -129,8 +128,9 @@ export function Segmented<T extends string>({
               className={cx(
                 'press inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[12px] font-semibold whitespace-nowrap',
                 size === 'sm' ? 'min-h-11 px-2.5 text-[13px]' : 'min-h-11 px-3 text-[14px]',
-                fill ? 'px-1.5' : stretch ? 'sm:shrink-0' : 'shrink',
+                fill ? 'px-1.5' : stretch ? 'lg:shrink-0' : 'shrink',
                 active ? 'bg-segment-active text-ink shadow-card ring-1 ring-line-strong' : 'text-muted',
+                divider && 'relative before:absolute before:top-1/4 before:-left-[2.5px] before:h-1/2 before:w-px before:bg-line-strong',
               )}
             >
               {Icon ? <Icon size={16} aria-hidden className="shrink-0" /> : null}
@@ -160,7 +160,7 @@ export function ChoiceChips<T extends string>({
 }: {
   label: string
   value: T | null
-  options: { value: T; label: ReactNode; icon?: LucideIcon; hint?: string }[]
+  options: { value: T; label: ReactNode; icon?: LucideIcon; hint?: string; testId?: string }[]
   onChange: (v: T) => void
   error?: string
 }) {
@@ -180,6 +180,7 @@ export function ChoiceChips<T extends string>({
               type="button"
               role="radio"
               aria-checked={active}
+              data-testid={o.testId}
               onClick={() => onChange(o.value)}
               className={cx(
                 'press inline-flex min-h-12 items-center gap-2 rounded-[14px] border px-3.5 text-left text-[14px] font-semibold',
