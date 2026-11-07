@@ -158,6 +158,7 @@ export function ChoiceChips<T extends string>({
   onChange,
   error,
   stack = false,
+  cols = 2,
 }: {
   label: string
   value: T | null
@@ -166,15 +167,20 @@ export function ChoiceChips<T extends string>({
   error?: string
   /** uma opção por linha, na largura toda (cartões de Ajustes, rótulos com nomes) */
   stack?: boolean
+  /** colunas iguais na largura toda; a última opção de uma conta ímpar ocupa a linha */
+  cols?: 1 | 2 | 3
 }) {
   const id = useId()
+  const n = stack ? 1 : Math.min(cols, options.length)
+  const grid = n === 1 ? 'grid-cols-1' : n === 2 ? 'grid-cols-2' : 'grid-cols-3'
+  const odd = n === 2 && options.length % 2 === 1
   return (
     <fieldset className="min-w-0">
       <legend id={id} className="mb-2 text-[14px] font-semibold text-ink">
         {label}
       </legend>
-      <div role="radiogroup" aria-labelledby={id} aria-invalid={error ? true : undefined} className={stack ? 'flex flex-col gap-2' : 'flex flex-wrap gap-2'}>
-        {options.map((o) => {
+      <div role="radiogroup" aria-labelledby={id} aria-invalid={error ? true : undefined} className={cx('grid gap-2', grid)}>
+        {options.map((o, i) => {
           const active = o.value === value
           const Icon = o.icon
           return (
@@ -186,13 +192,13 @@ export function ChoiceChips<T extends string>({
               data-testid={o.testId}
               onClick={() => onChange(o.value)}
               className={cx(
-                'press inline-flex min-h-12 items-center gap-2 rounded-[14px] border px-3.5 text-left text-[14px] font-semibold',
-                stack && 'w-full py-2',
+                'press flex min-h-12 w-full min-w-0 items-center gap-2 rounded-[14px] border px-3.5 py-2 text-left text-[14px] leading-snug font-semibold',
+                odd && i === options.length - 1 && 'col-span-2',
                 active ? 'border-action bg-selected text-ink' : 'border-line bg-surface text-ink hoverable',
               )}
             >
-              {Icon ? <Icon size={18} aria-hidden className={active ? 'text-action' : 'text-muted'} /> : null}
-              <span>
+              {Icon ? <Icon size={18} aria-hidden className={cx('shrink-0', active ? 'text-action' : 'text-muted')} /> : null}
+              <span className="min-w-0 break-words">
                 {o.label}
                 {o.hint ? <span className="block text-[12px] font-medium text-muted">{o.hint}</span> : null}
               </span>
@@ -441,7 +447,8 @@ export function SectionHeader({ title, rest, action, id }: { title: string; rest
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
       <Title as="h2" size="md" anchor={title} rest={rest} id={id} />
-      {action}
+      {/* no celular a ação desce para a largura toda; no computador fica ao lado do título */}
+      {action ? <div className="w-full sm:w-auto [&>*]:w-full sm:[&>*]:w-auto">{action}</div> : null}
     </div>
   )
 }
@@ -452,7 +459,7 @@ export function EmptyState({ icon: Icon, title, text, action }: { icon: LucideIc
       <Icon size={28} className="text-action" aria-hidden />
       <p className="mt-3 text-[16px] font-bold text-ink">{title}</p>
       <p className="mt-1 max-w-[34ch] text-[14px] text-muted">{text}</p>
-      {action ? <div className="mt-4">{action}</div> : null}
+      {action ? <div className="mt-4 w-full sm:w-auto [&>*]:w-full sm:[&>*]:w-auto">{action}</div> : null}
     </div>
   )
 }

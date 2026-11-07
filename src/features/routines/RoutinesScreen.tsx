@@ -187,7 +187,7 @@ export function RoutinesScreen() {
                         d.nudged.has(dose.log.id) ? (
                           <StatusBadge kind="ok">Lembrete enviado</StatusBadge>
                         ) : (
-                          <Button size="sm" variant="primary" icon={HandHeart} onClick={() => sendNudge(dose.log.id, dose.med.name)}>
+                          <Button size="sm" variant="primary" icon={HandHeart} className="w-full sm:w-auto" onClick={() => sendNudge(dose.log.id, dose.med.name)}>
                             Mandar lembrete carinhoso
                           </Button>
                         )

@@ -159,13 +159,13 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
                     <span className="text-[13px] text-muted">{splitRuleLabel(t.splitRule, couple.ratioABps)}</span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Button size="sm" variant="quiet" icon={CircleCheck} onClick={() => quickPay(t.id, viewer)} data-testid="pay-me">
+                    <Button size="sm" variant="quiet" icon={CircleCheck} className="grow basis-[120px]" onClick={() => quickPay(t.id, viewer)} data-testid="pay-me">
                       Eu paguei
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => quickPay(t.id, partnerId)}>
+                    <Button size="sm" variant="secondary" className="grow basis-[120px]" onClick={() => quickPay(t.id, partnerId)}>
                       {partner.displayName.split(' ')[0]} pagou
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => ui.openSheet('pay', { id: t.id })} data-testid="pay-other">
+                    <Button size="sm" variant="secondary" className="grow basis-[120px]" onClick={() => ui.openSheet('pay', { id: t.id })} data-testid="pay-other">
                       Outro valor
                     </Button>
                   </div>
@@ -403,10 +403,10 @@ function PersonalTab({ month, owner, today }: { month: string; owner: 'me' | 'pa
                 </div>
                 {view.status === 'own' && t.status === 'PREDICTED_DASHED' ? (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Button size="sm" variant="quiet" icon={CircleCheck} onClick={() => quickPay(t.id, viewer)} data-testid="pay-me">
+                    <Button size="sm" variant="quiet" icon={CircleCheck} className="grow basis-[120px]" onClick={() => quickPay(t.id, viewer)} data-testid="pay-me">
                       Paguei
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => ui.openSheet('pay', { id: t.id })}>
+                    <Button size="sm" variant="secondary" className="grow basis-[120px]" onClick={() => ui.openSheet('pay', { id: t.id })}>
                       Outro valor
                     </Button>
                   </div>

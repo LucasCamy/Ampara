@@ -66,12 +66,12 @@ export function TourSheet({ onDone }: { onDone: () => void }) {
           <span key={k} className={k === i ? 'h-1.5 w-5 rounded-full bg-action' : 'h-1.5 w-1.5 rounded-full bg-line-strong'} />
         ))}
       </div>
-      <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-        <Button variant="primary" className="grow basis-[140px]" onClick={() => (last ? finish() : setI(i + 1))} data-testid="tour-next">
+      <div className="flex gap-2 border-t border-line pt-4">
+        <Button variant="primary" className="flex-1" onClick={() => (last ? finish() : setI(i + 1))} data-testid="tour-next">
           {last ? 'Começar' : 'Próximo'}
         </Button>
         {!last ? (
-          <Button variant="ghost" onClick={finish} data-testid="tour-skip">
+          <Button variant="ghost" className="flex-1" onClick={finish} data-testid="tour-skip">
             Pular
           </Button>
         ) : null}

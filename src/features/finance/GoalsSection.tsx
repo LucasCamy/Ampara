@@ -134,8 +134,8 @@ function GoalCard({ goal }: { goal: SavingsGoal }) {
           </p>
         )}
       </div>
-      <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3">
-        <div className="min-w-[140px] flex-1">
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
+        <div className="col-span-2 min-w-0">
           <MoneyInput cents={cents} onChange={setCents} label={`Valor para ${goal.title}`} hideLabel testId="goal-amount" />
         </div>
         <Button

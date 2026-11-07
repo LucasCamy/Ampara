@@ -91,7 +91,7 @@ export function ShoppingSection() {
       {lowMeds.length ? (
         <div className="mt-3 flex flex-wrap gap-2" aria-label="Remédios acabando">
           {lowMeds.map((m) => (
-            <Button key={m.id} size="sm" variant="quiet" icon={Pill} onClick={() => addShoppingItem(m.name, 'PHARMACY', m.id)} data-testid="shopping-low-med">
+            <Button key={m.id} size="sm" variant="quiet" icon={Pill} className="grow basis-[130px]" onClick={() => addShoppingItem(m.name, 'PHARMACY', m.id)} data-testid="shopping-low-med">
               Repor {m.name}
             </Button>
           ))}

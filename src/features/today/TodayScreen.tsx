@@ -101,7 +101,7 @@ export function TodayScreen() {
           </p>
           <p className="mt-2 text-[16px] font-semibold text-ink">{n.message}</p>
           <div className="mt-3">
-            <Button size="sm" variant="quiet" onClick={() => seeNudge(n.id)}>
+            <Button size="sm" variant="quiet" className="w-full sm:w-auto" onClick={() => seeNudge(n.id)}>
               Recebi, obrigado
             </Button>
           </div>
@@ -144,7 +144,7 @@ export function TodayScreen() {
           <StatusBadge kind="ok">{h.response === 'TAKE_OVER' ? `${partner.displayName} assumiu` : `${partner.displayName} vai fazer junto`}</StatusBadge>
           <p className="mt-2 text-[16px] font-semibold text-ink">{h.situation}</p>
           <div className="mt-3">
-            <Button size="sm" variant="quiet" onClick={() => resolveHelp(h.id)}>
+            <Button size="sm" variant="quiet" className="w-full sm:w-auto" onClick={() => resolveHelp(h.id)}>
               Combinado, obrigado
             </Button>
           </div>
@@ -181,10 +181,10 @@ export function TodayScreen() {
             ))}
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="quiet" onClick={() => bringTasksToToday(d.leftovers.map((t) => t.id))}>
+            <Button size="sm" variant="quiet" className="grow basis-[130px]" onClick={() => bringTasksToToday(d.leftovers.map((t) => t.id))}>
               Trazer para hoje
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => archiveTasks(d.leftovers.map((t) => t.id))}>
+            <Button size="sm" variant="secondary" className="grow basis-[130px]" onClick={() => archiveTasks(d.leftovers.map((t) => t.id))}>
               Arquivar e recomeçar
             </Button>
           </div>
@@ -236,7 +236,7 @@ export function TodayScreen() {
           </ul>
         )}
         {hiddenCount > 0 ? (
-          <button type="button" onClick={() => setShowAll(true)} className="press hoverable mt-2 min-h-12 rounded-[14px] px-3 text-[14px] font-semibold text-action">
+          <button type="button" onClick={() => setShowAll(true)} className="press hoverable mt-2 inline-flex min-h-12 w-full items-center justify-center rounded-[14px] border border-line px-3 text-[14px] font-semibold text-action">
             Ver mais {plural(hiddenCount, 'tarefa de hoje', 'tarefas de hoje')}
           </button>
         ) : null}
@@ -483,7 +483,7 @@ function TodayFeed({ children }: { children: ReactNode }) {
           aria-expanded={open}
           aria-controls="para-hoje-lista"
           data-testid="today-more"
-          className="press hoverable mt-2 inline-flex min-h-12 items-center gap-1.5 rounded-[14px] px-3 text-[14px] font-semibold text-action"
+          className="press hoverable mt-3 inline-flex min-h-12 w-full items-center justify-center gap-1.5 rounded-[14px] border border-line px-3 text-[14px] font-semibold text-action"
         >
           {open ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
           {open ? 'Mostrar menos' : `Mais para hoje (${hidden})`}

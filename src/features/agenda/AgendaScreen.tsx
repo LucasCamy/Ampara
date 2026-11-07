@@ -92,7 +92,7 @@ export function AgendaScreen() {
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <Title anchor="Agenda e tarefas," rest="no tempo certo." />
-        <Button variant="primary" size="compact" icon={CalendarPlus} onClick={() => ui.openSheet('event', { date: view === 'INBOX' ? today : cursor })} data-testid="agenda-new-event">
+        <Button variant="primary" size="compact" icon={CalendarPlus} className="w-full sm:w-auto" onClick={() => ui.openSheet('event', { date: view === 'INBOX' ? today : cursor })} data-testid="agenda-new-event">
           Compromisso
         </Button>
       </div>
@@ -569,11 +569,11 @@ function InboxView({ tasks }: { tasks: ReturnType<typeof inboxTasks> }) {
             <p className="text-[15px] font-semibold text-ink">{t.title}</p>
             <OwnerTag tone={toneOf(t.assignedTo)}>{ownerLabel(t.assignedTo, viewer, partner)}</OwnerTag>
           </div>
-          <Button size="sm" variant="quiet" onClick={() => scheduleTaskToday(t.id)}>
+          <Button size="sm" variant="quiet" className="grow basis-[130px]" onClick={() => scheduleTaskToday(t.id)}>
             Trazer para hoje
           </Button>
           {t.assignedTo === viewer ? (
-            <Button size="sm" variant="ghost" onClick={() => sendTaskToPartner(t.id)}>
+            <Button size="sm" variant="secondary" className="grow basis-[130px]" onClick={() => sendTaskToPartner(t.id)}>
               Enviar para meu amor
             </Button>
           ) : null}

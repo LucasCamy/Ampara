@@ -75,7 +75,6 @@ export function NewMedSheet({ id, onDone }: { id?: string; onDone: () => void })
         hint={isPack ? 'Comprimidos, somando as cartelas que você tem.' : 'Unidades. Avisamos quando estiver acabando.'}
         placeholder={isPack ? 'Ex.: 63 (3 cartelas)' : 'Ex.: 30'}
         testId="new-med-stock"
-        className="max-w-[260px]"
       />
       <div className="rounded-[20px] bg-subtle p-4">
         <Switch

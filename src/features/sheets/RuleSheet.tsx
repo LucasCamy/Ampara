@@ -44,7 +44,6 @@ export function RuleSheet({ id, onDone }: { id: string; onDone: () => void }) {
         data
         hint="Mês curto usa o último dia."
         testId="rule-day"
-        className="max-w-[200px]"
       />
       <p className="text-[13px] text-muted">Muda as previstas deste mês em diante. As já pagas ficam como foram.</p>
       <DeleteButton label="Encerrar conta fixa" testId="rule-end" onClick={() => endRule(id) && onDone()} />

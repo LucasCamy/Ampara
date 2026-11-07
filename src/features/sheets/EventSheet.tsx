@@ -58,7 +58,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
     <form id={SHEET_FORM.event} onSubmit={submit} className="flex flex-col gap-5 pt-2" noValidate>
       <TextField label="Título do compromisso" value={form.title} onChange={set('title')} error={errors.title} placeholder="Ex.: Consulta médica" maxLength={80} testId="event-title" autoFocus={!id} />
       <DateField label="Data" value={form.date} onChange={set('date')} error={errors.date} testId="event-date" />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
         <TimeField label="Início" value={form.start} onChange={setStart} error={errors.start} testId="event-start" shortcuts={START_SHORTCUTS} />
         <TimeField
           label="Término"

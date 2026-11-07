@@ -107,7 +107,7 @@ export function MyMoodCard() {
           <p className="mb-3 text-[15px] font-semibold text-ink">Como você está hoje? {partner.displayName.split(' ')[0]} vê.</p>
           <MoodPicker value={mine?.mood} />
           {mine ? (
-            <Button size="sm" variant="ghost" className="mt-2 -ml-2" onClick={() => setEditing(false)}>
+            <Button size="sm" variant="quiet" className="mt-3 w-full sm:w-auto" onClick={() => setEditing(false)}>
               Pronto
             </Button>
           ) : null}

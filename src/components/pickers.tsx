@@ -27,8 +27,11 @@ export function QuickChips({
   /** horários e durações em fonte de dados; palavras (Hoje, Amanhã) na fonte da interface */
   data?: boolean
 }) {
+  // colunas iguais na largura do campo (até 4 por linha), sem chips soltos à esquerda
+  const n = Math.min(Math.max(items.length, 1), 4)
+  const grid = n === 1 ? 'grid-cols-1' : n === 2 ? 'grid-cols-2' : n === 3 ? 'grid-cols-3' : 'grid-cols-4'
   return (
-    <div role="group" aria-label={label} className="mt-2 flex flex-wrap gap-2" data-testid={testId}>
+    <div role="group" aria-label={label} className={cx('mt-2 grid gap-2', grid)} data-testid={testId}>
       {items.map((s) => {
         const active = s.value === value
         return (
@@ -40,7 +43,7 @@ export function QuickChips({
             data-testid={s.testId}
             onClick={() => onPick(s.value)}
             className={cx(
-              'press inline-flex min-h-11 items-center rounded-full border px-3.5 text-[14px] font-semibold whitespace-nowrap',
+              'press inline-flex min-h-11 min-w-0 items-center justify-center rounded-full border px-2 text-[14px] font-semibold whitespace-nowrap',
               data && 'font-data',
               active ? 'border-action bg-selected text-ink' : 'hoverable border-line bg-surface text-muted',
             )}
@@ -164,7 +167,6 @@ export function DateField({
         invalid={!!error}
         describedBy={error ? `${id}-err` : hint ? `${id}-hint` : undefined}
         testId={testId}
-        className="max-w-[260px]"
       />
       <QuickChips
         label="Atalhos de data"

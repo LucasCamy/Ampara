@@ -45,7 +45,7 @@ export function TimesField({
               testId={`${testId}-${i}`}
               onFocus={() => setActive(i)}
               onChange={(v) => setAt(i, v)}
-              className="w-full max-w-[200px]"
+              className="w-full flex-1"
             />
             {times.length > 1 ? (
               <button
@@ -71,7 +71,7 @@ export function TimesField({
         testId={`${testId}-shortcuts`}
       />
       {times.length < MAX_TIMES ? (
-        <Button size="sm" variant="ghost" icon={Plus} className="mt-1 -ml-2" onClick={() => onChange([...times, next()])} data-testid={`${testId}-add`}>
+        <Button size="sm" variant="quiet" icon={Plus} className="mt-1 w-full" onClick={() => onChange([...times, next()])} data-testid={`${testId}-add`}>
           Outro horário
         </Button>
       ) : null}

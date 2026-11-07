@@ -90,7 +90,7 @@ export function MedSheet({ onDone }: { onDone: () => void }) {
             options={(['FORGOT', 'OUT_OF_STOCK', 'MEDICAL'] as SkipReason[]).map((r) => ({ value: r, label: skipReasonLabel(r) }))}
           />
         ) : (
-          <Button variant="ghost" icon={SkipForward} onClick={() => setSkipping(true)} className="self-start" data-testid="dose-skip">
+          <Button variant="ghost" icon={SkipForward} onClick={() => setSkipping(true)} className="w-full" data-testid="dose-skip">
             Pular dose de hoje
           </Button>
         )

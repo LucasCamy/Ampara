@@ -56,7 +56,7 @@ export function FocusCard({ session, compact }: { session: FocusSession; compact
         >
           Terminamos
         </Button>
-        <Button variant="ghost" size="compact" icon={Square} onClick={() => cancelFocus(session.id)} data-testid="focus-cancel">
+        <Button variant="secondary" size="compact" icon={Square} className="grow basis-[100px]" onClick={() => cancelFocus(session.id)} data-testid="focus-cancel">
           Parar
         </Button>
       </div>
@@ -112,7 +112,7 @@ export function FocusSection() {
             Tarefa chata fica mais leve com {first(partner.displayName)} por perto, mesmo cada um na sua. Comece e {first(partner.displayName)} recebe o convite.
           </p>
           {suggestions.length ? (
-            <div className="mt-3 flex flex-wrap gap-2" aria-label="Tarefas de hoje">
+            <div className="mt-3 flex flex-col gap-2" aria-label="Tarefas de hoje">
               {suggestions.map((t) => (
                 <button
                   key={t.id}
@@ -124,7 +124,7 @@ export function FocusSection() {
                   }}
                   aria-pressed={taskId === t.id}
                   className={cx(
-                    'press min-h-11 rounded-[12px] border px-3 text-left text-[13px] font-semibold',
+                    'press min-h-11 w-full rounded-[12px] border px-3 py-2 text-left text-[14px] font-semibold',
                     taskId === t.id ? 'border-action bg-selected text-ink' : 'border-line text-ink hoverable',
                   )}
                   data-testid="focus-suggestion"

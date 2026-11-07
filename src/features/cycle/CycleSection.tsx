@@ -90,7 +90,7 @@ export function CycleSection() {
               Opcional, para quem menstrua. Prevê a próxima menstruação e avisa a semana em que o foco e a paciência costumam cair, que é
               quando o TDAH mais pesa.
             </p>
-            <Button variant="quiet" icon={Plus} className="mt-3" onClick={() => ui.openSheet('period')} data-testid="cycle-start">
+            <Button variant="quiet" icon={Plus} className="mt-3 w-full sm:w-auto" onClick={() => ui.openSheet('period')} data-testid="cycle-start">
               Registrar menstruação
             </Button>
           </div>
@@ -320,10 +320,10 @@ export function CycleTodayCards() {
           <p className="mt-2 text-[16px] font-semibold text-ink">Quer deixar a Bateria Mental em 50% hoje?</p>
           <p className="mt-1 text-[14px] text-muted">{PHASE_HINT[d.cycle.phase]}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="primary" onClick={() => setEnergy('MEDIUM')} data-testid="cycle-suggest-accept">
+            <Button size="sm" variant="primary" className="grow basis-[130px]" onClick={() => setEnergy('MEDIUM')} data-testid="cycle-suggest-accept">
               Deixar em 50%
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => dismissed.set((s) => ({ ...s, [`${viewer}@${today}`]: true }))}>
+            <Button size="sm" variant="secondary" className="grow basis-[130px]" onClick={() => dismissed.set((s) => ({ ...s, [`${viewer}@${today}`]: true }))}>
               Hoje não
             </Button>
           </div>

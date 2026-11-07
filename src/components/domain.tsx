@@ -158,13 +158,13 @@ export function TaskRow({
           ) : null}
         </div>
         {!done && (actions.includes('postpone') || (actions.includes('send') && task.assignedTo === viewer)) ? (
-          <div className="mt-1 -ml-2 flex flex-wrap">
+          <div className="mt-2 flex gap-2">
             {actions.includes('postpone') ? (
               <button
                 type="button"
                 onClick={() => postponeTask(task.id)}
                 aria-label={`Adiar para amanhã: ${task.title}`}
-                className="press hoverable inline-flex min-h-11 items-center gap-1 rounded-[12px] px-2 text-[13px] font-semibold text-action"
+                className="press hoverable inline-flex min-h-11 min-w-0 grow basis-0 items-center justify-center gap-1.5 rounded-[12px] border border-line px-2 text-[13px] font-semibold text-action"
               >
                 <MoveRight size={15} aria-hidden /> <span className="sm:hidden">Amanhã</span><span className="hidden sm:inline">Adiar para amanhã</span>
               </button>
@@ -174,7 +174,7 @@ export function TaskRow({
                 type="button"
                 onClick={() => sendTaskToPartner(task.id)}
                 aria-label={`Enviar para ${partner.displayName}: ${task.title}`}
-                className="press hoverable inline-flex min-h-11 items-center gap-1 rounded-[12px] px-2 text-[13px] font-semibold text-action"
+                className="press hoverable inline-flex min-h-11 min-w-0 grow basis-0 items-center justify-center gap-1.5 rounded-[12px] border border-line px-2 text-[13px] font-semibold text-action"
               >
                 <Mail size={15} aria-hidden /> <span className="sm:hidden">Enviar ao amor</span><span className="hidden sm:inline">Enviar para meu amor</span>
               </button>

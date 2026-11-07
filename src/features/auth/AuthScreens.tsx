@@ -244,7 +244,7 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
           <p className="min-w-0 flex-1 basis-[200px] text-[14px] text-ink">
             <strong>Seu par já usa o Ampara?</strong> Entre com o convite ou com sua conta.
           </p>
-          <Button variant="quiet" icon={Cloud} onClick={onCloud} data-testid="setup-cloud">
+          <Button variant="quiet" icon={Cloud} className="w-full sm:w-auto" onClick={onCloud} data-testid="setup-cloud">
             Entrar pela nuvem
           </Button>
         </div>
@@ -254,7 +254,7 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
           <p className="min-w-0 flex-1 basis-[200px] text-[14px] text-ink">
             <strong>Trocou de celular?</strong> Volte com o arquivo de backup.
           </p>
-          <Button variant="quiet" icon={Upload} onClick={() => setRestoring((r) => !r)} aria-expanded={restoring} data-testid="setup-restore">
+          <Button variant="quiet" icon={Upload} className="w-full sm:w-auto" onClick={() => setRestoring((r) => !r)} aria-expanded={restoring} data-testid="setup-restore">
             Restaurar backup
           </Button>
         </div>

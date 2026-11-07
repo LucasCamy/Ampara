@@ -120,6 +120,7 @@ function GiftRow({ gift, dateTitle }: { gift: GiftIdea; dateTitle?: string }) {
             size="sm"
             variant="quiet"
             icon={ShoppingBag}
+            className="grow basis-[130px]"
             data-testid="gift-bought"
             onClick={() => {
               setGiftStatus(gift.id, 'BOUGHT')
@@ -133,7 +134,7 @@ function GiftRow({ gift, dateTitle }: { gift: GiftIdea; dateTitle?: string }) {
         {gift.status === 'BOUGHT' ? (
           <>
             <StatusBadge kind="ok">Comprado</StatusBadge>
-            <Button size="sm" variant="quiet" icon={PartyPopper} onClick={() => setGiftStatus(gift.id, 'GIVEN')} data-testid="gift-given">
+            <Button size="sm" variant="quiet" icon={PartyPopper} className="grow basis-[130px]" onClick={() => setGiftStatus(gift.id, 'GIVEN')} data-testid="gift-given">
               Entreguei
             </Button>
           </>
@@ -172,7 +173,7 @@ export function SpecialDatesTodayCards() {
                 <p className="text-[14px] text-muted">
                   {forThis ? `Você tem ${forThis === 1 ? '1 ideia guardada' : `${forThis} ideias guardadas`} para essa data.` : 'Ainda sem ideia de presente?'}
                 </p>
-                <Button size="sm" variant="quiet" icon={Gift} onClick={() => (forThis ? ui.setTab('nos') : ui.openSheet('gift', { dateId: u.item.id }))} data-testid="special-today-gift">
+                <Button size="sm" variant="quiet" icon={Gift} className="w-full sm:w-auto" onClick={() => (forThis ? ui.setTab('nos') : ui.openSheet('gift', { dateId: u.item.id }))} data-testid="special-today-gift">
                   {forThis ? 'Ver ideias' : 'Anotar ideia'}
                 </Button>
               </div>
