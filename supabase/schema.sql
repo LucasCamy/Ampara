@@ -190,10 +190,33 @@ create policy profiles_update on profiles for update
   with check (couple_id = my_couple_id() and (id = my_partner_id() or not partner_joined(couple_id, id)));
 -- events e medication_logs têm políticas próprias mais abaixo (privacidade); a antiga "couple_rw" sai
 drop policy if exists couple_rw on events;
+-- Pedido de ajuda e lembrete carinhoso: só quem pede (ou manda) cria; os dois atualizam (aceitar, resolver,
+-- marcar como visto); ninguém apaga (remoção é exclusão lógica). O app grava por upsert, e no Postgres o with
+-- check do insert vale também quando a linha já existe e vira update: por isso "ou a linha já existe".
+create or replace function help_request_exists(p_id uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from help_requests where id = p_id and couple_id = my_couple_id())
+$$;
+create or replace function nudge_exists(p_id uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from nudges where id = p_id and couple_id = my_couple_id())
+$$;
+revoke all on function help_request_exists(uuid), nudge_exists(uuid) from public, anon;
+grant execute on function help_request_exists(uuid), nudge_exists(uuid) to authenticated;
 drop policy if exists couple_rw on help_requests;
-create policy couple_rw on help_requests for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists help_read on help_requests;
+drop policy if exists help_insert on help_requests;
+drop policy if exists help_update on help_requests;
+create policy help_read on help_requests for select using (couple_id = my_couple_id());
+create policy help_insert on help_requests for insert
+  with check (couple_id = my_couple_id() and (requester_id = my_partner_id() or help_request_exists(id)));
+create policy help_update on help_requests for update using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 drop policy if exists couple_rw on nudges;
-create policy couple_rw on nudges for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists nudges_read on nudges;
+drop policy if exists nudges_insert on nudges;
+drop policy if exists nudges_update on nudges;
+create policy nudges_read on nudges for select using (couple_id = my_couple_id());
+create policy nudges_insert on nudges for insert
+  with check (couple_id = my_couple_id() and ("from" = my_partner_id() or nudge_exists(id)));
+create policy nudges_update on nudges for update using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 drop policy if exists couple_rw on medication_logs;
 
 -- Compromissos: do casal (owner_id nulo) ou meus. "Meu · só você vê" não chega ao par nem pode ser

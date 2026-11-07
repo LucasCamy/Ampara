@@ -48,8 +48,13 @@
 - **Service worker:** a API (`/rest/`, `/auth/`, pedidos com `Authorization`) não passa mais pelo cache. Em
   produção ela fica na mesma origem do app, então as respostas iam para o Cache Storage em texto claro e o pull
   podia receber sempre a mesma resposta guardada. O cache sobe para `ampara-v5` e "Apagar dados" limpa o que sobrou.
-- Pendente: E2E com a nuvem na mesma origem do app (hoje os testes usam outra origem), HSTS e `real_ip` no
-  `nginx-prod.conf`.
+- **Pedido de ajuda e lembrete carinhoso:** sem "for all"; só quem pede ou manda cria, os dois atualizam, ninguém
+  apaga (`help_request_exists`/`nudge_exists` deixam o upsert do par virar update). Na primeira subida cada
+  aparelho manda só os seus. Casos no `validate.sql`, espelho no `fake-supabase.ts`.
+- **Gateway:** HSTS. `real_ip` documentado e desligado (depende do que está na frente; ligar sem isso deixa o
+  IP ser forjado e o limite de tentativas ser contornado).
+- **E2E na mesma origem:** `e2e/sw-api.spec.ts` (falha com o `sw.js` antigo).
+- Pendente: ligar o `real_ip` quando o proxy da frente for confirmado.
 
 ## Iteração 20 (2026-11-06): Hoje enxuto, PWA, agenda única e acabamento
 
@@ -379,7 +384,6 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 - **Alarmes nativos do iOS:** (Web Push na iteração 16 cobre o caso com internet) um PWA não agenda notificação local `time-sensitive` offline. O contador de 5 min roda
   com o app aberto. Para alarmes reais na tela bloqueada, migrar a camada de UI/domínio para Expo (o domínio em
   `src/domain` é puro e reaproveitável).
-- **Supabase:** conectado desde as iterações 16 a 19 (self-hosted no cluster, validado no Docker). Falta um E2E com
-  a nuvem na mesma origem do app, como em produção.
+- **Supabase:** conectado desde as iterações 16 a 19 (self-hosted no cluster, validado no Docker).
 - **IndexedDB vs. limpeza do Safari:** (mitigado pelo backup cifrado da iteração 15) iOS pode limpar armazenamento de sites pouco usados; instalar na Tela de
   Início reduz o risco. Sync com Supabase resolve de vez.

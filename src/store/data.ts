@@ -2,7 +2,7 @@ import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
 import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
 import { canViewRule } from '../domain/ledger'
 import { COLLECTIONS } from '../domain/types'
-import type { CalendarEvent, Collections, CollectionName, CycleLog, CycleSettings, DataState, GiftIdea, RecurringRule, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
+import type { CalendarEvent, Collections, CollectionName, CycleLog, CycleSettings, DataState, GiftIdea, HelpRequest, Nudge, RecurringRule, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 /** Chave antiga (dados em texto claro, versão sem login). Migrada para o cofre e apagada no cadastro. */
@@ -124,6 +124,9 @@ export function enqueueAll(who: PartnerId) {
     // conta fixa: do casal qualquer um grava; a pessoal só a dona (espelho de recurrences_insert)
     if (c === 'recurrences') return canViewRule(e as RecurringRule, who)
     if (c === 'moodCheckins' || c === 'comfortItems') return (e as { ownerId: PartnerId }).ownerId === who
+    // pedido de ajuda e lembrete carinhoso: quem pediu ou mandou cria (help_insert, nudges_insert)
+    if (c === 'helpRequests') return (e as HelpRequest).requesterId === who
+    if (c === 'nudges') return (e as Nudge).from === who
     return true
   }
   dataStore.set((s) => {

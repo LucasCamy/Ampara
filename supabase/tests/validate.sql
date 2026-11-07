@@ -32,7 +32,7 @@ begin
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('couples','profiles','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences');
+     and tablename in ('couples','profiles','help_requests','nudges','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
 \echo 'ok  estrutura: 24 tabelas, RLS ligado em todas, 9 funções'
@@ -189,6 +189,33 @@ do $$ begin
 end $$;
 \echo 'ok  RLS recusa remédio e compromisso forjados em nome do par'
 
+-- pedido de ajuda e lembrete carinhoso: ela não cria em nome do Lucas; o dela os dois atualizam; ninguém apaga
+do $$ declare n int; begin
+  begin
+    insert into help_requests (id, couple_id, requester_id, situation, help_type, urgency, status)
+    values (gen_random_uuid(), 'space-teste', 'A', 'forjado', 'TAKE_OVER', 'NOW', 'OPEN');
+    raise exception 'FALHOU: ela criou pedido de ajuda em nome do Lucas';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into nudges (id, couple_id, "from", "to", medication_log_id, message)
+    values (gen_random_uuid(), 'space-teste', 'A', 'B', 'x', 'forjado');
+    raise exception 'FALHOU: ela mandou lembrete em nome do Lucas';
+  exception when insufficient_privilege then null;
+  end;
+  insert into help_requests (id, couple_id, requester_id, situation, help_type, urgency, status)
+  values ('55555555-0000-4000-8000-000000000001', 'space-teste', 'B', 'Lavar a louça', 'TAKE_OVER', 'TODAY', 'OPEN');
+  insert into help_requests (id, couple_id, requester_id, situation, help_type, urgency, status)
+  values ('55555555-0000-4000-8000-000000000001', 'space-teste', 'B', 'Lavar a louça', 'TAKE_OVER', 'TODAY', 'RESOLVED')
+  on conflict (id) do update set status = excluded.status;
+  assert (select status from help_requests where id = '55555555-0000-4000-8000-000000000001') = 'RESOLVED', 'FALHOU: upsert do próprio pedido';
+  delete from help_requests where id = '55555555-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  assert n = 0, 'FALHOU: pedido de ajuda apagado pela API';
+  update help_requests set status = 'OPEN' where id = '55555555-0000-4000-8000-000000000001';
+end $$;
+\echo 'ok  pedido de ajuda e lembrete: ninguém cria em nome do par nem apaga pela API'
+
 -- compromisso "Meu · só você vê" do Lucas: não aparece, não muda, não some
 do $$ declare n int; begin
   assert (select count(*) from events) = 1 and (select title from events) = 'Jantar', 'FALHOU: compromisso privado vazou';
@@ -264,6 +291,15 @@ select (synced_at > :'before_sync'::timestamptz) as cursor_moved from profiles w
 \else
 select 1/0 as "FALHOU: synced_at não avançou";
 \endif
+
+-- ele aceita o pedido de ajuda dela pelo mesmo upsert do app ("Deixa comigo")
+do $$ begin
+  insert into help_requests (id, couple_id, requester_id, situation, help_type, urgency, status, response)
+  values ('55555555-0000-4000-8000-000000000001', 'space-teste', 'B', 'Lavar a louça', 'TAKE_OVER', 'TODAY', 'ACCEPTED', 'TAKE_OVER')
+  on conflict (id) do update set status = excluded.status, response = excluded.response;
+  assert (select status from help_requests where id = '55555555-0000-4000-8000-000000000001') = 'ACCEPTED', 'FALHOU: ele não conseguiu aceitar o pedido dela';
+end $$;
+\echo 'ok  ele aceita o pedido de ajuda dela'
 
 reset role;
 set local role authenticated;

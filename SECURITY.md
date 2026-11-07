@@ -59,6 +59,8 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
    `tx_read`) e apagar o espaço, levando os dados dos dois no cascade. Agora cada pessoa só altera o próprio perfil
    (o do par só antes de ele(a) entrar na nuvem, para a primeira subida; o app reenvia o perfil do par com
    `ignore-duplicates`), ninguém apaga perfil nem espaço pela API e a divisão do casal continua editável pelos dois.
+   `help_requests` e `nudges` seguiram o mesmo caminho: só quem pede ou manda cria (ninguém forja um pedido de
+   ajuda em nome do par), os dois atualizam (aceitar, resolver, marcar como visto) e ninguém apaga.
 8. **Dados de saúde e surpresas:** ciclo menstrual (`cycle_settings`/`cycle_logs`) só a dona grava; o par lê a janela
    ou os registros conforme ela escolheu, e com "Só eu vejo" a linha de ajustes não diz nada (janela nula por check no
    banco, durações mascaradas pelo app). Ideias de presente (`gift_ideas`) só quem anotou lê ou grava. Nos dois casos a
@@ -84,7 +86,7 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 | Step-up binding and bypass | confirmado | Apagar dados, trocar senha e gerar convite pedem a senha de novo; trocar de perspectiva pede a senha da outra pessoa |
 | Browser-storage disclosure and stale authorization | confirmado | Nada em texto claro no `localStorage` (E2E verifica que não aparecem "Venvanse", "Supermercado" nem a senha); a chave antiga em texto claro é migrada e apagada |
 | Cross-context storage and broadcast confusion | confirmado | `storage` recarrega dados novos; `rev` incrementa a cada gravação; bloqueio chega a todas as abas |
-| Service-worker cache and identity confusion | confirmado | `public/sw.js` guarda só o app do mesmo domínio e deixa passar direto `/rest/`, `/auth/` e qualquer pedido com `Authorization`. Até 2026-11-07 a API atrás do gateway (mesma origem) caía no cache: dados do casal em texto claro no Cache Storage e pull travado. O cache subiu para `ampara-v5` (o antigo é apagado) e "Apagar dados" remove respostas da API que tenham sobrado. Ainda sem E2E com a nuvem na mesma origem |
+| Service-worker cache and identity confusion | confirmado | `public/sw.js` guarda só o app do mesmo domínio e deixa passar direto `/rest/`, `/auth/` e qualquer pedido com `Authorization`. Até 2026-11-07 a API atrás do gateway (mesma origem) caía no cache: dados do casal em texto claro no Cache Storage e pull travado. O cache subiu para `ampara-v5` (o antigo é apagado) e "Apagar dados" remove respostas da API que tenham sobrado. `e2e/sw-api.spec.ts` chama a API da mesma origem com o service worker no controle e confere que nada é reaproveitado nem guardado (falha com o `sw.js` antigo) |
 | DOM-based XSS (fonte `location`) | confirmado | `?quick=` aceita só `task/expense/med/sos`; `title`/`amount` entram como valor de input React (escapado) e a URL é limpa |
 | Client-side navigation confusion | confirmado | Navegação só para URLs montadas com `location.origin` |
 | Clickjacking | confirmado no `vite preview` / needs_validation na hospedagem | `vite.config.ts` e `public/_headers`; conferir os cabeçalhos no provedor real |
@@ -117,7 +119,11 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   alguns minutos e feche de novo. O app mostra uma mensagem clara quando o cadastro está fechado.
 - **Limite de tentativas** no gateway (`docker/nginx-prod.conf`): login, cadastro, recuperação e entrada pelo
   convite, 20 por minuto por IP (folga de 20). Ensaiado com o nginx real: 22 passam, o resto recebe 429; o uso
-  normal da API não é afetado.
+  normal da API não é afetado. `needs_validation`: atrás do túnel/proxy com TLS todos chegam com o mesmo IP, então
+  o limite vale para todos juntos (quem força senhas também trava o login do casal por um minuto). O `real_ip`
+  está descrito e desligado no `nginx-prod.conf`: só ligue quando o que está na frente sempre regravar o cabeçalho
+  do IP, senão ele pode ser forjado.
+- **HSTS** (`max-age=31536000`, sem `includeSubDomains`) no gateway; o navegador só aceita por HTTPS.
 - **Backup diário** do banco (CronJob `ampara-backup`, 14 dias) e restauração ensaiada num banco novo
   (`npm run backup:check`). Procedimento em `docs/BACKUP.md`. Limitação: o volume do backup fica no mesmo nó.
 - iPhone: só com o app na Tela de Início (iOS 16.4+). Sem a nuvem conectada não há lembrete com o app fechado.

@@ -224,7 +224,14 @@ export class FakeSupabase {
       const key = keyOf(body)
       const existing = t.get(key)
       // upsert: a linha nova passa no with check; a que já existe precisa passar no using do update
-      const insertOk = tableName === 'tasks' || tableName === 'profiles' ? body.couple_id === me.couple_id : this.canWrite(tableName, body, me)
+      // help_insert / nudges_insert: quem pede ou manda cria; linha existente vira update (os dois atualizam)
+      const author = tableName === 'help_requests' ? body.requester_id : tableName === 'nudges' ? body.from : undefined
+      const insertOk =
+        tableName === 'tasks' || tableName === 'profiles'
+          ? body.couple_id === me.couple_id
+          : author !== undefined
+            ? body.couple_id === me.couple_id && (author === me.partner_id || !!existing)
+            : this.canWrite(tableName, body, me)
       // resolution=ignore-duplicates: ON CONFLICT DO NOTHING (o insert ainda passa no with check)
       if (insertOk && existing && /ignore-duplicates/.test(req.headers()['prefer'] ?? '')) return json(201, null)
       if (!insertOk || (existing && !this.canWrite(tableName, existing, me))) {
