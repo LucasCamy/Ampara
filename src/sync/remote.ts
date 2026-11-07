@@ -192,12 +192,16 @@ export function fromRow(collection: CollectionName, row: Record<string, unknown>
   return { entity: out, deleted: row.deleted === true, syncedAt: String(row.synced_at ?? '') }
 }
 
-export async function upsertRow(cfg: RemoteConfig, token: string, collection: CollectionName, row: Record<string, unknown>) {
+/**
+ * `onlyCreate`: grava só se a linha ainda não existe (ON CONFLICT DO NOTHING). Usado no perfil do par:
+ * quem criou o espaço sobe o perfil dele(a) na primeira vez; depois só o próprio par altera (profiles_update).
+ */
+export async function upsertRow(cfg: RemoteConfig, token: string, collection: CollectionName, row: Record<string, unknown>, onlyCreate = false) {
   const conflict = PER_PERSON.has(collection) ? '?on_conflict=couple_id,id' : ''
   await call(cfg, `/rest/v1/${TABLES[collection]}${conflict}`, {
     method: 'POST',
     token,
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    headers: { Prefer: `resolution=${onlyCreate ? 'ignore' : 'merge'}-duplicates,return=minimal` },
     body: JSON.stringify(row),
   })
 }

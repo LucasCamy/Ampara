@@ -1,5 +1,6 @@
 /* Ampara service worker: app shell offline (network-first para navegação, cache-first para assets) */
-const CACHE = 'ampara-v4'
+// v5: o activate apaga o cache antigo, que podia ter respostas da API guardadas
+const CACHE = 'ampara-v5'
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon.svg', '/theme-init.js'])).then(() => self.skipWaiting()))
 })
@@ -14,6 +15,9 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== location.origin) return
   // versão e o próprio service worker sempre da rede: é assim que o app instalado descobre a versão nova
   if (url.pathname === '/version.json' || url.pathname === '/sw.js') return
+  // API da nuvem (mesma origem atrás do gateway) nunca passa pelo cache: são dados do casal em texto claro e
+  // uma resposta guardada travaria o pull (mesma URL com o mesmo cursor) e a limpeza de cópias sem autorização
+  if (url.pathname.startsWith('/rest/') || url.pathname.startsWith('/auth/') || req.headers.has('authorization')) return
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)

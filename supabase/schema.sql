@@ -144,11 +144,15 @@ create table if not exists nudges (
 );
 
 -- Helpers de identidade
-create or replace function my_couple_id() returns text language sql stable security definer as $$
+create or replace function my_couple_id() returns text language sql stable security definer set search_path = public as $$
   select couple_id from couple_members where user_id = auth.uid()
 $$;
-create or replace function my_partner_id() returns text language sql stable security definer as $$
+create or replace function my_partner_id() returns text language sql stable security definer set search_path = public as $$
   select partner_id from couple_members where user_id = auth.uid()
+$$;
+-- A pessoa já entrou na nuvem? Antes disso quem criou o espaço ainda cuida do perfil dela (primeira subida).
+create or replace function partner_joined(p_couple_id text, p_partner_id text) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from couple_members where couple_id = p_couple_id and partner_id = p_partner_id)
 $$;
 
 -- RLS: tudo restrito ao próprio casal
@@ -160,10 +164,30 @@ begin
   end loop;
 end $$;
 
+-- Espaço: os dois leem e ajustam a divisão; ninguém apaga pela API (o cascade levaria os dados dos dois).
+-- Criar é pela RPC create_couple; couples_insert existe só porque o app sobe o espaço por upsert (ON CONFLICT
+-- DO UPDATE também passa pelo with check do insert). Como o vínculo exige a linha, ela sempre já existe.
 drop policy if exists couple_rw on couples;
-create policy couple_rw on couples for all using (id = my_couple_id()) with check (id = my_couple_id());
+drop policy if exists couples_read on couples;
+drop policy if exists couples_insert on couples;
+drop policy if exists couples_update on couples;
+create policy couples_read on couples for select using (id = my_couple_id());
+create policy couples_insert on couples for insert with check (id = my_couple_id());
+create policy couples_update on couples for update using (id = my_couple_id()) with check (id = my_couple_id());
+-- Perfis: o par lê, mas cada pessoa só altera o próprio (share_personal_finances libera tx_read, então
+-- o par não pode abrir a aba pessoal de ninguém). Exceção: antes do par entrar, quem criou o espaço sobe e
+-- ajusta o perfil dele(a). Criar uma linha que ainda não existe é livre dentro do casal: o aparelho de quem
+-- criou o espaço reenvia o perfil do par com ON CONFLICT DO NOTHING, e no Postgres o with check do insert vale
+-- mesmo quando o conflito descarta a linha. Uma linha já existente nunca muda por insert. Sem política de delete.
 drop policy if exists couple_rw on profiles;
-create policy couple_rw on profiles for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+drop policy if exists profiles_read on profiles;
+drop policy if exists profiles_insert on profiles;
+drop policy if exists profiles_update on profiles;
+create policy profiles_read on profiles for select using (couple_id = my_couple_id());
+create policy profiles_insert on profiles for insert with check (couple_id = my_couple_id());
+create policy profiles_update on profiles for update
+  using (couple_id = my_couple_id() and (id = my_partner_id() or not partner_joined(couple_id, id)))
+  with check (couple_id = my_couple_id() and (id = my_partner_id() or not partner_joined(couple_id, id)));
 -- events e medication_logs têm políticas próprias mais abaixo (privacidade); a antiga "couple_rw" sai
 drop policy if exists couple_rw on events;
 drop policy if exists couple_rw on help_requests;
@@ -365,6 +389,8 @@ returns table (couple_id text, partner_id text) language sql stable security def
 $$;
 
 revoke all on function create_couple(text, text, integer), create_invite(text), join_couple(text), my_membership() from public, anon;
+revoke all on function partner_joined(text, text) from public, anon;
+grant execute on function partner_joined(text, text) to authenticated;
 grant execute on function create_couple(text, text, integer), create_invite(text), join_couple(text), my_membership() to authenticated;
 
 -- Cursor de pull carimbado pelo servidor: relógios diferentes entre aparelhos não fazem perder alterações.

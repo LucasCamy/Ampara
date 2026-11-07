@@ -353,6 +353,25 @@ export async function changeMyPassword(current: string, next: string) {
 }
 
 /** Apaga o espaço deste aparelho. Exige a senha de novo (confirmação forte). */
+/**
+ * Tira do Cache Storage qualquer resposta da API (o service worker antigo guardava, em texto claro).
+ * O app (HTML, JS, ícones) fica, para continuar abrindo offline.
+ */
+async function purgeApiCache() {
+  if (typeof caches === 'undefined') return
+  try {
+    for (const name of await caches.keys()) {
+      const c = await caches.open(name)
+      for (const req of await c.keys()) {
+        const path = new URL(req.url).pathname
+        if (path.startsWith('/rest/') || path.startsWith('/auth/')) await c.delete(req)
+      }
+    }
+  } catch {
+    // sem Cache Storage (modo privado): nada a limpar
+  }
+}
+
 export async function wipeDevice(password: string) {
   const who = authStore.get().who
   const v = loadVault()
@@ -362,6 +381,7 @@ export async function wipeDevice(password: string) {
   localStorage.removeItem(VAULT_KEY)
   localStorage.removeItem(ATTEMPTS_KEY)
   localStorage.removeItem('ampara:prefs')
+  await purgeApiCache()
   await forgetSession()
   vault = null
   closeSession(null)

@@ -32,7 +32,7 @@ begin
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences');
+     and tablename in ('couples','profiles','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
 \echo 'ok  estrutura: 24 tabelas, RLS ligado em todas, 9 funções'
@@ -121,6 +121,28 @@ do $$ begin
   assert (select description from transactions) = 'Supermercado', 'FALHOU: lançamento visível errado';
 end $$;
 \echo 'ok  aba pessoal fechada: ela vê 1 de 3 lançamentos (só o do casal)'
+
+-- perfil e espaço: ela não abre a aba pessoal do Lucas nem apaga o casal
+do $$ declare n int; begin
+  update profiles set share_personal_finances = true, display_name = 'mexido' where id = 'A';
+  get diagnostics n = row_count;
+  assert n = 0, 'FALHOU: ela alterou o perfil do Lucas';
+  assert (select count(*) from transactions) = 1, 'FALHOU: ela abriu a aba pessoal do Lucas pelo perfil';
+  insert into profiles (id, couple_id, display_name, pronoun, energy, share_personal_finances)
+    values ('A', 'space-teste', 'x', 'ele', 'FULL', true) on conflict (couple_id, id) do nothing;
+  assert (select share_personal_finances from profiles where id = 'A') = false, 'FALHOU: insert mudou o perfil do Lucas';
+  update profiles set energy = 'OVERLOAD' where id = 'B';
+  get diagnostics n = row_count;
+  assert n = 1, 'FALHOU: ela não conseguiu mudar o próprio perfil';
+  update profiles set energy = 'MEDIUM' where id = 'B';
+  delete from couples where id = 'space-teste';
+  delete from profiles where id = 'A';
+  assert (select count(*) from couples) = 1 and (select count(*) from profiles) = 2, 'FALHOU: ela apagou o espaço ou um perfil';
+  update couples set ratio_a_bps = 5000 where id = 'space-teste';
+  get diagnostics n = row_count;
+  assert n = 1, 'FALHOU: ela não conseguiu ajustar a divisão do casal';
+end $$;
+\echo 'ok  perfil do Lucas não muda pelo aparelho dela (aba pessoal fica fechada); o espaço não é apagado pela API'
 
 -- tarefa privada do Lucas some; tarefa do casal aparece
 do $$ declare n int; begin

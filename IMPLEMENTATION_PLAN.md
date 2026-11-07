@@ -37,6 +37,20 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 21 (2026-11-07): correções de segurança da análise
+
+- **Perfil e espaço no banco:** `couples` e `profiles` saíram do "for all". O par não altera mais o perfil do outro
+  (antes conseguia abrir a aba pessoal ligando `share_personal_finances`) nem apaga o espaço (o cascade apagava tudo).
+  Exceção: antes do par entrar, quem criou o espaço ainda sobe o perfil dele(a) (`partner_joined`). O app reenvia
+  o perfil do par só para criar (`resolution=ignore-duplicates`). Espelhado em `e2e/fake-supabase.ts`, com caso novo
+  no `validate.sql`, que agora também proíbe "for all" nas duas tabelas. `my_couple_id`/`my_partner_id` ganharam
+  `set search_path`.
+- **Service worker:** a API (`/rest/`, `/auth/`, pedidos com `Authorization`) não passa mais pelo cache. Em
+  produção ela fica na mesma origem do app, então as respostas iam para o Cache Storage em texto claro e o pull
+  podia receber sempre a mesma resposta guardada. O cache sobe para `ampara-v5` e "Apagar dados" limpa o que sobrou.
+- Pendente: E2E com a nuvem na mesma origem do app (hoje os testes usam outra origem), HSTS e `real_ip` no
+  `nginx-prod.conf`.
+
 ## Iteração 20 (2026-11-06): Hoje enxuto, PWA, agenda única e acabamento
 
 - **Cuidados:** a aba "Remédios" passa a se chamar Cuidados (remédios, rotinas, rede de apoio, ciclo).
@@ -365,7 +379,7 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 - **Alarmes nativos do iOS:** (Web Push na iteração 16 cobre o caso com internet) um PWA não agenda notificação local `time-sensitive` offline. O contador de 5 min roda
   com o app aberto. Para alarmes reais na tela bloqueada, migrar a camada de UI/domínio para Expo (o domínio em
   `src/domain` é puro e reaproveitável).
-- **Supabase:** adaptador e schema prontos, não conectados (sem credenciais nesta sessão). O pareamento é simulado
-  com código de convite local.
+- **Supabase:** conectado desde as iterações 16 a 19 (self-hosted no cluster, validado no Docker). Falta um E2E com
+  a nuvem na mesma origem do app, como em produção.
 - **IndexedDB vs. limpeza do Safari:** (mitigado pelo backup cifrado da iteração 15) iOS pode limpar armazenamento de sites pouco usados; instalar na Tela de
   Início reduz o risco. Sync com Supabase resolve de vez.

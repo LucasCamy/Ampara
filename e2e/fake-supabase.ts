@@ -103,6 +103,8 @@ export class FakeSupabase {
   private canWrite(table: string, row: Row, m: Member): boolean {
     if (table === 'couples') return row.id === m.couple_id
     if (row.couple_id !== m.couple_id) return false
+    // profiles_update: só o próprio perfil, ou o do par antes de ele(a) entrar na nuvem
+    if (table === 'profiles') return row.id === m.partner_id || !this.members.some((x) => x.couple_id === m.couple_id && x.partner_id === row.id)
     if (table === 'transactions' || table === 'recurrences') return row.scope === 'COUPLE' || row.created_by === m.partner_id
     if (table === 'medications' || table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
     if (table === 'medication_logs' || table === 'tasks') return this.canRead(table, row, m)
@@ -222,7 +224,9 @@ export class FakeSupabase {
       const key = keyOf(body)
       const existing = t.get(key)
       // upsert: a linha nova passa no with check; a que já existe precisa passar no using do update
-      const insertOk = tableName === 'tasks' ? body.couple_id === me.couple_id : this.canWrite(tableName, body, me)
+      const insertOk = tableName === 'tasks' || tableName === 'profiles' ? body.couple_id === me.couple_id : this.canWrite(tableName, body, me)
+      // resolution=ignore-duplicates: ON CONFLICT DO NOTHING (o insert ainda passa no with check)
+      if (insertOk && existing && /ignore-duplicates/.test(req.headers()['prefer'] ?? '')) return json(201, null)
       if (!insertOk || (existing && !this.canWrite(tableName, existing, me))) {
         return json(403, { code: '42501', message: 'new row violates row-level security policy' })
       }

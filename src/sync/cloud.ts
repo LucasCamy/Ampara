@@ -145,7 +145,11 @@ export const cloudAdapter: SyncAdapter = {
       if (missingTables.has(e.entityType)) continue
       try {
         if (e.operation === 'DELETE') await softDelete(cfg, token, e.entityType, e.entityId, space)
-        else await upsertRow(cfg, token, e.entityType, toRow(e.entityType, e.payload, space))
+        else {
+          // perfil do par: só cria se ainda não existe; alterar é com o aparelho do par (profiles_update)
+          const partnerProfile = e.entityType === 'profiles' && (e.payload as { id?: string } | null)?.id !== authStore.get().who
+          await upsertRow(cfg, token, e.entityType, toRow(e.entityType, e.payload, space), partnerProfile)
+        }
         accepted.push(e.id)
       } catch (err) {
         if (!(err instanceof RemoteError) || err.code === 'network' || err.status === 401) break
