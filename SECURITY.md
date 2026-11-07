@@ -124,6 +124,9 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   chega o cloudflared. Ensaiado com o nginx real: o mesmo visitante recebe 429 depois de 21 pedidos, outro
   visitante segue entrando e o log mostra o IP de verdade. Limite: quem está na rede local e acessa a porta 8217
   direto pode mandar o cabeçalho; a porta do LoadBalancer não deve ficar aberta para a internet.
+  IPv4 conta por endereço e IPv6 pelo bloco /64 (a operadora entrega um /64 a cada cliente; trocar o final do
+  endereço não escapa do limite). Ensaiado: 30 endereços do mesmo /64 dividem um limite, outro /64 segue livre,
+  e as formas com "::" e por extenso do mesmo bloco caem na mesma conta.
 - **HSTS** (`max-age=31536000`, sem `includeSubDomains`) no gateway; o navegador só aceita por HTTPS.
 - **Backup diário** do banco (CronJob `ampara-backup`, 14 dias) e restauração ensaiada num banco novo
   (`npm run backup:check`). Procedimento em `docs/BACKUP.md`. Limitação: o volume do backup fica no mesmo nó.
