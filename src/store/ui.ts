@@ -65,8 +65,26 @@ uiStore.subscribe(() => {
   } catch {
     /* armazenamento indisponível: preferências ficam só na sessão */
   }
-  document.documentElement.dataset.theme = s.theme
+  applyTheme(s.theme)
 })
+
+let appliedTheme: Theme | null = null
+/**
+ * Aplica o tema do app (não o do sistema) e pinta a barra de status com o fundo do próprio tema:
+ * o theme-color do index.html segue o sistema e deixava o topo claro com o app no escuro.
+ */
+export function applyTheme(theme: Theme) {
+  if (theme === appliedTheme) return
+  appliedTheme = theme
+  const root = document.documentElement
+  root.dataset.theme = theme
+  const bg = getComputedStyle(root).getPropertyValue('--bg').trim()
+  if (!bg) return
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
+    m.removeAttribute('media')
+    m.content = bg
+  })
+}
 
 export const useUi = <S>(sel: (s: UiState) => S) => useStore(uiStore, sel)
 

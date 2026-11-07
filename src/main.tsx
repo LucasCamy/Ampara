@@ -13,11 +13,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { startClocks } from './store/clock'
-import { uiStore } from './store/ui'
+import { applyTheme, uiStore } from './store/ui'
 import { startSync } from './sync/engine'
 import { startAuth } from './auth/session'
 
-document.documentElement.dataset.theme = uiStore.get().theme
+applyTheme(uiStore.get().theme)
 startClocks()
 startSync()
 startUpdateChecks()

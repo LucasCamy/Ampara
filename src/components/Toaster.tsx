@@ -23,9 +23,9 @@ export function Toaster() {
               initial={{ transform: 'translateY(-120%)', opacity: 0 }}
               animate={{ transform: 'translateY(0%)', opacity: 1, transition: { duration: reduce ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] } }}
               exit={{ opacity: 0, transition: { duration: reduce ? 0 : 0.17 } }}
-              className="pointer-events-auto flex w-full max-w-[520px] items-center gap-3 rounded-[18px] bg-night py-2 pr-2 pl-4 text-on-night shadow-float"
+              className="pointer-events-auto flex w-full max-w-[520px] items-center gap-3 rounded-[18px] border border-line-strong bg-surface py-2 pr-2 pl-4 text-ink shadow-float"
             >
-              <Icon size={18} aria-hidden className="shrink-0" />
+              <Icon size={18} aria-hidden className={cx('shrink-0', t.tone === 'warn' ? 'text-warn' : t.tone === 'info' ? 'text-muted' : 'text-ok')} />
               <p className="min-w-0 flex-1 text-[14px] leading-snug font-medium"><MoneyText>{t.message}</MoneyText></p>
               {t.undo ? (
                 <button
@@ -34,7 +34,7 @@ export function Toaster() {
                     t.undo?.()
                     ui.dismissToast(t.id)
                   }}
-                  className={cx('press inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[12px] px-3 text-[14px] font-bold underline-offset-4 hover:underline')}
+                  className={cx('press inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[12px] px-3 text-[14px] font-bold text-action underline-offset-4 hover:underline')}
                 >
                   <Undo2 size={16} aria-hidden />
                   Desfazer
@@ -44,7 +44,7 @@ export function Toaster() {
                 type="button"
                 onClick={() => ui.dismissToast(t.id)}
                 aria-label="Fechar aviso"
-                className="press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] opacity-80"
+                className="press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] text-muted"
               >
                 <X size={18} aria-hidden />
               </button>
