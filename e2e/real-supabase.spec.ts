@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { expect, goTab, noHorizontalOverflow, open, skipTour, test } from './fixtures'
+import { expect, goTab, noHorizontalOverflow, open, skipTour, test, goSettings } from './fixtures'
 
 /**
  * Dois aparelhos contra o Supabase real do Docker. Confere a interface E o que ficou gravado no Postgres.
@@ -35,7 +35,7 @@ test('Supabase real: cria conta, sobe os dados, pareia o segundo aparelho e resp
   await sheet.getByTestId('expense-save').click()
   await expect(sheet).toBeHidden()
 
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'nuvem')
   await page.getByTestId('cloud-email').fill(emailA)
   await page.getByTestId('cloud-password').fill(PW_CLOUD_A)
   await page.getByTestId('cloud-submit').click()
@@ -101,7 +101,7 @@ test('Supabase real: cria conta, sobe os dados, pareia o segundo aparelho e resp
     .poll(() => sql(`select created_by || ':' || amount_cents || ':' || scope from transactions where couple_id = ${lit(couple)} and description = 'Pizza de sexta'`), { timeout: 20_000 })
     .toBe('B:8000:COUPLE')
 
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'nuvem')
   await page.getByTestId('cloud-sync').click()
   await goTab(page, 'financas')
   await page.getByTestId('fin-US').click()
@@ -110,7 +110,7 @@ test('Supabase real: cria conta, sobe os dados, pareia o segundo aparelho e resp
   // ---- Aba pessoal do Lucas: começa aberta (exemplo), ele fecha e depois reabre
   const shareA = () => sql(`select share_personal_finances from profiles where couple_id = ${lit(couple)} and id = 'A'`)
   const syncB = async () => {
-    await goTab(b, 'ajustes')
+    await goSettings(b, 'nuvem')
     await b.getByTestId('cloud-sync').click()
     await goTab(b, 'financas')
     await b.getByTestId('fin-PARTNER').click()

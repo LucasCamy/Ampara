@@ -66,7 +66,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
 
   return (
     <section className="module p-4 sm:p-5" aria-labelledby="seguranca">
-      <SectionHeader id="seguranca" title="Segurança" rest="· acesso deste aparelho" />
+      <SectionHeader id="seguranca" title="Segurança" rest="· deste aparelho" />
       <ul className="mb-4 flex flex-col gap-1.5 text-[13px] text-muted">
         <li className="flex items-start gap-2">
           <ShieldCheck size={16} aria-hidden className="mt-0.5 shrink-0 text-action" /> Dados cifrados no aparelho (AES-256). A senha nunca é guardada.
@@ -76,7 +76,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           {remembered ? 'Conectado por até 14 dias neste aparelho. Bloquear encerra isso.' : 'Bloqueia sozinho após 15 min sem uso.'}
         </li>
       </ul>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
         <Button size="sm" variant="quiet" icon={Lock} onClick={() => void lock()}>
           Bloquear agora
         </Button>
@@ -153,7 +153,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           >
             <p className="text-[14px] font-semibold text-ink">Apagar o espaço do casal deste aparelho? Não dá para desfazer.</p>
             <PwInput label="Confirme com sua senha" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
               <Button type="submit" variant="secondary" className="border-err text-err" busy={busy}>
                 Apagar tudo deste aparelho
               </Button>

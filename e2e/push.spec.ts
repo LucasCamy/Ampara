@@ -1,4 +1,4 @@
-import { expect, goTab, noHorizontalOverflow, open, shot, test } from './fixtures'
+import { expect, noHorizontalOverflow, open, shot, test, goSettings } from './fixtures'
 import { FakeSupabase } from './fake-supabase'
 
 /**
@@ -36,7 +36,7 @@ test('lembretes no celular: pede nuvem, ativa com a chave do servidor, detalhes 
   await server.attach(page.context())
   await open(page)
 
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'nuvem')
   const section = page.getByTestId('push-section')
   await expect(section.getByTestId('push-needs-cloud')).toBeVisible()
 

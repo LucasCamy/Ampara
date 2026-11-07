@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { expect, goTab, noHorizontalOverflow, open, PASSWORDS, test, skipTour } from './fixtures'
+import { expect, goTab, noHorizontalOverflow, open, PASSWORDS, test, skipTour, goSettings } from './fixtures'
 
 test('backup cifrado: baixar com a senha, restaurar num celular novo e entrar', async ({ browser, page, errors }, info) => {
   void errors
@@ -13,7 +13,7 @@ test('backup cifrado: baixar com a senha, restaurar num celular novo e entrar', 
   await page.getByTestId('shopping-input').press('Enter')
   await expect(page.locator('[data-testid="shop-row"][data-title="Pilhas AA"]')).toHaveCount(1)
 
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'aparelho')
   const section = page.getByTestId('backup-section')
   await section.getByTestId('backup-export-open').click()
   await section.getByTestId('backup-password').fill('senha errada qualquer')

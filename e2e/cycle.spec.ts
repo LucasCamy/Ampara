@@ -1,4 +1,4 @@
-import { at, expect, goTab, noHorizontalOverflow, open, setViewer, shot, test, skipTour } from './fixtures'
+import { at, expect, goTab, noHorizontalOverflow, open, setViewer, shot, test, skipTour, goSettings } from './fixtures'
 import { FakeSupabase } from './fake-supabase'
 
 /**
@@ -81,7 +81,7 @@ test('ciclo na nuvem: o servidor só entrega o que a dona liberou', async ({ bro
 
   // ---- Aparelho do Lucas conecta (os dados de exemplo dela não sobem deste aparelho)
   await open(page)
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'nuvem')
   await page.getByTestId('cloud-email').fill('lucas@exemplo.com')
   await page.getByTestId('cloud-password').fill('cafe com pao na varanda')
   await page.getByTestId('cloud-submit').click()
@@ -124,7 +124,7 @@ test('ciclo na nuvem: o servidor só entrega o que a dona liberou', async ({ bro
 
   // ---- Lucas sincroniza: vê a fase dela
   const sync = async () => {
-    await goTab(page, 'ajustes')
+    await goSettings(page, 'nuvem')
     await page.getByTestId('cloud-sync').click()
     await expect(page.locator('[data-testid="sync-pill"]:visible')).toHaveAttribute('data-state', 'ok', { timeout: 20_000 })
   }

@@ -1,4 +1,4 @@
-import { expect, goTab, open, PASSWORDS, test } from './fixtures'
+import { expect, goTab, open, PASSWORDS, test, goSettings } from './fixtures'
 
 const fireSwMessage = () => (u: string) =>
   navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: { type: 'OPEN_URL', url: u } }))
@@ -11,7 +11,7 @@ test('atualização do app instalado: avisa a versão nova e recarrega; procurar
   await open(page)
 
   // versão atual = a do build; o servidor ainda serve a mesma: nada de aviso, e o manual confirma
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'aparelho')
   const current = (await page.getByTestId('app-version').textContent())?.trim() ?? ''
   expect(current).toMatch(/^\d{12}-[a-z0-9]{1,4}$/)
   served = current

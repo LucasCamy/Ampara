@@ -68,3 +68,46 @@ test('no computador a gaveta é diálogo: arrastar não fecha', async ({ page, e
   await page.waitForTimeout(300)
   await expect(sheet).toBeVisible()
 })
+
+/** Toque de verdade (CDP), como o dedo no celular: touchstart, touchmove em ritmo de dedo, touchend. */
+async function touchDrag(page: Page, from: { x: number; y: number }, dy: number, steps = 10, msPerStep = 30) {
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] })
+  for (let i = 1; i <= steps; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from.x, y: from.y + (dy * i) / steps }] })
+    await page.waitForTimeout(msPerStep)
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await cdp.detach()
+}
+
+test('gaveta no celular com toque: alça e conteúdo no topo fecham, pouco volta', async ({ page, errors }, info) => {
+  void errors
+  test.skip(!info.project.name.startsWith('mobile') && !info.project.name.startsWith('iphone'), 'gesto de gaveta é do celular')
+  test.skip(info.project.name.endsWith('light') && !info.project.name.startsWith('iphone'), 'um projeto de toque por largura basta')
+  await open(page)
+  const sheet = page.getByTestId('sheet-task')
+  const centerOf = async (testId: string, dy = 10) => {
+    const b = (await page.getByTestId(testId).boundingBox())!
+    return { x: b.x + b.width / 2, y: b.y + dy }
+  }
+
+  // pouco pela alça: volta
+  await quick(page, 'task')
+  await page.waitForTimeout(350)
+  await touchDrag(page, await centerOf('sheet-grab'), 30, 6)
+  await page.waitForTimeout(350)
+  await expect(sheet).toBeVisible()
+  expect(Math.abs(await translateY(page))).toBeLessThan(1)
+
+  // longe pela alça: fecha
+  await touchDrag(page, await centerOf('sheet-grab'), 300)
+  await expect(sheet).toBeHidden()
+
+  // pelo conteúdo (lista no topo), puxando para baixo: fecha
+  await quick(page, 'task')
+  await page.waitForTimeout(350)
+  const label = (await sheet.getByText('O que precisa ser feito?').boundingBox())!
+  await touchDrag(page, { x: label.x + 20, y: label.y + 5 }, 300)
+  await expect(sheet).toBeHidden()
+})

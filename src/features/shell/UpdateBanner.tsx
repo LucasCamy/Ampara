@@ -1,4 +1,4 @@
-import { RefreshCw, Sparkles } from 'lucide-react'
+import { RefreshCw, Sparkles, BookOpen } from 'lucide-react'
 import { useState } from 'react'
 import { Button, SectionHeader } from '../../components/ui'
 import { ui } from '../../store/ui'
@@ -36,7 +36,7 @@ export function AboutSection() {
   const { current, available, checking, lastCheckedAt } = useUpdate((s) => s)
   return (
     <section className="module p-4 sm:p-5" aria-labelledby="sobre" data-testid="about-section">
-      <SectionHeader id="sobre" title="Sobre este app" rest="· versão e atualização" />
+      <SectionHeader id="sobre" title="Sobre o app" rest="· versão" />
       <p className="text-[14px] text-muted">
         Versão <span className="font-data text-ink" data-testid="app-version">{current}</span>
         {lastCheckedAt ? (
@@ -47,10 +47,7 @@ export function AboutSection() {
         ) : null}
       </p>
       <p className="mt-1 text-[13px] text-muted">O app confere sozinho ao abrir e ao voltar para ele. Atualizar não apaga nada: os dados ficam no aparelho.</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="ghost" onClick={() => ui.openSheet('tour')} data-testid="tour-again">
-          Rever a apresentação
-        </Button>
+      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
         {available ? (
           <Button variant="primary" icon={RefreshCw} onClick={() => void applyUpdate()} data-testid="about-apply">
             Atualizar agora
@@ -69,6 +66,9 @@ export function AboutSection() {
             Procurar atualização
           </Button>
         )}
+        <Button variant="quiet" icon={BookOpen} onClick={() => ui.openSheet('tour')} data-testid="tour-again">
+          Rever a apresentação
+        </Button>
       </div>
     </section>
   )

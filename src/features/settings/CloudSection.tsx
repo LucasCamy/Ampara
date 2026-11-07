@@ -121,7 +121,7 @@ export function CloudSection() {
               <span className="font-data font-semibold">{inviteCode}</span>.
             </p>
           ) : null}
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2 sm:flex sm:flex-wrap">
             <Button size="sm" variant="quiet" icon={RefreshCw} onClick={() => void syncNow()} data-testid="cloud-sync">
               Sincronizar agora
             </Button>

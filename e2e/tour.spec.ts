@@ -1,4 +1,4 @@
-import { expect, goTab, noHorizontalOverflow, open, setViewer, shot, test } from './fixtures'
+import { expect, noHorizontalOverflow, open, setViewer, shot, test, goSettings } from './fixtures'
 
 test('apresentação: uma vez por pessoa, 5 passos, privacidade com o nome do par e rever em Ajustes', async ({ page, errors }, info) => {
   void errors
@@ -33,7 +33,7 @@ test('apresentação: uma vez por pessoa, 5 passos, privacidade com o nome do pa
   await expect(page.getByTestId('tour')).toBeHidden()
 
   // rever quando quiser
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'aparelho')
   await page.getByTestId('tour-again').click()
   await expect(page.getByTestId('tour')).toBeVisible()
 })

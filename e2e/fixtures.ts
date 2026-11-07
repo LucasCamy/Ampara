@@ -60,6 +60,12 @@ export const goTab = (page: Page, tab: 'hoje' | 'agenda' | 'nos' | 'rotinas' | '
     ? page.locator('[data-testid="side-ajustes"]:visible, button[aria-label="Ajustes e atalhos do iPhone"]:visible').first().click()
     : visible(page, `nav-${tab}`, `side-${tab}`).click()
 
+/** Ajustes é dividido em grupos (Casal, Nuvem, Aparelho, Atalhos) */
+export async function goSettings(page: Page, group: 'casal' | 'nuvem' | 'aparelho' | 'atalhos') {
+  await goTab(page, 'ajustes')
+  await page.getByTestId(`settings-group-${group}`).click()
+}
+
 /** Trocar de pessoa exige autenticar a outra pessoa (primeiro acesso usa o convite) */
 export async function setViewer(page: Page, who: 'A' | 'B') {
   const radio = visible(page, `viewer-${who}`)

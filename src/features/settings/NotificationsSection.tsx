@@ -31,7 +31,7 @@ export function NotificationsSection() {
 
   return (
     <section className="module p-4 sm:p-5" aria-labelledby="lembretes" data-testid="push-section">
-      <SectionHeader id="lembretes" title="Lembretes no celular" rest="· mesmo com a tela bloqueada" />
+      <SectionHeader id="lembretes" title="Lembretes" rest="· na tela bloqueada" />
       <p className="text-[14px] text-muted">
         Remédio na hora, “pegou a água?” depois de 5 min, aviso quando o remédio do par atrasa (rede de apoio) e pedido de ajuda.
       </p>
@@ -70,12 +70,12 @@ export function NotificationsSection() {
                 label="Mostrar o nome do remédio"
                 description="Desligado, a tela bloqueada diz só “Hora do seu remédio”. Quem pegar o celular não vê o que você toma."
               />
-              <Button variant="secondary" icon={BellOff} busy={busy} onClick={() => void run(disablePush, 'Lembretes desligados neste aparelho')} data-testid="push-disable" className="self-start">
+              <Button variant="secondary" icon={BellOff} busy={busy} onClick={() => void run(disablePush, 'Lembretes desligados neste aparelho')} data-testid="push-disable" className="w-full sm:w-auto sm:self-start">
                 Desligar neste aparelho
               </Button>
             </>
           ) : (
-            <Button variant="primary" icon={BellRing} busy={busy} onClick={() => void run(enablePush, 'Lembretes ativados neste aparelho')} data-testid="push-enable" className="self-start">
+            <Button variant="primary" icon={BellRing} busy={busy} onClick={() => void run(enablePush, 'Lembretes ativados neste aparelho')} data-testid="push-enable" className="w-full sm:w-auto sm:self-start">
               {busy ? 'Ativando...' : 'Ativar lembretes'}
             </Button>
           )}

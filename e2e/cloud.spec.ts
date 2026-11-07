@@ -1,4 +1,4 @@
-import { expect, goTab, noHorizontalOverflow, open, shot, test, skipTour } from './fixtures'
+import { expect, goTab, noHorizontalOverflow, open, shot, test, skipTour, goSettings } from './fixtures'
 import { FakeSupabase } from './fake-supabase'
 
 // Dois aparelhos (dois contextos isolados) falando com o mesmo Supabase simulado
@@ -26,7 +26,7 @@ test('nuvem: cada um no seu celular, com sync e privacidade aplicada pelo servid
   await sheet.getByTestId('expense-save').click()
   await expect(sheet).toBeHidden()
 
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'nuvem')
   await page.getByTestId('cloud-email').fill('lucas@exemplo.com')
   await page.getByTestId('cloud-password').fill('cafe com pao na varanda')
   await page.getByTestId('cloud-submit').click()
@@ -84,7 +84,7 @@ test('nuvem: cada um no seu celular, com sync e privacidade aplicada pelo servid
   const rows = (t: string) => [...(server.tables.get(t)?.values() ?? [])]
   await expect.poll(() => rows('transactions').some((r) => r.description === 'Pizza de sexta'), { timeout: 20_000 }).toBe(true)
 
-  await goTab(b, 'ajustes')
+  await goSettings(b, 'nuvem')
   await expect(b.getByTestId('cloud-section')).toContainText('Conectado como ela@exemplo.com')
   await b.getByTestId('cloud-sync').click()
   await goTab(b, 'financas')
@@ -96,7 +96,7 @@ test('nuvem: cada um no seu celular, com sync e privacidade aplicada pelo servid
   await page.getByTestId('fin-MINE').click()
   await page.getByTestId('share-toggle').click()
   await expect.poll(() => rows('profiles').find((r) => r.id === 'A')?.share_personal_finances, { timeout: 20_000, message: 'falhas: ' + server.failures.join(' | ') }).toBe(false)
-  await goTab(b, 'ajustes')
+  await goSettings(b, 'nuvem')
   await expect(b.getByTestId('cloud-section')).toContainText('Conectado como ela@exemplo.com')
   await b.getByTestId('cloud-sync').click()
   await goTab(b, 'financas')
@@ -116,7 +116,7 @@ test('nuvem: cada um no seu celular, com sync e privacidade aplicada pelo servid
   await ev.getByTestId('event-save').click()
   await expect(ev).toBeHidden()
   await expect.poll(() => rows('events').find((r) => r.title === 'Jantar com a família')?.owner_id, { timeout: 20_000, message: 'falhas: ' + server.failures.join(' | ') }).toBe('A')
-  await goTab(b, 'ajustes')
+  await goSettings(b, 'nuvem')
   await b.getByTestId('cloud-sync').click()
   await goTab(b, 'agenda')
   await expect(jantarB).toHaveCount(0, { timeout: 15_000 })

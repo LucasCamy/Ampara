@@ -1,4 +1,4 @@
-import { at, expect, goTab, open, PASSWORDS, setViewer, shot, skipTour, test } from './fixtures'
+import { at, expect, open, PASSWORDS, setViewer, shot, skipTour, test, goSettings } from './fixtures'
 
 // Fluxos de acesso: roda em um celular e um desktop (os demais tamanhos já passam pelo login nos outros testes)
 // eslint-disable-next-line no-empty-pattern -- o Playwright exige desestruturar as fixtures
@@ -43,7 +43,7 @@ test.describe('Autenticação e segurança', () => {
     void errors
     await at(page, '10:00')
     await open(page)
-    await goTab(page, 'ajustes')
+    await goSettings(page, 'aparelho')
     await page.getByRole('button', { name: 'Bloquear agora' }).click()
     await expect(page.getByTestId('login-form')).toBeVisible()
     await expect(page.getByText('Venvanse')).toHaveCount(0)
@@ -105,7 +105,7 @@ test.describe('Autenticação e segurança', () => {
     await skipTour(other)
     await other.goto('/')
     await expect(other.getByTestId('app')).toBeVisible({ timeout: 15_000 })
-    await goTab(page, 'ajustes')
+    await goSettings(page, 'aparelho')
     await page.getByRole('button', { name: 'Bloquear agora' }).click()
     await expect(other.getByTestId('login-form')).toBeVisible()
     await expect(other.getByText('Venvanse')).toHaveCount(0)

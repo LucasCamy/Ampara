@@ -1,4 +1,4 @@
-import { at, expect, goTab, noHorizontalOverflow, open, shot, test, skipTour } from './fixtures'
+import { at, expect, goTab, noHorizontalOverflow, open, shot, test, skipTour, goSettings } from './fixtures'
 import { FakeSupabase } from './fake-supabase'
 
 test('lista de compras: captura em uma linha, sem duplicar, carrinho e fim da compra', async ({ page, errors }, info) => {
@@ -59,7 +59,7 @@ test('lista de compras na nuvem: o que um adiciona aparece no celular do outro',
   const serverRows = () => [...(server.tables.get('shopping_items')?.values() ?? [])]
 
   await open(page)
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'nuvem')
   await page.getByTestId('cloud-email').fill('lucas@exemplo.com')
   await page.getByTestId('cloud-password').fill('cafe com pao na varanda')
   await page.getByTestId('cloud-submit').click()
@@ -88,7 +88,7 @@ test('lista de compras na nuvem: o que um adiciona aparece no celular do outro',
   await b.getByTestId('shopping-input').press('Enter')
   await expect.poll(() => serverRows().some((r) => r.title === 'Absorvente'), { timeout: 20_000 }).toBe(true)
 
-  await goTab(page, 'ajustes')
+  await goSettings(page, 'nuvem')
   await page.getByTestId('cloud-sync').click()
   await goTab(page, 'nos')
   const item = page.locator('[data-testid="shop-row"][data-title="Absorvente"]')
@@ -97,7 +97,7 @@ test('lista de compras na nuvem: o que um adiciona aparece no celular do outro',
   // ele pega no mercado, ela vê no carrinho
   await page.getByRole('checkbox', { name: 'Peguei: Absorvente' }).click()
   await expect.poll(() => serverRows().find((r) => r.title === 'Absorvente')?.checked, { timeout: 20_000 }).toBe(true)
-  await goTab(b, 'ajustes')
+  await goSettings(b, 'nuvem')
   await b.getByTestId('cloud-sync').click()
   await goTab(b, 'nos')
   await expect(b.getByTestId('shop-cart')).toContainText('Absorvente', { timeout: 15_000 })

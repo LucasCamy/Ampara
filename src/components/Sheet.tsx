@@ -97,6 +97,7 @@ function SheetFrame({ onClose, title, description, children, footer, testId }: S
    * conteúdo (não briga com a rolagem). Só transform e opacity, direto no elemento (compositor, regra 6).
    */
   const overlayRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{ y0: number; y: number; t: number; v: number; dy: number } | null>(null)
   const setDrag = (dy: number) => {
     const panel = panelRef.current
@@ -105,20 +106,27 @@ function SheetFrame({ onClose, title, description, children, footer, testId }: S
     panel.style.transform = `translateY(${dy}px)`
     overlay.style.opacity = String(Math.max(0, 1 - dy / Math.max(1, panel.offsetHeight)))
   }
-  const onDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (desktop || !present || e.button !== 0 || (e.target as HTMLElement).closest('button')) return
-    drag.current = { y0: e.clientY, y: e.clientY, t: performance.now(), v: 0, dy: 0 }
-    e.currentTarget.setPointerCapture(e.pointerId)
+  const beginDrag = (y: number) => {
+    drag.current = { y0: y, y, t: performance.now(), v: 0, dy: 0 }
   }
-  const onDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const moveDrag = (y: number) => {
     const d = drag.current
     if (!d) return
     const now = performance.now()
-    d.v = (e.clientY - d.y) / Math.max(1, now - d.t)
-    d.y = e.clientY
+    d.v = (y - d.y) / Math.max(1, now - d.t)
+    d.y = y
     d.t = now
-    d.dy = Math.max(0, e.clientY - d.y0) // só para baixo
+    d.dy = Math.max(0, y - d.y0) // só para baixo
     setDrag(d.dy)
+  }
+  // mouse e caneta (no toque o Safari do iPhone cancela pointer events; ali vale o bloco de touch abaixo)
+  const onDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch' || desktop || !present || e.button !== 0 || (e.target as HTMLElement).closest('button')) return
+    beginDrag(e.clientY)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'touch') moveDrag(e.clientY)
   }
   const onDragEnd = () => {
     const d = drag.current
@@ -143,6 +151,63 @@ function SheetFrame({ onClose, title, description, children, footer, testId }: S
     panel.style.transform = shown
     overlay.style.opacity = '1'
   }
+
+  /*
+   * Toque: eventos nativos com touchmove não passivo (preventDefault), o único jeito confiável no iOS.
+   * Na faixa de cima o arrasto começa na hora; no conteúdo, só se a lista já está no topo e o dedo desce
+   * mais na vertical do que na horizontal (assim rolar e as fileiras de chips continuam funcionando).
+   */
+  const touchApi = useRef({ beginDrag, moveDrag, onDragEnd, enabled: !desktop && present })
+  touchApi.current = { beginDrag, moveDrag, onDragEnd, enabled: !desktop && present }
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    let start: { x: number; y: number; grab: boolean } | null = null
+    const onStart = (e: TouchEvent) => {
+      const api = touchApi.current
+      const target = e.target as HTMLElement
+      if (!api.enabled || e.touches.length !== 1 || target.closest('button[aria-label="Fechar"], textarea, input[type=range], [data-no-drag]')) {
+        start = null
+        return
+      }
+      const t = e.touches[0]!
+      const grab = !!target.closest('[data-testid=sheet-grab]')
+      start = { x: t.clientX, y: t.clientY, grab }
+      if (grab) api.beginDrag(t.clientY)
+    }
+    const onMove = (e: TouchEvent) => {
+      const api = touchApi.current
+      const t = e.touches[0]
+      if (!start || !t) return
+      if (!drag.current) {
+        const dx = t.clientX - start.x
+        const dy = t.clientY - start.y
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+        const atTop = (scrollRef.current?.scrollTop ?? 0) <= 0
+        if (dy <= 0 || Math.abs(dy) < Math.abs(dx) || !atTop) {
+          start = null // é rolagem ou gesto lateral: deixa o navegador cuidar
+          return
+        }
+        api.beginDrag(start.y)
+      }
+      if (e.cancelable) e.preventDefault()
+      api.moveDrag(t.clientY)
+    }
+    const onEnd = () => {
+      start = null
+      if (drag.current) touchApi.current.onDragEnd()
+    }
+    panel.addEventListener('touchstart', onStart, { passive: true })
+    panel.addEventListener('touchmove', onMove, { passive: false })
+    panel.addEventListener('touchend', onEnd)
+    panel.addEventListener('touchcancel', onEnd)
+    return () => {
+      panel.removeEventListener('touchstart', onStart)
+      panel.removeEventListener('touchmove', onMove)
+      panel.removeEventListener('touchend', onEnd)
+      panel.removeEventListener('touchcancel', onEnd)
+    }
+  }, [])
 
   return (
     <div
@@ -175,8 +240,8 @@ function SheetFrame({ onClose, title, description, children, footer, testId }: S
           className="cursor-grab touch-none select-none active:cursor-grabbing lg:cursor-auto lg:touch-auto lg:select-auto"
           onPointerDown={onDragStart}
           onPointerMove={onDragMove}
-          onPointerUp={onDragEnd}
-          onPointerCancel={onDragEnd}
+          onPointerUp={(e) => e.pointerType !== 'touch' && onDragEnd()}
+          onPointerCancel={(e) => e.pointerType !== 'touch' && onDragEnd()}
           data-testid="sheet-grab"
         >
           <div aria-hidden className="flex justify-center pt-2.5 pb-1 lg:hidden">
@@ -199,7 +264,7 @@ function SheetFrame({ onClose, title, description, children, footer, testId }: S
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 lg:px-6">{children}</div>
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 lg:px-6">{children}</div>
         {footer ? <div className="safe-bottom border-t border-line px-5 pt-3 pb-4 lg:px-6">{footer}</div> : null}
       </motion.div>
     </div>

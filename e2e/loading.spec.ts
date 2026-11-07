@@ -31,7 +31,7 @@ test('aba carregando mostra esqueleto; depois de aberto, as abas funcionam sem i
     await goTab(p2, tab)
     await expect(p2.getByTestId('screen-skeleton')).toHaveCount(0)
   }
-  await expect(p2.getByTestId('about-section')).toBeVisible()
+  await expect(p2.getByTestId('settings-group-aparelho')).toBeVisible()
 
   // movimento reduzido: o esqueleto não pulsa
   const anim = await p2.evaluate(() => {

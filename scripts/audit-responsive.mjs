@@ -80,7 +80,7 @@ for (const w of WIDTHS) {
     if ((await p.evaluate(() => document.documentElement.dataset.theme)) !== scheme) report.push(`[${w}] não consegui trocar para o tema ${scheme}`)
     for (const tab of ['hoje', 'agenda', 'nos', 'rotinas', 'financas', 'ajustes']) {
       await p.evaluate((t) => (location.hash = '#/' + t), tab)
-      const views = tab === 'agenda' ? ['agenda-DAY', 'agenda-WEEK', 'agenda-MONTH', 'agenda-INBOX'] : tab === 'financas' ? ['fin-US', 'fin-MINE', 'fin-PARTNER'] : [null]
+      const views = tab === 'agenda' ? ['agenda-DAY', 'agenda-WEEK', 'agenda-MONTH', 'agenda-INBOX'] : tab === 'financas' ? ['fin-US', 'fin-MINE', 'fin-PARTNER'] : tab === 'ajustes' ? ['settings-group-casal', 'settings-group-nuvem', 'settings-group-aparelho', 'settings-group-atalhos'] : [null]
       for (const v of views) {
         if (v) await p.getByTestId(v).click()
         await check(`${scheme} ${tab}${v ? '/' + v : ''}`, `${scheme}-${tab}${v ? '-' + v : ''}`)
@@ -99,6 +99,7 @@ for (const w of WIDTHS) {
   }
   for (const k of ['task', 'expense', 'med', 'sos']) {
     await p.evaluate(() => (location.hash = '#/ajustes'))
+    await p.getByTestId('settings-group-atalhos').click()
     await sheet(() => p.getByTestId(`try-${k}`).click(), k)
     if (!(await p.getByTestId('app').isVisible())) report.push(`[${w}] atalho ${k}: a sessão caiu`)
   }
