@@ -14,6 +14,7 @@ export const test = base.extend<{ errors: string[] }>({
   },
 })
 export { expect }
+export type { Page } from '@playwright/test'
 
 /** Fixa o relógio local (America/Sao_Paulo) antes de carregar o app */
 export async function at(page: Page, hhmm: string) {
