@@ -78,6 +78,8 @@ export class FakeSupabase {
       const owner = this.table('profiles').get(`${m.couple_id}|${String(row.created_by)}`)
       return row.scope === 'PERSONAL' && row.is_secret_gift === false && owner?.share_personal_finances === true
     }
+    // recurrences_read: do casal ou minha
+    if (table === 'recurrences') return row.scope === 'COUPLE' || row.created_by === m.partner_id
     if (table === 'tasks') return row.assigned_to == null || row.assigned_to === m.partner_id || row.sent_by === m.partner_id || row.visible_to_partner === true
     if (table === 'medications') return row.owner_id == null || row.owner_id === m.partner_id || row.notify_partner_on_delay === true
     if (table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
@@ -101,7 +103,7 @@ export class FakeSupabase {
   private canWrite(table: string, row: Row, m: Member): boolean {
     if (table === 'couples') return row.id === m.couple_id
     if (row.couple_id !== m.couple_id) return false
-    if (table === 'transactions') return row.scope === 'COUPLE' || row.created_by === m.partner_id
+    if (table === 'transactions' || table === 'recurrences') return row.scope === 'COUPLE' || row.created_by === m.partner_id
     if (table === 'medications' || table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
     if (table === 'medication_logs' || table === 'tasks') return this.canRead(table, row, m)
     if (table === 'cycle_settings') return row.id === m.partner_id
@@ -223,6 +225,11 @@ export class FakeSupabase {
       const insertOk = tableName === 'tasks' ? body.couple_id === me.couple_id : this.canWrite(tableName, body, me)
       if (!insertOk || (existing && !this.canWrite(tableName, existing, me))) {
         return json(403, { code: '42501', message: 'new row violates row-level security policy' })
+      }
+      // espelho de keep_newest(): versão mais velha não sobrescreve a mais nova (a linha volta com synced_at novo)
+      if (existing && (tableName === 'transactions' || tableName === 'recurrences') && String(body.updated_at) < String(existing.updated_at)) {
+        t.set(key, { ...existing, synced_at: this.stamp() })
+        return json(201, null)
       }
       t.set(key, { ...(existing ?? {}), ...body, synced_at: this.stamp() })
       return json(201, null)

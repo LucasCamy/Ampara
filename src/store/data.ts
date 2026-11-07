@@ -1,7 +1,8 @@
 import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
 import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
+import { canViewRule } from '../domain/ledger'
 import { COLLECTIONS } from '../domain/types'
-import type { CalendarEvent, Collections, CollectionName, CycleLog, CycleSettings, DataState, GiftIdea, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
+import type { CalendarEvent, Collections, CollectionName, CycleLog, CycleSettings, DataState, GiftIdea, RecurringRule, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 /** Chave antiga (dados em texto claro, versão sem login). Migrada para o cofre e apagada no cadastro. */
@@ -120,6 +121,8 @@ export function enqueueAll(who: PartnerId) {
     // presente é surpresa: só quem anotou sobe (gift_ideas_insert)
     if (c === 'giftIdeas') return (e as GiftIdea).ownerId === who
     // check-in e "o que me acalma": cada um grava o seu (o par lê)
+    // conta fixa: do casal qualquer um grava; a pessoal só a dona (espelho de recurrences_insert)
+    if (c === 'recurrences') return canViewRule(e as RecurringRule, who)
     if (c === 'moodCheckins' || c === 'comfortItems') return (e as { ownerId: PartnerId }).ownerId === who
     return true
   }

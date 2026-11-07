@@ -1,6 +1,7 @@
 import { addDays, parseDateKey, toDateKey } from './dates'
 import { defaultCycleSettings, publishedForecast } from './cycle'
 import { computeShares } from './finance'
+import { occurrenceId } from './ledger'
 import { COLLECTIONS } from './types'
 import type {
   CycleLog,
@@ -9,6 +10,7 @@ import type {
   GiftIdea,
   ComfortItem,
   SavingsGoal,
+  RecurringRule,
   MoodCheckin,
   CycleSettings,
   Couple,
@@ -156,6 +158,30 @@ export function buildSeed(now: Date): DataState {
     tx({ description: 'Uber para o trabalho', amountCents: 2340, paidBy: 'B', scope: 'PERSONAL', category: 'TRANSPORT', date: dayInMonth(today, -1) }),
   ]
 
+  // Internet e Aluguel são contas fixas: a ocorrência deste mês já existe com o id que a regra geraria
+  const recurrences: RecurringRule[] = []
+  for (const t of transactions) {
+    if (t.description !== 'Internet' && t.description !== 'Aluguel') continue
+    const rule: RecurringRule = {
+      id: uuid(),
+      createdBy: t.createdBy,
+      scope: t.scope,
+      description: t.description,
+      category: t.category,
+      amountCents: t.amountCents,
+      paidBy: t.paidBy,
+      splitRule: t.splitRule,
+      dayOfMonth: parseDateKey(t.competenceDate).getDate(),
+      startMonth: t.competenceDate.slice(0, 7),
+      endMonth: null,
+      skipMonths: [],
+      updatedAt: iso,
+    }
+    recurrences.push(rule)
+    t.id = occurrenceId(rule.id, rule.startMonth)
+    t.recurrenceId = rule.id
+  }
+
   const dentista = tasks.find((t) => t.title === 'Marcar dentista')
   const helpRequests: HelpRequest[] = [
     {
@@ -274,6 +300,7 @@ export function buildSeed(now: Date): DataState {
     comfortItems: byId(comfort),
     focusSessions: {},
     savingsGoals: byId(goals),
+    recurrences: byId(recurrences),
     outbox: [],
     lastSyncedAt: iso,
   }
@@ -334,6 +361,7 @@ export function buildEmpty(now: Date): DataState {
     comfortItems: {},
     focusSessions: {},
     savingsGoals: {},
+    recurrences: {},
     outbox: [],
   }
 }

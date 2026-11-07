@@ -332,7 +332,7 @@ spec:
       containers:
         - name: web
           image: ghcr.io/lucascamy/ampara:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http
@@ -347,6 +347,7 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
+            runAsUser: 101
           readinessProbe:
             httpGet:
               path: /healthz
@@ -398,7 +399,7 @@ spec:
       containers:
         - name: push
           image: ghcr.io/lucascamy/ampara-push:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -421,3 +422,5 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000

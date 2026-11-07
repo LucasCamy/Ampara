@@ -37,6 +37,25 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 18 (2026-11-06): finanças no tempo (baixa, futuras, parceladas e fixas)
+
+- **Dar baixa** (`payTx`): valor real (a conta veio diferente), quem pagou e data do pagamento (`paidAt`); o mês de
+  competência não muda mais (antes a baixa movia o lançamento para hoje). Baixa rápida "Eu paguei / X pagou" e
+  "Outro valor" na gaveta; "Desfazer baixa" volta para previsto. Pessoal também tem baixa.
+- **Vencidas:** previsto com data passada fica com traço vermelho e "Vencida há N dias (dd/mm)".
+- **Data no gasto:** vencimento futuro (conta futura) ou gasto de outro dia.
+- **Parcelado:** o valor é o total; N parcelas (2 a 48) em centavos exatos (resto na primeira), uma por mês no
+  mesmo dia (31 vira o último dia do mês curto), a primeira com o status escolhido. "Parcela 3/10".
+- **Conta fixa (todo mês):** regra em `recurrences`; o app gera do mês atual até 2 meses à frente
+  (`missingOccurrences`), sem passado. Editar vale para os previstos deste mês em diante; "Excluir só este mês"
+  pula o mês; "Excluir este e encerrar" e "Encerrar conta fixa". Pessoal só a dona vê (RLS + `canViewRule`).
+- **Meses:** setas para navegar (até 24 meses); acerto de um mês passado vai para o último dia dele.
+- **Lançamento:** botão de detalhes com baixa, desfazer e excluir (com "esta e as próximas" em parcelas/fixas).
+- **Dois aparelhos:** parcelas e ocorrências têm id determinístico (`seededUuid`) e as geradas nascem com
+  `updatedAt` antigo; no servidor, `keep_newest()` impede que uma versão mais velha sobrescreva a mais nova
+  (aparelho atrasado não desfaz a baixa do outro). Espelhado no Supabase simulado e testado no `validate.sql`.
+- **Campo de valor:** pré-preenchido, o primeiro dígito substitui o valor (antes concatenava: R$ 12.000.134,90).
+
 ## Iteração 17 (2026-11-06): o backend atualiza o banco sozinho
 
 - O backend (`ampara-push`, imagem `Dockerfile.push`) traz o `supabase/schema.sql` e aplica ao subir

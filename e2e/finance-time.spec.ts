@@ -1,0 +1,115 @@
+import { at, expect, goTab, noHorizontalOverflow, open, quick, setViewer, shot, test } from './fixtures'
+
+/** Relógio fixo: 2026-11-05. No exemplo, Internet (08/11) e Aluguel (11/11) são contas fixas do casal. */
+test('finanças no tempo: contas fixas, baixa com outro valor, parcelado, vencida e meses', async ({ page, errors }, info) => {
+  void errors
+  test.setTimeout(90_000)
+  await at(page, '10:00')
+  await open(page)
+  await goTab(page, 'financas')
+
+  const predicted = (title: string) => page.locator(`[data-testid="predicted-row"][data-title="${title}"]`)
+  const paidRow = (title: string) => page.locator(`[data-testid="couple-row"][data-title="${title}"]`)
+
+  // ---- contas fixas: aparecem nas regras e já estão previstas no mês que vem
+  await expect(page.getByTestId('rules-COUPLE').getByTestId('rule-row')).toHaveCount(2)
+  await expect(page.getByTestId('rules-COUPLE')).toContainText('R$ 2.520,00 por mês')
+  await page.getByTestId('month-next').click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Finanças de dezembro')
+  await expect(predicted('Aluguel')).toContainText('Fixa mensal')
+  await expect(predicted('Aluguel')).toContainText('Vence 11/12')
+  await page.getByTestId('month-today').click()
+
+  // ---- baixa com outro valor (a internet veio mais cara) e desfazer a baixa
+  await predicted('Internet').getByTestId('pay-other').click()
+  const pay = page.getByTestId('sheet-pay')
+  await expect(pay.getByTestId('pay-amount')).toHaveValue('R$ 120,00')
+  await pay.getByTestId('pay-amount').pressSequentially('13490')
+  await pay.getByTestId('pay-save').click()
+  await expect(pay).toBeHidden()
+  await expect(paidRow('Internet')).toContainText('R$ 134,90')
+  await expect(predicted('Internet')).toHaveCount(0)
+  await paidRow('Internet').getByTestId('tx-open').click()
+  await page.getByTestId('sheet-tx').getByTestId('tx-unpay').click()
+  await expect(predicted('Internet')).toHaveCount(1)
+  // baixa rápida
+  await predicted('Internet').getByTestId('pay-me').click()
+  await expect(paidRow('Internet')).toHaveCount(1)
+
+  // ---- parcelado: 10x, a primeira paga hoje, as outras previstas nos próximos meses
+  await quick(page, 'expense')
+  const exp = page.getByTestId('sheet-expense')
+  await exp.getByTestId('expense-amount').pressSequentially('120000')
+  await exp.getByTestId('expense-description').fill('Geladeira')
+  await exp.getByRole('radio', { name: /Parcelado/ }).click()
+  await exp.getByTestId('expense-installments').fill('10')
+  await expect(exp.getByTestId('installments-preview')).toContainText('10x de R$ 120,00')
+  await noHorizontalOverflow(page)
+  await shot(page, '95-parcelado', info.project.name)
+  await exp.getByTestId('expense-save').click()
+  await expect(exp).toBeHidden()
+  await expect(paidRow('Geladeira')).toContainText('Parcela 1/10')
+  await page.getByTestId('month-next').click()
+  await expect(predicted('Geladeira')).toContainText('Parcela 2/10')
+  await expect(predicted('Geladeira')).toContainText('R$ 120,00')
+  // cancelar as que faltam: some deste mês e dos próximos
+  await predicted('Geladeira').getByTestId('tx-open').click()
+  await page.getByTestId('sheet-tx').getByTestId('tx-delete-following').click()
+  await expect(predicted('Geladeira')).toHaveCount(0)
+  await page.getByTestId('month-next').click()
+  await expect(predicted('Geladeira')).toHaveCount(0)
+  await page.getByTestId('month-today').click()
+  await expect(paidRow('Geladeira')).toContainText('Parcela 1/10')
+
+  // ---- conta que já venceu: vermelha, com quantos dias
+  await quick(page, 'expense')
+  await exp.getByTestId('expense-amount').pressSequentially('8000')
+  await exp.getByTestId('expense-description').fill('Conta de água')
+  await exp.getByRole('radio', { name: /Previsto/ }).click()
+  await exp.getByTestId('expense-date').fill('2026-11-01')
+  await exp.getByTestId('expense-save').click()
+  await expect(exp).toBeHidden()
+  await expect(predicted('Conta de água')).toContainText('Vencida há 4 dias (01/11)')
+  await noHorizontalOverflow(page)
+  await shot(page, '96-financas-baixa', info.project.name)
+
+  // ---- editar a conta fixa (vale para os previstos) e encerrar
+  await page.getByTestId('rules-COUPLE').getByTestId('rule-row').filter({ hasText: 'Aluguel' }).getByTestId('rule-edit').click()
+  const rule = page.getByTestId('sheet-rule')
+  await rule.getByTestId('rule-amount').pressSequentially('250000')
+  await rule.getByTestId('rule-save').click()
+  await expect(rule).toBeHidden()
+  await expect(predicted('Aluguel')).toContainText('R$ 2.500,00')
+  await page.getByTestId('rules-COUPLE').getByTestId('rule-row').filter({ hasText: 'Aluguel' }).getByTestId('rule-edit').click()
+  await rule.getByTestId('rule-end').click()
+  await page.getByTestId('month-next').click()
+  await expect(predicted('Aluguel')).toHaveCount(0)
+  await page.getByTestId('month-today').click()
+  await expect(predicted('Aluguel')).toHaveCount(1)
+})
+
+test('conta fixa pessoal: só a dona vê a regra', async ({ page, errors }) => {
+  void errors
+  test.setTimeout(60_000)
+  await at(page, '10:00')
+  await open(page)
+  await goTab(page, 'financas')
+  await page.getByTestId('fin-MINE').click()
+  await page.getByTestId('rule-add-PERSONAL').click()
+  const exp = page.getByTestId('sheet-expense')
+  await expect(exp.getByRole('radio', { name: /Todo mês/ })).toHaveAttribute('aria-checked', 'true')
+  await exp.getByTestId('expense-amount').pressSequentially('3990')
+  await exp.getByTestId('expense-description').fill('Streaming')
+  await exp.getByTestId('expense-save').click()
+  await expect(exp).toBeHidden()
+  await expect(page.getByTestId('rules-PERSONAL').getByTestId('rule-row')).toContainText('Streaming')
+  await expect(page.locator('[data-testid="personal-row"][data-title="Streaming"]')).toContainText('Fixa mensal')
+
+  // ela: as regras do Lucas não aparecem (nem a aba dela tem a dele)
+  await setViewer(page, 'B')
+  await goTab(page, 'financas')
+  await page.getByTestId('fin-MINE').click()
+  await expect(page.getByTestId('rules-PERSONAL').getByTestId('rule-row')).toHaveCount(0)
+  await page.getByTestId('fin-US').click()
+  await expect(page.getByTestId('rules-COUPLE')).not.toContainText('Streaming')
+})

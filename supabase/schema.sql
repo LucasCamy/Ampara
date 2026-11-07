@@ -729,3 +729,70 @@ $$;
 
 revoke all on function push_public_key(), save_push_subscription(text, text, text, text, boolean), delete_push_subscription(text) from public, anon;
 grant execute on function push_public_key(), save_push_subscription(text, text, text, text, boolean), delete_push_subscription(text) to authenticated;
+
+-- =====================================================================
+-- Iteração 18: baixa, parcelas e contas fixas
+-- =====================================================================
+alter table transactions add column if not exists paid_at date;
+alter table transactions add column if not exists installment_group uuid;
+alter table transactions add column if not exists installment_n integer;
+alter table transactions add column if not exists installment_total integer;
+alter table transactions add column if not exists recurrence_id uuid;
+alter table transactions drop constraint if exists transactions_installment_check;
+alter table transactions add constraint transactions_installment_check check (
+  (installment_group is null and installment_n is null and installment_total is null)
+  or (installment_group is not null and installment_total between 2 and 48 and installment_n between 1 and installment_total)
+);
+create index if not exists idx_tx_installment_group on transactions (installment_group) where installment_group is not null;
+
+-- Conta fixa mensal. Privacidade igual à dos lançamentos: do casal os dois veem e gravam; pessoal só a dona
+create table if not exists recurrences (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  created_by text not null check (created_by in ('A', 'B')),
+  scope text not null check (scope in ('PERSONAL', 'COUPLE')),
+  description text not null check (length(description) between 1 and 60),
+  category text not null,
+  amount_cents bigint not null check (amount_cents > 0),
+  paid_by text not null check (paid_by in ('A', 'B')),
+  split_rule text,
+  day_of_month integer not null check (day_of_month between 1 and 31),
+  start_month text not null check (start_month ~ '^\d{4}-\d{2}$'),
+  end_month text check (end_month is null or end_month ~ '^\d{4}-\d{2}$'),
+  skip_months jsonb not null default '[]',
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create index if not exists idx_recurrences_pull on recurrences (couple_id, updated_at);
+alter table recurrences enable row level security;
+drop policy if exists recurrences_read on recurrences;
+create policy recurrences_read on recurrences for select using (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()));
+drop policy if exists recurrences_insert on recurrences;
+create policy recurrences_insert on recurrences for insert with check (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()));
+drop policy if exists recurrences_update on recurrences;
+create policy recurrences_update on recurrences for update using (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()))
+  with check (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()));
+drop policy if exists recurrences_delete on recurrences;
+create policy recurrences_delete on recurrences for delete using (couple_id = my_couple_id() and (scope = 'COUPLE' or created_by = my_partner_id()));
+drop trigger if exists trg_recurrences_synced on recurrences;
+create trigger trg_recurrences_synced before insert or update on recurrences for each row execute function touch_synced_at();
+
+-- A versão mais nova vence também no servidor: um aparelho atrasado (ex.: que gerou de novo a parcela prevista)
+-- não desfaz a baixa feita no outro. A linha antiga é regravada com synced_at novo e volta para quem estava atrás.
+-- Roda antes de trg_*_synced (gatilhos BEFORE disparam em ordem alfabética: "keep" < "synced").
+create or replace function keep_newest() returns trigger language plpgsql as $$
+begin
+  if new.updated_at < old.updated_at then
+    return old;
+  end if;
+  return new;
+end $$;
+do $$
+declare t text;
+begin
+  foreach t in array array['transactions','recurrences'] loop
+    execute format('drop trigger if exists trg_%I_keep on %I', t, t);
+    execute format('create trigger trg_%I_keep before update on %I for each row execute function keep_newest()', t, t);
+  end loop;
+end $$;

@@ -13,6 +13,9 @@ import { PeriodSheet } from './PeriodSheet'
 import { CycleSetupSheet } from './CycleSetupSheet'
 import { GiftSheet } from './GiftSheet'
 import { GoalSheet } from './GoalSheet'
+import { PaySheet } from './PaySheet'
+import { RuleSheet } from './RuleSheet'
+import { TxSheet } from './TxSheet'
 import { SpecialDateSheet } from './SpecialDateSheet'
 import { RoutineSheet } from './RoutineSheet'
 import { SosSheet } from './SosSheet'
@@ -31,6 +34,9 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
   specialDate: { title: 'Nova data especial', description: 'Repete todo ano. O app lembra uma semana antes.' },
   gift: { title: 'Ideia de presente', description: 'Anote na hora que ouvir. Só você vê.' },
   goal: { title: 'Nova caixinha', description: 'Uma meta do casal. Os dois guardam e veem quanto falta.' },
+  pay: { title: 'Dar baixa', description: 'Valor que saiu de verdade, quem pagou e quando.' },
+  tx: { title: 'Lançamento', description: 'Baixa, desfazer ou excluir.' },
+  rule: { title: 'Conta fixa', description: 'Vale deste mês em diante.' },
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
@@ -49,12 +55,12 @@ export function SheetHost() {
   const close = useCallback(() => ui.closeSheet(), [])
   const editId = sheet?.params.id
   const exists = useData(
-    (d) => !editId || (sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : sheet?.kind === 'goal' ? !!d.savingsGoals[editId] : !!d.meds[editId]),
+    (d) => !editId || (sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : sheet?.kind === 'goal' ? !!d.savingsGoals[editId] : sheet?.kind === 'pay' || sheet?.kind === 'tx' ? !!d.transactions[editId] : sheet?.kind === 'rule' ? !!d.recurrences[editId] : !!d.meds[editId]),
   )
   const editing = !!editId
   const meta = sheet ? ((editing && EDIT_TITLES[sheet.kind]) || TITLES[sheet.kind]) : null
   const base = sheet && exists ? SHEET_SUBMIT[sheet.kind] : undefined
-  const submit = base && editing ? { ...base, label: 'Salvar alterações' } : base
+  const submit = base && editing && sheet?.kind !== 'pay' ? { ...base, label: 'Salvar alterações' } : base
   const formId = sheet && sheet.kind in SHEET_FORM ? SHEET_FORM[sheet.kind as keyof typeof SHEET_FORM] : undefined
   return (
     <Sheet
@@ -96,6 +102,9 @@ export function SheetHost() {
       {sheet?.kind === 'period' && exists ? <PeriodSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'cycleSetup' ? <CycleSetupSheet onDone={close} /> : null}
       {sheet?.kind === 'specialDate' && exists ? <SpecialDateSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'pay' && exists && editId ? <PaySheet key={editId} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'tx' && exists && editId ? <TxSheet id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'rule' && exists && editId ? <RuleSheet key={editId} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'goal' && exists ? <GoalSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'gift' && exists ? <GiftSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
     </Sheet>

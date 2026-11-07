@@ -19,5 +19,5 @@ RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=builder /app/dist-push/worker.mjs ./
 # o backend aplica o schema ao subir (só quando o arquivo muda)
 COPY supabase/schema.sql ./schema.sql
-USER node
+USER 1000:1000
 CMD ["node", "worker.mjs"]

@@ -142,7 +142,37 @@ export interface Transaction {
   splitRule: SplitRule | null
   partnerAShareCents: number
   partnerBShareCents: number
+  /** Vencimento (previsto) ou data do gasto (pago). A baixa não muda o mês de competência. */
   competenceDate: DateKey
+  /** Dia em que foi pago (baixa). null/ausente = pago na própria data ou ainda previsto */
+  paidAt?: DateKey | null
+  /** Compra parcelada: grupo, número da parcela e total */
+  installmentGroup?: string | null
+  installmentN?: number | null
+  installmentTotal?: number | null
+  /** Conta fixa que gerou este lançamento */
+  recurrenceId?: string | null
+  updatedAt: string
+}
+
+/** Conta fixa mensal: gera um lançamento previsto por mês (os dois aparelhos geram o mesmo id) */
+export interface RecurringRule {
+  id: string
+  createdBy: PartnerId
+  scope: TxScope
+  description: string
+  category: TxCategory
+  amountCents: number
+  paidBy: PartnerId
+  splitRule: SplitRule | null
+  /** dia do vencimento (1 a 31; mês curto usa o último dia) */
+  dayOfMonth: number
+  /** YYYY-MM do primeiro mês */
+  startMonth: string
+  /** YYYY-MM do último mês (inclusive); null = sem fim */
+  endMonth: string | null
+  /** meses pulados/excluídos (não gerar de novo) */
+  skipMonths: string[]
   updatedAt: string
 }
 
@@ -342,6 +372,7 @@ export interface Collections {
   comfortItems: Record<string, ComfortItem>
   focusSessions: Record<string, FocusSession>
   savingsGoals: Record<string, SavingsGoal>
+  recurrences: Record<string, RecurringRule>
 }
 
 export type CollectionName = keyof Collections
@@ -366,6 +397,7 @@ export const COLLECTIONS: CollectionName[] = [
   'comfortItems',
   'focusSessions',
   'savingsGoals',
+  'recurrences',
 ]
 
 export interface DataState extends Collections {

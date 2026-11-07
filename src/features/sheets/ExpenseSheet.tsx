@@ -1,11 +1,16 @@
-import { CircleCheck, CircleDashed, Gift, User, Users } from 'lucide-react'
+import { CalendarCheck, CircleCheck, CircleDashed, Gift, Layers, Repeat as RepeatIcon, User, Users } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import { CATEGORIES, CATEGORY_ORDER } from '../../components/categories'
 import { ChoiceChips, cx, FieldError, Switch } from '../../components/ui'
 import { computeShares, defaultSplitRule } from '../../domain/finance'
 import { digitsToCents, formatCents, parseMoneyToCents } from '../../domain/format'
 import type { PartnerId, SplitRule, TxCategory, TxStatus } from '../../domain/types'
-import { addExpense } from '../../store/actions'
+import { DateField } from '../../components/pickers'
+import { isDateKey } from '../../domain/catalog'
+import { toDateKey } from '../../domain/dates'
+import { MAX_INSTALLMENTS, splitInstallments, validateRepeat, type Repeat } from '../../domain/ledger'
+import { useNow } from '../../store/clock'
+import { saveEntry } from '../../store/financeActions'
 import { useCouple, usePeople } from '../../store/hooks'
 import { SHEET_FORM } from './forms'
 
@@ -27,8 +32,12 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
   const [paidBy, setPaidBy] = useState<PartnerId>(viewer)
   const [rule, setRule] = useState<SplitRule>(defaultSplitRule(couple))
   const [gift, setGift] = useState(params.gift === '1')
-  const [status, setStatus] = useState<TxStatus>('CONFIRMED_SOLID')
-  const [errors, setErrors] = useState<{ amount?: string; description?: string }>({})
+  const [status, setStatus] = useState<TxStatus>(params.status === 'PREDICTED_DASHED' ? 'PREDICTED_DASHED' : 'CONFIRMED_SOLID')
+  const today = toDateKey(useNow())
+  const [date, setDate] = useState(params.date && isDateKey(params.date) ? params.date : today)
+  const [repeat, setRepeat] = useState<Repeat>(params.repeat === 'MONTHLY' || params.repeat === 'INSTALLMENTS' ? params.repeat : 'ONCE')
+  const [installments, setInstallments] = useState('2')
+  const [errors, setErrors] = useState<{ amount?: string; description?: string; date?: string; installments?: string }>({})
   const id = useId()
 
   const ratioA = couple.ratioABps / 100
@@ -43,10 +52,24 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
     e.preventDefault()
     const next: typeof errors = {}
     if (cents <= 0) next.amount = 'Informe um valor maior que R$ 0,00.'
+    if (!isDateKey(date)) next.date = 'Informe a data.'
+    next.installments = validateRepeat(repeat, installments, cents)
     const desc = description.trim() || CATEGORIES[category].label
     setErrors(next)
-    if (next.amount) return
-    addExpense({ amountCents: cents, description: desc, category, scope, paidBy, splitRule: rule, isSecretGift: scope === 'PERSONAL' && gift, status })
+    if (next.amount || next.date || next.installments) return
+    saveEntry({
+      amountCents: cents,
+      description: desc,
+      category,
+      scope,
+      paidBy,
+      splitRule: rule,
+      isSecretGift: scope === 'PERSONAL' && gift,
+      status,
+      date,
+      repeat,
+      installments: repeat === 'INSTALLMENTS' ? Number(installments) : undefined,
+    })
     onDone()
   }
 
@@ -164,13 +187,74 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
         </div>
       )}
 
+      <ChoiceChips<Repeat>
+        label="Repetição"
+        value={repeat}
+        onChange={(v) => {
+          setRepeat(v)
+          setErrors((x) => ({ ...x, installments: undefined }))
+        }}
+        options={[
+          { value: 'ONCE', label: 'Uma vez', icon: CalendarCheck },
+          { value: 'INSTALLMENTS', label: 'Parcelado', icon: Layers, hint: 'o valor é o total' },
+          { value: 'MONTHLY', label: 'Todo mês', icon: RepeatIcon, hint: 'conta fixa' },
+        ]}
+      />
+
+      {repeat === 'INSTALLMENTS' ? (
+        <div>
+          <label htmlFor={`${id}-n`} className="mb-2 block text-[14px] font-semibold text-ink">
+            Número de parcelas
+          </label>
+          <input
+            id={`${id}-n`}
+            inputMode="numeric"
+            value={installments}
+            maxLength={2}
+            onChange={(e) => {
+              setInstallments(e.target.value.replace(/\D/g, ''))
+              setErrors((x) => ({ ...x, installments: undefined }))
+            }}
+            data-testid="expense-installments"
+            aria-invalid={errors.installments ? true : undefined}
+            aria-describedby={errors.installments ? `${id}-nerr` : `${id}-nhelp`}
+            className={cx('font-data min-h-14 w-28 rounded-[16px] border bg-bg px-4 text-[16px] text-ink', errors.installments ? 'border-err' : 'border-line-strong')}
+          />
+          {errors.installments ? (
+            <FieldError id={`${id}-nerr`}>{errors.installments}</FieldError>
+          ) : (
+            <p id={`${id}-nhelp`} className="mt-1.5 text-[13px] text-muted" data-testid="installments-preview">
+              {Number(installments) >= 2 && Number(installments) <= MAX_INSTALLMENTS && cents >= Number(installments) ? (
+                <>
+                  <span className="font-data whitespace-nowrap text-ink">{installments}x</span> de{' '}
+                  <span className="font-data whitespace-nowrap text-ink">{formatCents(splitInstallments(cents, Number(installments))[1]!)}</span>, uma por mês a partir da data abaixo.
+                </>
+              ) : (
+                `De 2 a ${MAX_INSTALLMENTS} parcelas.`
+              )}
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      <DateField
+        label={repeat === 'MONTHLY' ? 'Primeiro vencimento (repete todo mês neste dia)' : repeat === 'INSTALLMENTS' ? 'Data da 1ª parcela' : status === 'PREDICTED_DASHED' ? 'Vencimento' : 'Data do gasto'}
+        value={date}
+        onChange={(v) => {
+          setDate(v)
+          setErrors((x) => ({ ...x, date: undefined }))
+        }}
+        error={errors.date}
+        testId="expense-date"
+      />
+
       <ChoiceChips<TxStatus>
-        label="Situação"
+        label={repeat === 'ONCE' ? 'Situação' : 'Situação da primeira'}
         value={status}
         onChange={setStatus}
         options={[
           { value: 'CONFIRMED_SOLID', label: 'Pago', hint: 'traço sólido', icon: CircleCheck },
-          { value: 'PREDICTED_DASHED', label: 'Previsto', hint: 'traço tracejado', icon: CircleDashed },
+          { value: 'PREDICTED_DASHED', label: 'Previsto', hint: 'a pagar, tracejado', icon: CircleDashed },
         ]}
       />
     </form>

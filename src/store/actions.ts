@@ -11,8 +11,9 @@ import {
   type RoutineInput,
 } from '../domain/catalog'
 import { addDays, toDateKey } from '../domain/dates'
-import { buildSettlement, computeCoupleBalance, computeShares, defaultSplitRule, nonPayerShare } from '../domain/finance'
+import { buildSettlement, computeCoupleBalance, computeShares, nonPayerShare } from '../domain/finance'
 import { formatCents } from '../domain/format'
+import { dayInMonth, payTx } from '../domain/ledger'
 import { confirmTaken, emptyLog, logId, skipDose, snoozeWater } from '../domain/medication'
 import { uuid } from '../domain/seed'
 import type {
@@ -222,24 +223,21 @@ export function addExpense(input: ExpenseInput) {
   ui.toast(msg, { undo })
 }
 
+/** Baixa rápida (Hoje e Finanças): valor previsto, hoje. O mês de competência não muda (ver domain/ledger). */
 export function markBillPaid(id: string, paidBy: PartnerId) {
   const state = dataStore.get()
   const tx = state.transactions[id]
   const couple = state.couple.couple
   if (!tx || !couple) return
-  const shares =
-    tx.scope === 'COUPLE' ? computeShares(tx.amountCents, tx.splitRule ?? defaultSplitRule(couple), paidBy, couple.ratioABps) : {}
-  const undo = transact((t) =>
-    t.put('transactions', { ...tx, ...shares, paidBy, status: 'CONFIRMED_SOLID', competenceDate: today(), updatedAt: nowIso() }),
-  )
+  const undo = transact((t) => t.put('transactions', payTx(tx, { amountCents: tx.amountCents, paidBy, paidAt: today() }, couple.ratioABps, nowIso())))
   ui.toast(`Pago: ${tx.description} · ${formatCents(tx.amountCents)}`, { undo })
 }
 
-export function settleMonth() {
+export function settleMonth(month = today().slice(0, 7)) {
   const who = viewer()
-  const month = today().slice(0, 7)
   const balance = computeCoupleBalance(Object.values(dataStore.get().transactions), month)
-  const settlement = buildSettlement(balance.netCents, who, today(), uuid(), nowIso())
+  const date = month === today().slice(0, 7) ? today() : dayInMonth(month, 31)
+  const settlement = buildSettlement(balance.netCents, who, date, uuid(), nowIso())
   if (!settlement) return
   const undo = transact((t) => t.put('transactions', settlement))
   ui.toast(`Acerto registrado · ${formatCents(settlement.amountCents)} · Contas em dia`, { undo })

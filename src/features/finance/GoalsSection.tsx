@@ -1,5 +1,5 @@
 import { Minus, PiggyBank, Plus } from 'lucide-react'
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { Button, cx, EditButton, EmptyState, SectionHeader, StatusBadge } from '../../components/ui'
 import { toDateKey } from '../../domain/dates'
 import { digitsToCents, formatCents } from '../../domain/format'
@@ -17,9 +17,22 @@ const caretToEnd = (e: { currentTarget: HTMLInputElement }) => {
   if (el.selectionStart !== end || el.selectionEnd !== end) el.setSelectionRange(end, end)
 }
 
-/** Valor em reais no estilo caixa eletrônico (dígitos entram pela direita), fonte de dados, alvo de 48px */
+/**
+ * Valor em reais no estilo caixa eletrônico (dígitos entram pela direita), fonte de dados, alvo de 48px.
+ * Veio preenchido (ex.: baixa com o valor previsto)? O primeiro dígito digitado SUBSTITUI o valor e apagar zera,
+ * como numa calculadora. Detectado no onChange (teclados Android nem sempre informam a tecla).
+ */
 export function MoneyInput({ cents, onChange, label, testId, hideLabel }: { cents: number; onChange: (c: number) => void; label: string; testId: string; hideLabel?: boolean }) {
   const id = useId()
+  const pristine = useRef(cents > 0)
+  const change = (raw: string) => {
+    if (!pristine.current) return onChange(digitsToCents(raw))
+    pristine.current = false
+    const before = String(cents)
+    const after = raw.replace(/\D/g, '').replace(/^0+/, '')
+    // digitou: fica só o que entrou depois do valor antigo; apagou: zera
+    onChange(after.length > before.length && after.startsWith(before) ? digitsToCents(after.slice(before.length)) : 0)
+  }
   return (
     <div className="min-w-0">
       <label htmlFor={id} className={hideLabel ? 'sr-only' : 'mb-2 block text-[14px] font-semibold text-ink'}>
@@ -34,7 +47,7 @@ export function MoneyInput({ cents, onChange, label, testId, hideLabel }: { cent
         onKeyDown={caretToEnd}
         onSelect={caretToEnd}
         value={formatCents(cents)}
-        onChange={(e) => onChange(digitsToCents(e.target.value))}
+        onChange={(e) => change(e.target.value)}
         data-testid={testId}
         className="font-data min-h-12 w-full min-w-0 rounded-[16px] border border-line-strong bg-bg px-4 text-[16px] text-ink"
       />

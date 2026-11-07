@@ -12,6 +12,10 @@ import { SheetHost } from './features/sheets/SheetHost'
 import { TodayScreen } from './features/today/TodayScreen'
 import { UsScreen } from './features/us/UsScreen'
 import { ui, useUi, type SheetKind } from './store/ui'
+import { useData } from './store/data'
+import { useNow } from './store/clock'
+import { toDateKey } from './domain/dates'
+import { materializeRecurrences } from './store/financeActions'
 
 const QUICK_KINDS: Record<string, SheetKind> = { task: 'task', expense: 'expense', med: 'med', sos: 'sos' }
 
@@ -53,8 +57,19 @@ function Screen() {
   }
 }
 
+/** Contas fixas: gera as próximas ocorrências ao abrir, ao virar o mês e quando uma regra muda */
+function useRecurrences() {
+  const rules = useData((s) => s.recurrences)
+  const viewer = useUi((s) => s.viewer)
+  const month = toDateKey(useNow()).slice(0, 7)
+  useEffect(() => {
+    materializeRecurrences()
+  }, [rules, viewer, month])
+}
+
 function AppShell() {
   useQuickLaunch()
+  useRecurrences()
   return (
     <div className="flex min-h-dvh" data-testid="app">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:rounded-[12px] focus:bg-surface focus:p-3">

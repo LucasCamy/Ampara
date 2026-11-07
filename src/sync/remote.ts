@@ -141,6 +141,7 @@ export const TABLES: Record<CollectionName, string> = {
   comfortItems: 'comfort_items',
   focusSessions: 'focus_sessions',
   savingsGoals: 'savings_goals',
+  recurrences: 'recurrences',
 }
 
 /** Tabelas com chave (couple_id, id): um registro por pessoa */

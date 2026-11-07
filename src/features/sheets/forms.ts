@@ -15,6 +15,8 @@ export const SHEET_FORM = {
   specialDate: 'sheet-form-special-date',
   gift: 'sheet-form-gift',
   goal: 'sheet-form-goal',
+  pay: 'sheet-form-pay',
+  rule: 'sheet-form-rule',
 } as const satisfies Partial<Record<SheetKind, string>>
 
 export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: string }>> = {
@@ -28,4 +30,6 @@ export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: st
   specialDate: { label: 'Salvar data', testId: 'special-save' },
   gift: { label: 'Guardar ideia', testId: 'gift-save' },
   goal: { label: 'Salvar caixinha', testId: 'goal-save' },
+  pay: { label: 'Dar baixa', testId: 'pay-save' },
+  rule: { label: 'Salvar conta fixa', testId: 'rule-save' },
 }

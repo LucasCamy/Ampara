@@ -39,7 +39,7 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 
 ```
 src/
-  domain/      regras puras e testadas (finance, privacy, medication, cycle, outbox, tasks, dates, format)
+  domain/      regras puras e testadas (finance, ledger, privacy, medication, cycle, outbox, tasks, dates, format)
   store/       stores externos (data, ui, clock) com useSyncExternalStore; ações estáveis
   auth/        cofre cifrado, sessão, convite do par (crypto, vault, session)
   sync/        motor da fila, nuvem (cloud.ts: conta, pareamento, push/pull), cliente REST do Supabase (remote.ts)

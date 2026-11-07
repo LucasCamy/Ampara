@@ -14,7 +14,7 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','push_subscriptions','push_config','push_sent']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','push_subscriptions','push_config','push_sent','recurrences']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -32,10 +32,10 @@ begin
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas');
+     and tablename in ('tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 23 tabelas, RLS ligado em todas, 9 funções'
+\echo 'ok  estrutura: 24 tabelas, RLS ligado em todas, 9 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -480,6 +480,54 @@ do $$ begin
   assert (select count(*) from push_subscriptions where endpoint = 'https://push.exemplo.test/ela-1') = 1, 'FALHOU: Lucas apagou a inscrição dela';
 end $$;
 \echo 'ok  push: cada um vê e apaga só as próprias inscrições; chave privada e envios fora do alcance do app'
+
+-- ---------------------------------------------------------------- 6h. contas fixas, parcelas e "a mais nova vence"
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+insert into recurrences (id, couple_id, created_by, scope, description, category, amount_cents, paid_by, day_of_month, start_month) values
+  ('aaaa1111-0000-4000-8000-000000000001', 'space-teste', 'A', 'COUPLE', 'Aluguel', 'HOME', 240000, 'A', 5, '2026-11'),
+  ('aaaa1111-0000-4000-8000-000000000002', 'space-teste', 'A', 'PERSONAL', 'Streaming do Lucas', 'LEISURE', 3990, 'A', 12, '2026-11');
+insert into transactions (id, couple_id, created_by, paid_by, scope, is_secret_gift, type, status, amount_cents, category, description,
+                          partner_a_share_cents, partner_b_share_cents, competence_date, installment_group, installment_n, installment_total, updated_at) values
+  ('aaaa2222-0000-4000-8000-000000000001', 'space-teste', 'A', 'A', 'COUPLE', false, 'EXPENSE', 'PREDICTED_DASHED', 10000, 'HOME', 'Geladeira',
+   5000, 5000, current_date, 'aaaa3333-0000-4000-8000-000000000001', 2, 10, '2026-11-06T12:00:00Z');
+do $$ begin
+  begin
+    insert into transactions (id, couple_id, created_by, paid_by, scope, is_secret_gift, type, status, amount_cents, category, description,
+                              partner_a_share_cents, partner_b_share_cents, competence_date, installment_group, installment_n, installment_total) values
+      ('aaaa2222-0000-4000-8000-000000000002', 'space-teste', 'A', 'A', 'COUPLE', false, 'EXPENSE', 'PREDICTED_DASHED', 10000, 'HOME', 'x',
+       5000, 5000, current_date, 'aaaa3333-0000-4000-8000-000000000001', 11, 10);
+    raise exception 'FALHOU: aceitou parcela 11 de 10';
+  exception when check_violation then null;
+  end;
+end $$;
+
+-- baixa feita (mais nova); um aparelho atrasado tenta regravar como previsto (mais velho): o servidor ignora
+update transactions set status = 'CONFIRMED_SOLID', paid_at = current_date, updated_at = '2026-11-07T09:00:00Z' where id = 'aaaa2222-0000-4000-8000-000000000001';
+update transactions set status = 'PREDICTED_DASHED', paid_at = null, updated_at = '2000-01-01T00:00:00Z' where id = 'aaaa2222-0000-4000-8000-000000000001';
+do $$ begin
+  assert (select status from transactions where id = 'aaaa2222-0000-4000-8000-000000000001') = 'CONFIRMED_SOLID', 'FALHOU: versão velha desfez a baixa';
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+update recurrences set amount_cents = 1 where id = 'aaaa1111-0000-4000-8000-000000000002';
+do $$ begin
+  assert (select count(*) from recurrences) = 1, 'FALHOU: ela viu a conta fixa pessoal do Lucas';
+  assert (select description from recurrences) = 'Aluguel', 'FALHOU: ela não vê a conta fixa do casal';
+  begin
+    insert into recurrences (id, couple_id, created_by, scope, description, category, amount_cents, paid_by, day_of_month, start_month) values
+      ('aaaa1111-0000-4000-8000-000000000003', 'space-teste', 'A', 'PERSONAL', 'forjada', 'OTHER', 100, 'A', 1, '2026-11');
+    raise exception 'FALHOU: ela criou conta fixa pessoal em nome do Lucas';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+do $$ begin
+  assert (select amount_cents from recurrences where id = 'aaaa1111-0000-4000-8000-000000000002') = 3990, 'FALHOU: ela alterou a conta fixa pessoal dele';
+end $$;
+\echo 'ok  contas fixas com a privacidade dos lançamentos; parcela validada; versão velha não desfaz a baixa'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

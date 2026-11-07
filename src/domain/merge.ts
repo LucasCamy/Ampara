@@ -1,4 +1,5 @@
 import { canViewCycleLog } from './cycle'
+import { canViewRule } from './ledger'
 import type { CalendarEvent, CollectionName, CycleLog, CycleSettings, DataState, Medication, MedicationLog, PartnerId, Task, Transaction } from './types'
 
 export interface RemoteRow<T = unknown> {
@@ -110,6 +111,8 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const cycleLogs = filter(state.cycleLogs, keepCycleLog)
   // ideia de presente do par nunca fica neste aparelho (é surpresa para quem está aqui)
   const giftIdeas = filter(state.giftIdeas, (g) => g.ownerId === owner)
+  // conta fixa pessoal do par nunca fica aqui (espelho de recurrences_read)
+  const recurrences = filter(state.recurrences, (r) => canViewRule(r, owner))
   // ajustes têm id = pessoa ('A'/'B'), igual ao do perfil: não entram em `removed` (que limpa a fila por id)
   const cycleSettings = Object.values(state.cycleSettings).every(keepCycleSettings)
     ? state.cycleSettings
@@ -118,5 +121,5 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const logIds = Object.keys(state.medLogs).filter((id) => !medLogs[id])
   for (const id of logIds) removed.add(id)
   const outbox = state.outbox.filter((e) => !removed.has(e.entityId))
-  return { ...state, transactions, tasks, events, meds, medLogs, cycleLogs, cycleSettings, giftIdeas, outbox }
+  return { ...state, transactions, tasks, events, meds, medLogs, cycleLogs, cycleSettings, giftIdeas, recurrences, outbox }
 }
