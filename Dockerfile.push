@@ -1,4 +1,4 @@
-# Worker de lembretes (Web Push). Lê o Postgres e envia as notificações; não expõe porta.
+# Backend do Ampara: aplica supabase/schema.sql ao subir e roda o worker de lembretes (Web Push). Não expõe porta.
 # Estágio 1: empacota server/push + src/domain num arquivo só
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -17,5 +17,7 @@ WORKDIR /app
 COPY --from=builder /app/dist-push/package.json ./
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=builder /app/dist-push/worker.mjs ./
+# o backend aplica o schema ao subir (só quando o arquivo muda)
+COPY supabase/schema.sql ./schema.sql
 USER node
 CMD ["node", "worker.mjs"]

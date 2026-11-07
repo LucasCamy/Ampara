@@ -273,31 +273,8 @@ spec:
       labels:
         app: ampara-rest
     spec:
-      initContainers:
-        - name: migrate
-          image: supabase/postgres:15.8.1.085
-          env:
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ampara-secrets
-                  key: POSTGRES_PASSWORD
-            - name: PGOPTIONS
-              value: "-c client_min_messages=warning"
-          command:
-            - sh
-            - -c
-            - |
-              until psql -h db -U postgres -d postgres -tAc "select coalesce(to_regclass('auth.users')::text, '')" 2>/dev/null | grep -q users; do
-                echo "Aguardando GoTrue criar auth.users..."
-                sleep 2
-              done
-              psql -h db -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f /supabase/schema.sql -c "notify pgrst, 'reload schema'"
-          volumeMounts:
-            - name: sql
-              mountPath: /supabase/schema.sql
-              subPath: schema.sql
-              readOnly: true
+      # O schema não é mais aplicado aqui: o backend (ampara-push) aplica o supabase/schema.sql da própria imagem
+      # a cada versão nova e avisa o PostgREST. Um ConfigMap antigo reaplicado aqui desfaria políticas novas.
       containers:
         - name: rest
           image: postgrest/postgrest:v12.2.12
@@ -328,10 +305,6 @@ spec:
             limits:
               cpu: 150m
               memory: 128Mi
-      volumes:
-        - name: sql
-          configMap:
-            name: ampara-sql
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -395,7 +368,8 @@ spec:
             medium: Memory
             sizeLimit: 16Mi
 ---
-# Lembretes com a tela bloqueada (Web Push). Sem porta exposta: lê o Postgres e chama os serviços de push
+# Backend: ao subir aplica o supabase/schema.sql da imagem (só quando mudou, com trava) e depois roda os lembretes
+# (Web Push). Sem porta exposta: lê o Postgres e chama os serviços de push
 # dos navegadores. Gera as chaves VAPID na primeira vez (tabela push_config). Uma réplica basta; duas não
 # duplicam envio (cada lembrete é reservado em push_sent antes de sair).
 apiVersion: apps/v1

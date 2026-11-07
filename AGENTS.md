@@ -44,7 +44,7 @@ src/
   auth/        cofre cifrado, sessão, convite do par (crypto, vault, session)
   sync/        motor da fila, nuvem (cloud.ts: conta, pareamento, push/pull), cliente REST do Supabase (remote.ts)
                e inscrição de lembretes (push.ts)
-server/push/   worker de Web Push: plan.ts (decide, puro e testado) e worker.ts (banco + envio)
+server/push/   backend: migrate.ts (aplica o schema.sql ao subir), plan.ts (decide os lembretes, puro e testado) e worker.ts (banco + envio)
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
   features/    telas: today, agenda, us (aba Nós), routines, cycle, finance, settings, sheets, shell
   styles/      tokens.css (fonte única de cor, raio, sombra e motion)

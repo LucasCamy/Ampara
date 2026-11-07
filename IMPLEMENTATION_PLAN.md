@@ -37,6 +37,18 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 17 (2026-11-06): o backend atualiza o banco sozinho
+
+- O backend (`ampara-push`, imagem `Dockerfile.push`) traz o `supabase/schema.sql` e aplica ao subir
+  (`server/push/migrate.ts`): espera o `auth.users`, trava com advisory lock (réplicas não aplicam juntas), só aplica
+  se o hash mudou (`ampara_meta.schema_versions`, fora da API REST), tudo numa transação e avisa o PostgREST.
+  SQL quebrado: nada fica pela metade, o pod sai com erro e a versão anterior continua valendo.
+- Saiu o initContainer `migrate` do `ampara-rest`: reaplicar um ConfigMap antigo desfaria políticas novas. O
+  ConfigMap `ampara-sql` fica só para o `99-roles.sql` do banco (usado na criação).
+- Fluxo de deploy: `git push` -> CI publica as imagens -> Keel atualiza `ampara-web` e `ampara-push` -> o backend
+  aplica o schema. Validado no Docker: primeira subida aplica, reinício pula, duas réplicas ao mesmo tempo (uma
+  aplica, a outra espera e pula), SQL quebrado desfaz e sai com código 1. `MIGRATE=off` desliga.
+
 ## Iteração 16 (2026-11-06): lembretes com a tela bloqueada (Web Push)
 
 - **Worker** (`server/push`, imagem `Dockerfile.push`, serviço `push` no compose, Deployment `ampara-push` no k8s,
