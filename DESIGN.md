@@ -114,7 +114,7 @@ Marcadores do calendário mensal: `●` compromisso do casal (`--couple`), `▲`
 
 | Largura | Composição |
 |---|---|
-| `< 640px` | Top bar compacta, conteúdo em pilha, Dock flutuante acima da Bottom Nav de 4 abas |
+| `< 640px` | Top bar compacta, conteúdo em pilha, Dock flutuante acima da Bottom Nav de 5 abas (Hoje, Agenda, Nós, Cuidados, Finanças) |
 | `640-1023px` | Mesmo esquema com conteúdo centralizado em 640px e cards em 2 colunas onde couber |
 | `>= 1024px` | Sidebar 248px (navegação + captura rápida), conteúdo em 2 colunas, sem Dock |
 
@@ -125,3 +125,23 @@ Marcadores do calendário mensal: `●` compromisso do casal (`--couple`), `▲`
 - `Sheet`: bottom sheet no mobile, diálogo centralizado no desktop. Foco preso, `Esc` fecha, foco volta ao gatilho.
 - `Toast`: topo, `aria-live="polite"`, botão `[Desfazer]`, 5 s.
 - `StatusBadge`: implementa a tabela de estados.
+
+## Padrões de interação (revisão de 2026-11-06)
+
+- **Seletores (`Segmented`):** `stretch` é o padrão das telas: colunas iguais na largura toda até o tablet e
+  largura natural no computador (com a barra lateral); `fill` sempre na largura toda (cartões estreitos, barra
+  lateral). Divisória fina entre opções não selecionadas. Alvo de 44px. Mais de 3 opções de categoria viram
+  `ChoiceChips` (borda + ícone), não grade.
+- **Navegação de período:** setas com borda (48px) e o rótulo no meio (`Novembro de 2026`), igual na Agenda e
+  nas Finanças; "Mês atual"/"Hoje" só quando fora do período atual.
+- **Carregando:** `Button busy` mantém rótulo e largura, troca o ícone por um indicador que gira (parado com
+  movimento reduzido) e anuncia `aria-busy`, sem a opacidade de desabilitado. Abas carregam sob demanda com
+  `ScreenSkeleton` (forma da tela); a abertura do app usa o mesmo esqueleto. Pré-carregamento ocioso mantém o
+  app offline.
+- **Hoje em três camadas:** urgente (sempre no topo; no modo sobrecarga, primeiro em "Pode esperar"), a próxima
+  ação (Foco do dia, Próximas horas) e "Para hoje" com até 3 cartões e "Mais para hoje (N)".
+- **Agenda única:** marcas do dia com ícone + texto e borda tracejada (previsão): coração (data especial), gota
+  (menstruação), traço (semana de mais cuidado). O ciclo do par segue a privacidade da dona.
+- **Dados:** "Para onde foi" usa barras horizontais ranqueadas de uma série, na cor de quem gastou (casal ou
+  pessoa), com valor e % em texto; contraste de cada cor validado (≥ 3:1) em `surface` e `subtle`, claro e
+  escuro.

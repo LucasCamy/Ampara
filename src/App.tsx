@@ -8,7 +8,8 @@ import { LoadingScreen, LoginScreen, SetupScreen, WelcomeScreen } from './featur
 import { useAuth } from './auth/session'
 import { SheetHost } from './features/sheets/SheetHost'
 import { TodayScreen } from './features/today/TodayScreen'
-import { useUi, type Tab } from './store/ui'
+import { ui, uiStore, useUi, type Tab } from './store/ui'
+import { tourSeen } from './features/sheets/TourSheet'
 import { consumeLaunchLink } from './sync/deeplink'
 import { useData } from './store/data'
 import { useNow } from './store/clock'
@@ -84,10 +85,23 @@ function useRecurrences() {
   }, [rules, viewer, month])
 }
 
+/** Primeira vez de cada pessoa neste aparelho: apresentação curta (depois de qualquer destino de link) */
+function useTour() {
+  const viewer = useUi((s) => s.viewer)
+  useEffect(() => {
+    if (tourSeen(viewer) || uiStore.get().sheet) return
+    const id = window.setTimeout(() => {
+      if (!uiStore.get().sheet) ui.openSheet('tour')
+    }, 600)
+    return () => window.clearTimeout(id)
+  }, [viewer])
+}
+
 function AppShell() {
   useQuickLaunch()
   useRecurrences()
   usePrefetchTabs()
+  useTour()
   return (
     <div className="flex min-h-dvh" data-testid="app">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:rounded-[12px] focus:bg-surface focus:p-3">

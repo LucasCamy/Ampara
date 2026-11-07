@@ -1,4 +1,4 @@
-import { at, expect, goTab, noHorizontalOverflow, open, shot, test } from './fixtures'
+import { at, expect, goTab, noHorizontalOverflow, open, shot, test, skipTour } from './fixtures'
 import { FakeSupabase } from './fake-supabase'
 
 test('lista de compras: captura em uma linha, sem duplicar, carrinho e fim da compra', async ({ page, errors }, info) => {
@@ -71,6 +71,7 @@ test('lista de compras na nuvem: o que um adiciona aparece no celular do outro',
   const ctxB = await browser.newContext({ viewport: page.viewportSize() ?? undefined })
   await server.attach(ctxB)
   const b = await ctxB.newPage()
+  await skipTour(b)
   await b.goto('/')
   await b.getByTestId('setup-cloud').click()
   await b.getByTestId('cloud-entry-code').fill(invite)

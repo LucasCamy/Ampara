@@ -1,4 +1,4 @@
-import { at, expect, goTab, open, PASSWORDS, setViewer, shot, test } from './fixtures'
+import { at, expect, goTab, open, PASSWORDS, setViewer, shot, skipTour, test } from './fixtures'
 
 // Fluxos de acesso: roda em um celular e um desktop (os demais tamanhos já passam pelo login nos outros testes)
 // eslint-disable-next-line no-empty-pattern -- o Playwright exige desestruturar as fixtures
@@ -10,6 +10,7 @@ test.describe('Autenticação e segurança', () => {
   test('nada do casal aparece nem fica legível antes do login', async ({ page, errors }, info) => {
     void errors
     await at(page, '10:00')
+    await skipTour(page)
     await page.goto('/')
     await expect(page.getByTestId('setup-form')).toBeVisible()
     await expect(page.getByTestId('app')).toHaveCount(0)
@@ -83,6 +84,7 @@ test.describe('Autenticação e segurança', () => {
   test('sem "manter conectado", recarregar pede a senha', async ({ page, errors }) => {
     void errors
     await at(page, '10:00')
+    await skipTour(page)
     await page.goto('/')
     await page.getByTestId('setup-name').fill('Lucas')
     await page.getByTestId('setup-partner').fill('Namorada')
@@ -100,6 +102,7 @@ test.describe('Autenticação e segurança', () => {
     void errors
     await open(page)
     const other = await context.newPage()
+    await skipTour(other)
     await other.goto('/')
     await expect(other.getByTestId('app')).toBeVisible({ timeout: 15_000 })
     await goTab(page, 'ajustes')

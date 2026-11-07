@@ -1,4 +1,4 @@
-import { at, expect, goTab, noHorizontalOverflow, open, setViewer, shot, test } from './fixtures'
+import { at, expect, goTab, noHorizontalOverflow, open, setViewer, shot, test, skipTour } from './fixtures'
 import { FakeSupabase } from './fake-supabase'
 
 /**
@@ -98,6 +98,7 @@ test('ciclo na nuvem: o servidor só entrega o que a dona liberou', async ({ bro
   const b = await ctxB.newPage()
   const errorsB: string[] = []
   b.on('pageerror', (e) => errorsB.push(String(e)))
+  await skipTour(b)
   await b.goto('/')
   await b.getByTestId('setup-cloud').click()
   await b.getByTestId('cloud-entry-code').fill(invite)

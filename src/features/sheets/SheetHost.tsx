@@ -16,6 +16,7 @@ import { GoalSheet } from './GoalSheet'
 import { PaySheet } from './PaySheet'
 import { RuleSheet } from './RuleSheet'
 import { TxSheet } from './TxSheet'
+import { TourSheet } from './TourSheet'
 import { SpecialDateSheet } from './SpecialDateSheet'
 import { RoutineSheet } from './RoutineSheet'
 import { SosSheet } from './SosSheet'
@@ -37,6 +38,7 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
   pay: { title: 'Dar baixa', description: 'Valor que saiu de verdade, quem pagou e quando.' },
   tx: { title: 'Lançamento', description: 'Baixa, desfazer ou excluir.' },
   rule: { title: 'Conta fixa', description: 'Vale deste mês em diante.' },
+  tour: { title: 'Bem-vindo ao Ampara', description: 'Um minuto para conhecer. Dá para pular.' },
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
@@ -102,6 +104,7 @@ export function SheetHost() {
       {sheet?.kind === 'period' && exists ? <PeriodSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'cycleSetup' ? <CycleSetupSheet onDone={close} /> : null}
       {sheet?.kind === 'specialDate' && exists ? <SpecialDateSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'tour' ? <TourSheet onDone={close} /> : null}
       {sheet?.kind === 'pay' && exists && editId ? <PaySheet key={editId} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'tx' && exists && editId ? <TxSheet id={editId} onDone={close} /> : null}
       {sheet?.kind === 'rule' && exists && editId ? <RuleSheet key={editId} id={editId} onDone={close} /> : null}

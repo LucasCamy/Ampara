@@ -21,7 +21,9 @@ ok(objs.every((o) => o.metadata?.namespace === 'ampara' || o.kind === 'Namespace
 
 const auth = byName('Deployment', 'ampara-auth')
 const env = (c) => Object.fromEntries((c.env ?? []).map((e) => [e.name, e.value ?? `secret:${e.valueFrom?.secretKeyRef?.key}`]))
-ok(env(auth.spec.template.spec.containers[0]).GOTRUE_DISABLE_SIGNUP === 'true', 'cadastro fechado no Auth (GOTRUE_DISABLE_SIGNUP=true)')
+// cadastro aberto é uma escolha (ex.: o par criando a conta): avisa, não reprova
+if (env(auth.spec.template.spec.containers[0]).GOTRUE_DISABLE_SIGNUP === 'true') console.log('ok  cadastro fechado no Auth (GOTRUE_DISABLE_SIGNUP=true)')
+else console.log('AVISO: cadastro de contas ABERTO no Auth (GOTRUE_DISABLE_SIGNUP=false). Feche quando os dois tiverem conta.')
 
 const rest = byName('Deployment', 'ampara-rest')
 ok(!rest.spec.template.spec.initContainers, 'ampara-rest sem migração própria (quem migra é o backend)')

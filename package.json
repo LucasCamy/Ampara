@@ -21,7 +21,8 @@
     "push:build": "node scripts/build-push.mjs",
     "push:check": "node scripts/build-push.mjs scripts/push-check.ts dist-push/push-check.mjs && node dist-push/push-check.mjs",
     "backup:check": "bash scripts/backup-check.sh && bash scripts/backup-check.sh --migrated",
-    "k8s:check": "node scripts/check-k8s.mjs"
+    "k8s:check": "node scripts/check-k8s.mjs",
+    "e2e:quick": "playwright test --project=iphone-390-light --project=desktop-1280-dark"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",

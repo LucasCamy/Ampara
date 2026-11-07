@@ -28,7 +28,8 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 | `npm test` | Vitest de domínio e do cofre (`src/**/*.test.ts`) |
 | `node scripts/audit-responsive.mjs` | Com `npm run dev` rodando: aponta menus cortados e botões estourando em 360/390 |
 | `npm run build` | Typecheck + build de produção em `dist/` |
-| `npm run e2e` | Build + `vite preview` + Playwright (larguras 360, 390, 1280, 1440; claro e escuro) |
+| `npm run e2e` | Build + `vite preview` + Playwright (larguras 360, 390, 1280, 1440; claro e escuro). `PW_PORT=4183` troca a porta se a 4173 estiver ocupada |
+| `npm run e2e:quick` | Mesma suíte em 2 projetos (celular 390 claro, computador 1280 escuro), para o dia a dia |
 | `npm run db:up` | Supabase local no Docker (Postgres, Auth, REST, gateway em `:54321`) e aplica `supabase/schema.sql` |
 | `npm run db:check` | `supabase/tests/validate.sql`: estrutura, inserções e RLS com três contas no Postgres real |
 | `npm run dev:local` / `npm run e2e:local` | App / Playwright de dois aparelhos contra o banco do Docker (`.env.docker`) |

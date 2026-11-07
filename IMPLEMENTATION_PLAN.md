@@ -37,6 +37,23 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 20 (2026-11-06): Hoje enxuto, PWA, agenda única e acabamento
+
+- **Cuidados:** a aba "Remédios" passa a se chamar Cuidados (remédios, rotinas, rede de apoio, ciclo).
+- **Atualização do app instalado:** `/version.json` por build (nunca em cache no service worker); aviso
+  "Nova versão" com [Atualizar] (salva antes de recarregar) e "Sobre este app" em Ajustes.
+- **Notificação na tela certa:** com o app aberto, o service worker manda o destino por mensagem (o iOS não
+  navega a janela); bloqueado, o destino espera o login. Atalhos: o iPhone abre os do app Atalhos no Safari,
+  que é separado do app da Tela de Início; texto de Ajustes ficou honesto e o Android usa os atalhos do ícone.
+- **Hoje enxuto:** três camadas (urgente, próxima ação, "Para hoje" com até 3 e o resto recolhido).
+- **Carregamento:** abas sob demanda (bundle de 699 para 576 kB), esqueleto com a forma da tela, pré-carga
+  ociosa (offline continua), botão "trabalhando" sem parecer desabilitado.
+- **Seletores:** regra única de largura, divisórias, navegação de mês igual à da Agenda, categorias em chips.
+- **Agenda única** (datas especiais, ciclo, contas pessoais) e **"Para onde foi"** (gastos por categoria).
+- **Apresentação** de 5 passos uma vez por pessoa, com privacidade explicada; rever em Ajustes.
+- **Manutenção:** `PW_PORT`, `npm run e2e:quick`; `k8s:check` avisa (sem reprovar) o cadastro aberto.
+- Pendente: bundle principal ainda acima de 500 kB (React, Motion e ícones usados já no Hoje).
+
 ## Iteração 19 (2026-11-06): segurança e backup de produção
 
 - **Backup diário do banco:** CronJob `ampara-backup` (03:30 de Brasília, 14 guardados, volume próprio) com dump do

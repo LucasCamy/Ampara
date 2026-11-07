@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test'
+import { test as base, expect, type BrowserContext, type Page } from '@playwright/test'
 
 /** Fixture: coleta erros de console/página e falha o teste se houver algum */
 export const test = base.extend<{ errors: string[] }>({
@@ -41,7 +41,9 @@ export async function setupCouple(page: Page) {
   await expect(page.getByTestId('app')).toBeVisible()
 }
 
-export async function open(page: Page, path = '/') {
+export async function open(page: Page, path = '/', opts: { tour?: boolean } = {}) {
+  // a apresentação aparece uma vez por pessoa; os testes em geral começam como quem já viu
+  if (!opts.tour) await page.addInitScript(() => ['A', 'B'].forEach((p) => localStorage.setItem(`ampara:tour:${p}`, 'done')))
   await page.goto(path)
   await ready(page)
   if (await page.getByTestId('setup-form').isVisible()) await setupCouple(page)
@@ -105,4 +107,9 @@ export async function shot(page: Page, name: string, project: string) {
 export async function showTodayFeed(page: Page) {
   const more = page.getByTestId('today-more')
   if ((await more.count()) && (await more.getAttribute('aria-expanded')) === 'false') await more.click()
+}
+
+/** Quem já viu a apresentação (para páginas e aparelhos abertos sem o open()) */
+export async function skipTour(target: Page | BrowserContext) {
+  await target.addInitScript(() => ['A', 'B'].forEach((p) => localStorage.setItem(`ampara:tour:${p}`, 'done')))
 }

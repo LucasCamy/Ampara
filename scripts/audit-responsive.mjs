@@ -53,6 +53,8 @@ const inspect = () => {
 
 for (const w of WIDTHS) {
   const p = await browser.newPage({ viewport: { width: w, height: w < 768 ? 800 : 900 } })
+  // a apresentação (uma vez por pessoa) cobriria a tela: a auditoria começa como quem já viu
+  await p.addInitScript(() => ['A', 'B'].forEach((x) => localStorage.setItem(`ampara:tour:${x}`, 'done')))
   const report = []
   const check = async (label, shotName) => {
     await p.waitForTimeout(250)

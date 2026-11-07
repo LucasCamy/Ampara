@@ -1,4 +1,4 @@
-import { expect, goTab, noHorizontalOverflow, open, shot, test } from './fixtures'
+import { expect, goTab, noHorizontalOverflow, open, shot, test, skipTour } from './fixtures'
 import { FakeSupabase } from './fake-supabase'
 
 // Dois aparelhos (dois contextos isolados) falando com o mesmo Supabase simulado
@@ -48,6 +48,7 @@ test('nuvem: cada um no seu celular, com sync e privacidade aplicada pelo servid
   const b = await ctxB.newPage()
   const errorsB: string[] = []
   b.on('pageerror', (e) => errorsB.push(String(e)))
+  await skipTour(b)
   await b.goto('/')
   await b.getByTestId('setup-cloud').click()
   await b.getByTestId('cloud-entry-code').fill(invite.toLowerCase())
@@ -129,6 +130,7 @@ test('nuvem: convite errado e senha errada dão erro claro, sem criar nada local
   void errors
   const server = new FakeSupabase()
   await server.attach(page.context())
+  await skipTour(page)
   await page.goto('/')
   await page.getByTestId('setup-cloud').click()
   await page.getByTestId('cloud-entry-code').fill('AAAAA-BBBBB')

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { expect, goTab, noHorizontalOverflow, open, PASSWORDS, test } from './fixtures'
+import { expect, goTab, noHorizontalOverflow, open, PASSWORDS, test, skipTour } from './fixtures'
 
 test('backup cifrado: baixar com a senha, restaurar num celular novo e entrar', async ({ browser, page, errors }, info) => {
   void errors
@@ -32,6 +32,7 @@ test('backup cifrado: baixar com a senha, restaurar num celular novo e entrar', 
   // celular novo: arquivo errado, senha errada e, por fim, a certa
   const ctx = await browser.newContext({ viewport: page.viewportSize() ?? undefined })
   const fresh = await ctx.newPage()
+  await skipTour(fresh)
   await fresh.goto('/')
   await expect(fresh.getByTestId('setup-form')).toBeVisible({ timeout: 15_000 })
   await fresh.getByTestId('setup-restore').click()

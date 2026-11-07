@@ -48,6 +48,9 @@ export function AboutSection() {
       </p>
       <p className="mt-1 text-[13px] text-muted">O app confere sozinho ao abrir e ao voltar para ele. Atualizar não apaga nada: os dados ficam no aparelho.</p>
       <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="ghost" onClick={() => ui.openSheet('tour')} data-testid="tour-again">
+          Rever a apresentação
+        </Button>
         {available ? (
           <Button variant="primary" icon={RefreshCw} onClick={() => void applyUpdate()} data-testid="about-apply">
             Atualizar agora

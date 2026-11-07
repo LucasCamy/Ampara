@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { expect, goTab, noHorizontalOverflow, open, test } from './fixtures'
+import { expect, goTab, noHorizontalOverflow, open, skipTour, test } from './fixtures'
 
 /**
  * Dois aparelhos contra o Supabase real do Docker. Confere a interface E o que ficou gravado no Postgres.
@@ -69,6 +69,7 @@ test('Supabase real: cria conta, sobe os dados, pareia o segundo aparelho e resp
   const errorsB: string[] = []
   b.on('pageerror', (e) => errorsB.push(String(e)))
   b.on('console', (m) => m.type() === 'error' && errorsB.push(m.text()))
+  await skipTour(b)
   await b.goto('/')
   await b.getByTestId('setup-cloud').click()
   await b.getByTestId('cloud-entry-code').fill(invite.toLowerCase())

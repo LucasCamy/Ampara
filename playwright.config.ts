@@ -7,6 +7,8 @@ const sizes = [
   { name: 'desktop-1440', width: 1440, height: 900, mobile: false },
 ]
 const schemes = ['light', 'dark'] as const
+// porta do preview dos testes: PW_PORT troca quando a 4173 está ocupada por outro projeto
+const PORT = Number(process.env.PW_PORT ?? 4173)
 
 const projects: Project[] = sizes.flatMap((s) =>
   schemes.map((scheme) => ({
@@ -32,10 +34,10 @@ export default defineConfig({
   workers: 4,
   retries: 0,
   reporter: [['list']],
-  use: { baseURL: 'http://localhost:4173', trace: 'retain-on-failure' },
+  use: { baseURL: `http://localhost:${PORT}`, trace: 'retain-on-failure' },
   webServer: {
-    command: 'npm run build && npm run preview',
-    url: 'http://localhost:4173',
+    command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
+    url: `http://localhost:${PORT}`,
     reuseExistingServer: true,
     timeout: 180_000,
     // build com nuvem apontando para o Supabase simulado dos testes (e2e/fake-supabase.ts)
