@@ -1,9 +1,6 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Toaster } from './components/Toaster'
-import { AgendaScreen } from './features/agenda/AgendaScreen'
-import { FinanceScreen } from './features/finance/FinanceScreen'
-import { RoutinesScreen } from './features/routines/RoutinesScreen'
-import { SettingsScreen } from './features/settings/SettingsScreen'
+import { ScreenSkeleton } from './components/Skeleton'
 import { BottomNav, Dock, Sidebar } from './features/shell/Nav'
 import { UpdateBanner } from './features/shell/UpdateBanner'
 import { ContextRow, TopBar } from './features/shell/TopBar'
@@ -11,8 +8,7 @@ import { LoadingScreen, LoginScreen, SetupScreen, WelcomeScreen } from './featur
 import { useAuth } from './auth/session'
 import { SheetHost } from './features/sheets/SheetHost'
 import { TodayScreen } from './features/today/TodayScreen'
-import { UsScreen } from './features/us/UsScreen'
-import { useUi } from './store/ui'
+import { useUi, type Tab } from './store/ui'
 import { consumeLaunchLink } from './sync/deeplink'
 import { useData } from './store/data'
 import { useNow } from './store/clock'
@@ -26,8 +22,42 @@ function useQuickLaunch() {
   }, [])
 }
 
+/**
+ * Abas além do Hoje carregam sob demanda (o primeiro download do celular fica menor). Logo depois de abrir,
+ * com o app ocioso, elas são pré-carregadas: o service worker guarda e o app continua funcionando offline.
+ */
+const loadAgenda = () => import('./features/agenda/AgendaScreen').then((m) => ({ default: m.AgendaScreen }))
+const loadUs = () => import('./features/us/UsScreen').then((m) => ({ default: m.UsScreen }))
+const loadRoutines = () => import('./features/routines/RoutinesScreen').then((m) => ({ default: m.RoutinesScreen }))
+const loadFinance = () => import('./features/finance/FinanceScreen').then((m) => ({ default: m.FinanceScreen }))
+const loadSettings = () => import('./features/settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen }))
+const AgendaScreen = lazy(loadAgenda)
+const UsScreen = lazy(loadUs)
+const RoutinesScreen = lazy(loadRoutines)
+const FinanceScreen = lazy(loadFinance)
+const SettingsScreen = lazy(loadSettings)
+
+function usePrefetchTabs() {
+  useEffect(() => {
+    const run = () => void Promise.all([loadAgenda(), loadUs(), loadRoutines(), loadFinance(), loadSettings()]).catch(() => undefined)
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    const id = idle ? idle(run) : window.setTimeout(run, 1500)
+    return () => {
+      if (!idle) window.clearTimeout(id)
+    }
+  }, [])
+}
+
 function Screen() {
   const tab = useUi((s) => s.tab)
+  return (
+    <Suspense fallback={<ScreenSkeleton />}>
+      <TabScreen tab={tab} />
+    </Suspense>
+  )
+}
+
+function TabScreen({ tab }: { tab: Tab }) {
   switch (tab) {
     case 'hoje':
       return <TodayScreen />
@@ -57,6 +87,7 @@ function useRecurrences() {
 function AppShell() {
   useQuickLaunch()
   useRecurrences()
+  usePrefetchTabs()
   return (
     <div className="flex min-h-dvh" data-testid="app">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:rounded-[12px] focus:bg-surface focus:p-3">

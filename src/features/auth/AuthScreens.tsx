@@ -6,6 +6,7 @@ import { Button, ChoiceChips, cx, FieldError, Segmented, Switch, Title } from '.
 import { enterFromCloud, useCloud } from '../../sync/cloud'
 import type { PartnerId, Pronoun, SplitMode } from '../../domain/types'
 import { ThemeToggle } from '../shell/TopBar'
+import { Bone } from '../../components/Skeleton'
 import { RestoreForm } from '../settings/BackupSection'
 
 function Shell({ children }: { children: ReactNode }) {
@@ -538,10 +539,23 @@ function ActivateForm({ who, person }: { who: PartnerId; person: PersonHeader })
   )
 }
 
+/** Abrindo o cofre: esqueleto com a forma da tela (marca, título e o cartão principal), sem texto solto no meio */
 export function LoadingScreen() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-bg" role="status" aria-live="polite">
-      <span className="text-[15px] font-semibold text-muted">Abrindo o Ampara...</span>
+    <div className="min-h-dvh bg-bg" role="status" aria-live="polite" aria-busy="true" data-testid="loading-screen">
+      <span className="sr-only">Abrindo o Ampara...</span>
+      <div className="mx-auto flex max-w-[480px] flex-col gap-4 px-4 pt-6">
+        <span className="text-[22px] font-extrabold tracking-tight text-ink" aria-hidden>
+          Ampara<span className="text-action">.</span>
+        </span>
+        <Bone className="mt-4 h-8 w-4/5 rounded-[12px]" />
+        <Bone className="h-4 w-3/5" />
+        <div className="module mt-2 flex flex-col gap-3 p-5">
+          <Bone className="h-4 w-1/3" />
+          <Bone className="h-6 w-3/4" />
+          <Bone className="h-14 w-full rounded-[18px]" />
+        </div>
+      </div>
     </div>
   )
 }
