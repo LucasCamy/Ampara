@@ -68,8 +68,8 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   só os nomes do cabeçalho, como no cofre local.
 - Restaurar só substitui o cofre deste aparelho depois que a senha abre o cofre do arquivo; com dados no aparelho,
   pede confirmação explícita. Depois a pessoa entra normalmente (sessão lembrada e tentativas são zeradas).
-- O backup carrega a sessão da nuvem cifrada (refresh token). Quem tiver o arquivo e a senha entra na conta: guarde
-  o arquivo como guardaria a senha.
+- O arquivo NÃO leva a sessão da nuvem (refresh token): quem achar o arquivo e souber a senha abre os dados daquele
+  aparelho, mas não entra na conta da nuvem. Depois de restaurar, a pessoa conecta a nuvem de novo em Ajustes.
 
 ## Mapeamento das classes da skill
 
@@ -101,8 +101,21 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 - Inscrições: cada pessoa lê e apaga só as próprias (RLS); gravar só pela RPC `save_push_subscription`, que exige
   https e prende a inscrição à pessoa logada. Chave privada VAPID e o registro de envios (`push_config`, `push_sent`)
   ficam sem política: o app não lê. O worker gera as chaves na primeira vez.
-- Limitação: o worker usa o usuário `postgres` (precisa ler os remédios de todos os casais). Um papel próprio só de
-  leitura com BYPASSRLS seria o ideal; fica como melhoria. A senha não pode ter caracteres especiais de URL.
+- O worker usa o papel próprio `ampara_worker`: lê remédios, doses, pedidos de ajuda e nomes de exibição (políticas
+  `to ampara_worker`, sem BYPASSRLS) e cuida só das tabelas de push. Não lê lançamentos, ciclo, presentes nem
+  check-in, e não altera nada do casal (`validate.sql`, caso 6i). No k8s a migração roda num initContainer com a
+  senha de administrador; o container do worker só recebe `WORKER_DB_PASSWORD`. `push:check` roda com esse papel.
+- As senhas do banco não podem ter caracteres especiais de URL (`@ / : ?`); use hex (`openssl rand -hex 24`).
+
+## Produção (cluster)
+
+- **Cadastro fechado:** `GOTRUE_DISABLE_SIGNUP=true`. O app é só do casal; para criar uma conta nova, libere por
+  alguns minutos e feche de novo. O app mostra uma mensagem clara quando o cadastro está fechado.
+- **Limite de tentativas** no gateway (`docker/nginx-prod.conf`): login, cadastro, recuperação e entrada pelo
+  convite, 20 por minuto por IP (folga de 20). Ensaiado com o nginx real: 22 passam, o resto recebe 429; o uso
+  normal da API não é afetado.
+- **Backup diário** do banco (CronJob `ampara-backup`, 14 dias) e restauração ensaiada num banco novo
+  (`npm run backup:check`). Procedimento em `docs/BACKUP.md`. Limitação: o volume do backup fica no mesmo nó.
 - iPhone: só com o app na Tela de Início (iOS 16.4+). Sem a nuvem conectada não há lembrete com o app fechado.
 
 ## Limitações conhecidas (honestas)

@@ -96,7 +96,10 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
     environment:
-      DATABASE_URL: postgres://postgres:ampara-local-postgres@db:5432/postgres
+      # migra com o administrador e roda os lembretes com o papel restrito ampara_worker (senha só local)
+      MIGRATE_DATABASE_URL: postgres://postgres:ampara-local-postgres@db:5432/postgres
+      WORKER_DB_PASSWORD: ampara-local-worker-senha
+      DATABASE_URL: postgres://ampara_worker:ampara-local-worker-senha@db:5432/postgres
       PUSH_SUBJECT: http://localhost:5173
 
   gateway:

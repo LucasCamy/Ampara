@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildSeed } from '../domain/seed'
 import { normalizeInvite } from './crypto'
-import { AuthError, backupFileName, changePassword, claimInvite, createVault, lockoutMs, parseBackup, readData, toBackup, unlockVault, validatePassword, writeData } from './vault'
+import { AuthError, backupFileName, sealCloud, changePassword, claimInvite, createVault, lockoutMs, parseBackup, readData, toBackup, unlockVault, validatePassword, writeData } from './vault'
 
 const IT = 1_000 // iterações reduzidas só no teste; produção usa 600.000
 const data = buildSeed(new Date('2026-11-05T10:00:00'))
@@ -111,5 +111,19 @@ describe('backup cifrado', () => {
     expect(() => parseBackup(JSON.stringify({ format: 'outra-coisa', version: 1 }))).toThrow('não é um backup do Ampara')
     expect(() => parseBackup(JSON.stringify({ format: 'ampara-backup', version: 1, vault: { v: 1 } }))).toThrow('não é um backup do Ampara')
     expect(backupFileName('2026-11-06')).toBe('ampara-backup-2026-11-06.ampara')
+  })
+})
+
+describe('backup sem a sessão da nuvem', () => {
+  it('o refresh token cifrado fica de fora do arquivo; o resto do cofre continua igual', async () => {
+    const { vault, key } = await make()
+    const withCloud = await sealCloud(vault, key, 'A', JSON.stringify({ refreshToken: 'rt-segredo', email: 'lucas@exemplo.com' }))
+    expect(withCloud.people.A.cloud).toBeTruthy()
+    const file = parseBackup(toBackup(withCloud, 'A', '2026-11-06T10:00:00.000Z'))
+    expect(file.vault.people.A.cloud).toBeUndefined()
+    expect(file.vault.data).toEqual(withCloud.data)
+    expect(file.vault.people.A.wrapped).toBe(withCloud.people.A.wrapped)
+    const k = await unlockVault(file.vault, 'A', 'uma frase longa do lucas')
+    expect((await readData(file.vault, k)).profiles.A?.displayName).toBe('Lucas')
   })
 })

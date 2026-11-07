@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import pg from 'pg'
 import { localParts } from '../server/push/plan'
+import { enableWorkerLogin } from '../server/push/migrate'
 import { tick } from '../server/push/worker'
 
 // só neste processo de teste: o serviço de push falso usa certificado autoassinado
@@ -92,6 +93,10 @@ function checkVapid(header: string | string[] | undefined, endpoint: string, pub
 
 /* ---------- dados de teste ---------- */
 const db = new pg.Pool({ connectionString: DB, max: 2 })
+// os ciclos do worker rodam com o papel restrito (o mesmo da produção): prova que as permissões bastam
+const WORKER_PW = 'ampara-local-worker-senha'
+await enableWorkerLogin(db, WORKER_PW)
+const workerDb = new pg.Pool({ connectionString: DB.replace(/\/\/[^@]+@/, `//ampara_worker:${WORKER_PW}@`), max: 2 })
 const couple = `push-check-${randomUUID()}`
 const ela = device('ela')
 const ele = device('ele')
@@ -119,7 +124,7 @@ try {
   }
 
   // 1) remédio dela na hora: só ela recebe, sem o nome do remédio na tela bloqueada
-  const r1 = await tick(db, opts, now)
+  const r1 = await tick(workerDb, opts, now)
   const pub = (await db.query<{ public_key: string }>('select public_key from push_config where id = 1')).rows[0]!.public_key
   ok(r1.sent === 1 && received.length === 1, `um envio no horário (enviados ${r1.sent}, recebidos ${received.length})`)
   const got = received[0]
@@ -132,27 +137,28 @@ try {
   ok(got && !got.body.toString('latin1').includes('Hora do seu'), 'o serviço de push não consegue ler o texto')
 
   // 2) próximo ciclo: não repete
-  const r2 = await tick(db, opts, now)
+  const r2 = await tick(workerDb, opts, now)
   ok(r2.sent === 0 && r2.skipped === 1 && received.length === 1, 'o mesmo lembrete não sai duas vezes')
 
   // 3) pedido de ajuda dela; o navegador dele cancelou a inscrição (410): a inscrição some
   reply = 410
   await db.query("insert into help_requests (id, couple_id, requester_id, situation, help_type, urgency, status) values ($1, $2, 'B', 'Marcar dentista', 'BODY_DOUBLING', 'TODAY', 'OPEN')", [randomUUID(), couple])
-  const r3 = await tick(db, opts, new Date())
+  const r3 = await tick(workerDb, opts, new Date())
   const left = (await db.query('select 1 from push_subscriptions where endpoint = $1', [ele.endpoint])).rowCount
   ok(r3.removed === 1 && left === 0, 'inscrição cancelada (410) é removida do banco')
 
   // 4) serviço de push fora do ar: libera a reserva para tentar de novo
   reply = 503
   await db.query("insert into help_requests (id, couple_id, requester_id, situation, help_type, urgency, status) values ($1, $2, 'A', 'Lavar louça', 'TAKE_OVER', 'NOW', 'OPEN')", [randomUUID(), couple])
-  const r4 = await tick(db, opts, new Date())
+  const r4 = await tick(workerDb, opts, new Date())
   reply = 201
-  const r5 = await tick(db, opts, new Date())
+  const r5 = await tick(workerDb, opts, new Date())
   ok(r4.failed === 1 && r5.sent === 1, `falha temporária tenta de novo no próximo ciclo (falhas ${r4.failed}, depois enviados ${r5.sent})`)
 } finally {
   await db.query('delete from push_sent where key like $1', [`%localhost:${port}%`])
   await db.query('delete from couples where id = $1', [couple])
   await db.end()
+  await workerDb.end()
   server.close()
   rmSync(dir, { recursive: true, force: true })
 }

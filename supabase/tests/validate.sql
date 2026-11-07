@@ -529,6 +529,44 @@ do $$ begin
 end $$;
 \echo 'ok  contas fixas com a privacidade dos lançamentos; parcela validada; versão velha não desfaz a baixa'
 
+-- ---------------------------------------------------------------- 6i. papel do worker: só o que os lembretes precisam
+reset role;
+set local role ampara_worker;
+do $$ begin
+  assert (select count(*) from medications) >= 2, 'FALHOU: worker não lê os remédios de todos os casais';
+  assert (select count(*) from profiles) >= 2, 'FALHOU: worker não lê os nomes';
+  perform 1 from medication_logs; perform 1 from help_requests; perform 1 from push_subscriptions;
+  insert into push_sent (key) values ('teste-worker');
+  delete from push_sent where key = 'teste-worker';
+  begin
+    perform 1 from transactions;
+    raise exception 'FALHOU: worker leu lançamentos';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from cycle_logs;
+    raise exception 'FALHOU: worker leu o ciclo';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from gift_ideas;
+    raise exception 'FALHOU: worker leu presentes';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update medications set name = 'invadido';
+    raise exception 'FALHOU: worker alterou remédio';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update push_subscriptions set p256dh = 'troca';
+    raise exception 'FALHOU: worker trocou a chave de uma inscrição';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+\echo 'ok  worker: lê remédios, doses, ajuda e nomes; não lê lançamentos, ciclo nem presentes; não altera nada do casal'
+
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;
 set local role anon;

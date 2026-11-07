@@ -212,8 +212,10 @@ spec:
                 secretKeyRef:
                   name: ampara-secrets
                   key: GOTRUE_DB_DATABASE_URL
+            # Cadastro fechado: o app é só do casal. Para criar uma conta nova (ex.: o par entrando pela primeira vez),
+            # mude para "false", aplique, crie a conta e volte para "true".
             - name: GOTRUE_DISABLE_SIGNUP
-              value: "false"
+              value: "true"
             - name: GOTRUE_JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -396,19 +398,53 @@ spec:
       labels:
         app: ampara-push
     spec:
-      containers:
-        - name: push
+      # Etapa 1 (senha de administrador): aplica o schema.sql da imagem e liga o login do papel ampara_worker.
+      initContainers:
+        - name: migrate
           image: ghcr.io/lucascamy/ampara-push:latest
           imagePullPolicy: Always
+          args: ["node", "worker.mjs", "--migrate-only"]
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: ampara-secrets
                   key: POSTGRES_PASSWORD
-            # lê os dados de todos os casais (RLS não se aplica ao dono das tabelas); senha sem caracteres de URL
-            - name: DATABASE_URL
+            - name: WORKER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: WORKER_DB_PASSWORD
+            # senhas sem caracteres especiais de URL (@ / : ?)
+            - name: MIGRATE_DATABASE_URL
               value: "postgres://postgres:$(POSTGRES_PASSWORD)@db:5432/postgres"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 48Mi
+            limits:
+              cpu: 300m
+              memory: 192Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+      # Etapa 2: o worker nem recebe a senha de administrador. O papel ampara_worker só lê remédios, doses,
+      # pedidos de ajuda e nomes (sem lançamentos, ciclo ou presentes; ver supabase/schema.sql, iteração 19).
+      containers:
+        - name: push
+          image: ghcr.io/lucascamy/ampara-push:latest
+          imagePullPolicy: Always
+          env:
+            - name: WORKER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ampara-secrets
+                  key: WORKER_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://ampara_worker:$(WORKER_DB_PASSWORD)@db:5432/postgres"
             - name: PUSH_SUBJECT
               value: "https://ampara.cloudlane.com.br"
           resources:
@@ -424,3 +460,82 @@ spec:
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
+---
+# Backup diário do banco (03:30 de Brasília), 14 dias guardados. Restauração e cópia para fora do cluster:
+# docs/BACKUP.md. Os comandos de dump são os mesmos que `npm run backup:check` ensaia (restaura num banco novo).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ampara-backup-pvc
+  namespace: ampara
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ampara-backup
+  namespace: ampara
+spec:
+  schedule: "30 3 * * *"
+  timeZone: America/Sao_Paulo
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: supabase/postgres:15.8.1.085
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ampara-secrets
+                      key: POSTGRES_PASSWORD
+                - name: PGHOST
+                  value: db
+                - name: KEEP
+                  value: "14"
+              command:
+                - bash
+                - -euc
+                - |
+                  TS=$(date -u +%Y-%m-%dT%H%M%SZ)
+                  D="/backup/$TS.partial"
+                  mkdir -p "$D"
+                  # app (estrutura + dados + RLS) e contas (só os dados: a estrutura do auth é do GoTrue)
+                  pg_dump -U postgres -d postgres -Fc -n public -n ampara_meta -f "$D/app.dump"
+                  pg_dump -U postgres -d postgres -Fc --data-only -t auth.users -t auth.identities -f "$D/auth.dump"
+                  (cd "$D" && sha256sum app.dump auth.dump > SHA256SUMS)
+                  mv "$D" "/backup/$TS"
+                  rm -rf /backup/*.partial
+                  # guarda os KEEP mais recentes
+                  ls -1d /backup/20*Z | sort | head -n "-$KEEP" | xargs -r rm -rf
+                  echo "backup $TS: $(du -sh "/backup/$TS" | cut -f1); guardados: $(ls -1d /backup/20*Z | wc -l)"
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: ampara-backup-pvc

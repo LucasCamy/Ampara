@@ -33,6 +33,8 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 | `npm run db:check` | `supabase/tests/validate.sql`: estrutura, inserções e RLS com três contas no Postgres real |
 | `npm run dev:local` / `npm run e2e:local` | App / Playwright de dois aparelhos contra o banco do Docker (`.env.docker`) |
 | `npm run push:check` | Worker de lembretes contra o Postgres do Docker: envia para um serviço de push falso e decifra (pare o serviço `push` do compose antes) |
+| `npm run backup:check` | Ensaio de desastre: backup do banco do Docker, restauração num Postgres + Auth novos (dois cenários) e comparação (`docs/BACKUP.md`) |
+| `npm run k8s:check` | Confere `k8s/deploy.yaml` e o workflow do CI (YAML válido e as regras de segurança do deploy) |
 | `npm run push:build` | Empacota o worker (`server/push` + `src/domain`) em `dist-push/worker.mjs` (imagem: `Dockerfile.push`) |
 
 ## Estrutura

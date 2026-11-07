@@ -57,3 +57,17 @@ export async function migrate(db: pg.Pool, sql: string, log: (m: string) => void
     client.release()
   }
 }
+
+/**
+ * Liga o login do papel do worker (criado sem login pelo schema) com a senha do segredo.
+ * Roda a cada subida da etapa de migração: trocar o segredo e reiniciar troca a senha.
+ */
+export async function enableWorkerLogin(db: pg.Pool, password: string): Promise<void> {
+  if (password.length < 16) throw new Error('WORKER_DB_PASSWORD precisa de pelo menos 16 caracteres')
+  const client = await db.connect()
+  try {
+    await client.query(`alter role ampara_worker with login password ${client.escapeLiteral(password)}`)
+  } finally {
+    client.release()
+  }
+}

@@ -237,9 +237,19 @@ export interface BackupFile {
   vault: Vault
 }
 
-/** Arquivo de backup: o cofre continua cifrado; nada é decifrado para exportar */
+/**
+ * Arquivo de backup: o cofre continua cifrado; nada é decifrado para exportar.
+ * A sessão da nuvem (refresh token) NÃO vai junto: quem achar o arquivo e souber a senha não entra na conta.
+ * Depois de restaurar, a pessoa conecta a nuvem de novo em Ajustes.
+ */
 export function toBackup(vault: Vault, by: PartnerId, nowIso: string): string {
-  const file: BackupFile = { format: BACKUP_FORMAT, version: 1, exportedAt: nowIso, exportedBy: by, vault }
+  const strip = (p: PersonSlot): PersonSlot => {
+    const { cloud: _cloud, ...rest } = p
+    void _cloud
+    return rest
+  }
+  const safe: Vault = { ...vault, people: { A: strip(vault.people.A), B: strip(vault.people.B) } }
+  const file: BackupFile = { format: BACKUP_FORMAT, version: 1, exportedAt: nowIso, exportedBy: by, vault: safe }
   return JSON.stringify(file)
 }
 

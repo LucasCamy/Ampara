@@ -37,6 +37,23 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 19 (2026-11-06): segurança e backup de produção
+
+- **Backup diário do banco:** CronJob `ampara-backup` (03:30 de Brasília, 14 guardados, volume próprio) com dump do
+  app (`public` + `ampara_meta`) e das contas (`auth.users`/`auth.identities`, só dados) e soma de verificação.
+- **Restauração ensaiada:** `docker/backup/restore.sh` + `npm run backup:check`, que faz o backup, sobe Postgres +
+  Auth novos e restaura nos dois cenários (banco sem tabelas; backend já criou as tabelas vazias), comparando as 25
+  tabelas, as contas (senhas preservadas) e as políticas RLS. Nunca restaura por cima de dados. O ensaio achou dois
+  problemas que quebrariam uma restauração real: o schema `public` e os privilégios padrão já existem num banco
+  novo, e o papel `ampara_worker` não vai no dump (o script cria antes). Procedimento em `docs/BACKUP.md`.
+- **Worker com mínimo privilégio:** papel `ampara_worker` (políticas `to ampara_worker`, sem BYPASSRLS); no k8s a
+  migração vira initContainer com a senha de administrador e o worker só recebe `WORKER_DB_PASSWORD`.
+- **Cadastro fechado** no Auth de produção e **limite de tentativas** no gateway (login, cadastro, recuperação,
+  convite), ensaiado com o nginx real. Mensagens claras no app para cadastro fechado e excesso de tentativas.
+- **Backup do app** sem a sessão da nuvem (refresh token).
+- `npm run k8s:check`: manifesto e workflow conferidos (YAML válido, cadastro fechado, worker sem a senha de
+  administrador, UID numérico, CronJob do backup). O script do CronJob foi rodado do próprio YAML na imagem do banco.
+
 ## Iteração 18 (2026-11-06): finanças no tempo (baixa, futuras, parceladas e fixas)
 
 - **Dar baixa** (`payTx`): valor real (a conta veio diferente), quem pagou e data do pagamento (`paidAt`); o mês de

@@ -168,7 +168,7 @@ export function BackupSection() {
     <section className="module p-4 sm:p-5" aria-labelledby="backup" data-testid="backup-section">
       <SectionHeader id="backup" title="Backup" rest="· cifrado, só abre com a senha" />
       <p className="text-[14px] text-muted">
-        Um arquivo com tudo deste aparelho, cifrado do mesmo jeito que aqui. Se o celular sumir ou o navegador limpar os dados, é por ele que vocês voltam.
+        Um arquivo com tudo deste aparelho, cifrado do mesmo jeito que aqui. Se o celular sumir ou o navegador limpar os dados, é por ele que vocês voltam. A conexão com a nuvem não vai junto: depois de restaurar, conecte de novo em Ajustes.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="quiet" icon={Download} onClick={() => setPanel(panel === 'export' ? null : 'export')} aria-expanded={panel === 'export'} data-testid="backup-export-open">

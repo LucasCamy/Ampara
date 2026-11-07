@@ -796,3 +796,41 @@ begin
     execute format('create trigger trg_%I_keep before update on %I for each row execute function keep_newest()', t, t);
   end loop;
 end $$;
+
+-- =====================================================================
+-- Iteração 19: papel próprio do worker de lembretes (mínimo privilégio)
+-- =====================================================================
+-- O worker lê só o que os lembretes precisam (remédios, doses, pedidos de ajuda, nomes) e cuida das tabelas de push.
+-- Nada de lançamentos, ciclo, presentes, check-in. Sem login aqui: a etapa de migração liga o login com a senha do
+-- segredo WORKER_DB_PASSWORD. Políticas "to ampara_worker" valem só para ele (o app continua com as suas).
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'ampara_worker') then
+    create role ampara_worker nologin;
+  end if;
+end $$;
+grant ampara_worker to postgres; -- para a validação poder "virar" o worker (set role)
+grant usage on schema public to ampara_worker;
+grant select on medications, medication_logs, help_requests, profiles to ampara_worker;
+grant select, update (last_ok_at), delete on push_subscriptions to ampara_worker;
+grant select, insert on push_config to ampara_worker;
+grant select, insert, delete on push_sent to ampara_worker;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['medications','medication_logs','help_requests','profiles','push_subscriptions','push_config','push_sent'] loop
+    execute format('drop policy if exists %I on %I', 'worker_read', t);
+    execute format('create policy %I on %I for select to ampara_worker using (true)', 'worker_read', t);
+  end loop;
+end $$;
+drop policy if exists worker_update on push_subscriptions;
+create policy worker_update on push_subscriptions for update to ampara_worker using (true) with check (true);
+drop policy if exists worker_delete on push_subscriptions;
+create policy worker_delete on push_subscriptions for delete to ampara_worker using (true);
+drop policy if exists worker_insert on push_config;
+create policy worker_insert on push_config for insert to ampara_worker with check (true);
+drop policy if exists worker_insert on push_sent;
+create policy worker_insert on push_sent for insert to ampara_worker with check (true);
+drop policy if exists worker_delete on push_sent;
+create policy worker_delete on push_sent for delete to ampara_worker using (true);

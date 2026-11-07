@@ -88,7 +88,9 @@ export function friendlyAuthError(e: unknown): string {
   if (e.code === 'network') return 'Sem conexão. Tente de novo quando a internet voltar.'
   if (e.status === 400 && /invalid/i.test(e.message)) return 'E-mail ou senha incorretos.'
   if (/already registered|already exists|user_already_exists/i.test(`${e.code} ${e.message}`)) return 'Este e-mail já tem conta. Use "Já tenho conta".'
-  if (e.status === 429) return 'Muitas tentativas. Aguarde um pouco.'
+  // servidor com cadastro fechado (o app é só do casal)
+  if (/signup_disabled|signups not allowed/i.test(`${e.code} ${e.message}`)) return 'O cadastro de contas novas está fechado neste servidor. Peça para quem administra liberar por alguns minutos.'
+  if (e.status === 429 || e.code === 'over_request_rate_limit') return 'Muitas tentativas. Espere um minuto e tente de novo.'
   if (/password/i.test(e.message)) return 'A senha não atende às regras do servidor.'
   return e.message || 'Não foi possível concluir.'
 }

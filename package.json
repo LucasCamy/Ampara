@@ -19,7 +19,9 @@
     "dev:local": "vite --mode docker",
     "e2e:local": "playwright test -c playwright.local.config.ts",
     "push:build": "node scripts/build-push.mjs",
-    "push:check": "node scripts/build-push.mjs scripts/push-check.ts dist-push/push-check.mjs && node dist-push/push-check.mjs"
+    "push:check": "node scripts/build-push.mjs scripts/push-check.ts dist-push/push-check.mjs && node dist-push/push-check.mjs",
+    "backup:check": "bash scripts/backup-check.sh && bash scripts/backup-check.sh --migrated",
+    "k8s:check": "node scripts/check-k8s.mjs"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",
@@ -49,7 +51,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.6",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
   },
   "overrides": {
     "minimatch": "^11.0.5"
