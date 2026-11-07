@@ -15,7 +15,7 @@ test('finanças no tempo: contas fixas, baixa com outro valor, parcelado, vencid
   await expect(page.getByTestId('rules-COUPLE').getByTestId('rule-row')).toHaveCount(2)
   await expect(page.getByTestId('rules-COUPLE')).toContainText('R$ 2.520,00 por mês')
   await page.getByTestId('month-next').click()
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Finanças de dezembro')
+  await expect(page.getByTestId('month-label')).toHaveText(/dezembro de 2026/i)
   await expect(predicted('Aluguel')).toContainText('Fixa mensal')
   await expect(predicted('Aluguel')).toContainText('Vence 11/12')
   await page.getByTestId('month-today').click()

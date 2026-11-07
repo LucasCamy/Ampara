@@ -33,23 +33,29 @@ export function FinanceScreen() {
   return (
     <div>
       <div className="mb-4">
-        <Title anchor={`Finanças de ${label},`} rest={month === current ? 'claras e leves.' : month > current ? 'o que vem por aí.' : 'como foi.'} />
+        {/* título fixo: o mês fica só no seletor abaixo (trocar o mês no título mudava o tamanho e quebrava a linha) */}
+        <Title anchor="Finanças," rest="claras e leves." />
       </div>
       {/* mesmo navegador da Agenda: setas com borda e o mês no meio */}
-      <div className="mb-4 flex items-center gap-2" role="group" aria-label="Mês">
-        <button type="button" onClick={() => step(-1)} aria-label="Mês anterior" data-testid="month-prev" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
-          <ChevronLeft size={20} aria-hidden />
-        </button>
-        <p className="min-w-0 flex-1 text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite" data-testid="month-label">
-          {monthTitle(month, '')}
-        </p>
-        <button type="button" onClick={() => step(1)} aria-label="Próximo mês" data-testid="month-next" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
-          <ChevronRight size={20} aria-hidden />
-        </button>
+      <div className="mb-4" role="group" aria-label="Mês">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => step(-1)} aria-label="Mês anterior" data-testid="month-prev" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
+            <ChevronLeft size={20} aria-hidden />
+          </button>
+          <p className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite" data-testid="month-label">
+            {monthTitle(month, '')}
+          </p>
+          <button type="button" onClick={() => step(1)} aria-label="Próximo mês" data-testid="month-next" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
+            <ChevronRight size={20} aria-hidden />
+          </button>
+        </div>
+        {/* voltar fica numa linha própria: ao lado do mês ele espremia o nome e quebrava a linha */}
         {month !== current ? (
-          <Button size="sm" variant="quiet" onClick={() => setMonth(current)} data-testid="month-today" className="shrink-0">
-            Mês atual
-          </Button>
+          <div className="mt-1 flex justify-center">
+            <Button size="sm" variant="ghost" onClick={() => setMonth(current)} data-testid="month-today">
+              Voltar para o mês atual
+            </Button>
+          </div>
         ) : null}
       </div>
       <div className="mb-5">

@@ -72,9 +72,13 @@ export function AgendaScreen() {
     } else setCursor(addDays(cursor, dir * step))
   }
 
+  // Dia no celular: curto e sem repetir o dia da semana ("Amanhã, 6/11" ou "Sexta-feira, 13/11")
+  const rel = relativeDayLabel(cursor, today)
+  const near = rel === 'Hoje' || rel === 'Amanhã' || rel === 'Ontem'
+  const shortDay = `${near ? rel : weekdayLong(cursor)}, ${dayOfMonth(cursor)}/${String(parseDateKey(cursor).getMonth() + 1).padStart(2, '0')}`
   const rangeLabel =
     view === 'DAY'
-      ? `${relativeDayLabel(cursor, today)} · ${weekdayLong(cursor)}, ${dayOfMonth(cursor)} de ${monthName(cursor)}`
+      ? `${near ? `${rel} · ` : ''}${weekdayLong(cursor)}, ${dayOfMonth(cursor)} de ${monthName(cursor)}`
       : view === 'WEEK'
         ? (() => {
             const w = weekDays(cursor)
@@ -124,20 +128,32 @@ export function AgendaScreen() {
       </div>
 
       {view !== 'INBOX' ? (
-        <div className="mb-4 flex items-center gap-2">
-          <button type="button" onClick={() => move(-1)} aria-label="Período anterior" className="press hoverable inline-flex h-12 w-12 items-center justify-center rounded-full border border-line text-ink">
-            <ChevronLeft size={20} aria-hidden />
-          </button>
-          <p className="min-w-0 flex-1 text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite">
-            {rangeLabel}
-          </p>
-          <button type="button" onClick={() => move(1)} aria-label="Próximo período" className="press hoverable inline-flex h-12 w-12 items-center justify-center rounded-full border border-line text-ink">
-            <ChevronRight size={20} aria-hidden />
-          </button>
+        <div className="mb-4">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => move(-1)} aria-label="Período anterior" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
+              <ChevronLeft size={20} aria-hidden />
+            </button>
+            <p className="min-w-0 flex-1 text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite">
+              {view === 'DAY' ? (
+                <>
+                  <span className="sm:hidden">{shortDay}</span>
+                  <span className="hidden sm:inline">{rangeLabel}</span>
+                </>
+              ) : (
+                rangeLabel
+              )}
+            </p>
+            <button type="button" onClick={() => move(1)} aria-label="Próximo período" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
+              <ChevronRight size={20} aria-hidden />
+            </button>
+          </div>
+          {/* voltar numa linha própria, como nas Finanças: ao lado ele espremia o período */}
           {cursor !== today ? (
-            <Button size="sm" variant="quiet" onClick={() => setCursor(today)}>
-              Hoje
-            </Button>
+            <div className="mt-1 flex justify-center">
+              <Button size="sm" variant="ghost" onClick={() => setCursor(today)} data-testid="agenda-today">
+                Voltar para hoje
+              </Button>
+            </div>
           ) : null}
         </div>
       ) : null}

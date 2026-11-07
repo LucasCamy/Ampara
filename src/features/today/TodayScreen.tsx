@@ -196,28 +196,26 @@ export function TodayScreen() {
   // 2) Núcleo: o que fazer agora e o que vem nas próximas horas
   const focusSection = (
       <section aria-labelledby="foco-title">
-        <SectionHeader
-          id="foco-title"
-          title="Foco do dia"
-          rest={`até 3 prioridades`}
-          action={
-            <Segmented<ScopeFilter>
-              label="Filtrar tarefas por pessoa"
-              value={filter}
-              onChange={(v) => {
-                setFilter(v)
-                setShowAll(false)
-              }}
-              size="sm"
-              options={[
-                { value: 'ALL', label: 'Todos', testId: 'filter-ALL' },
-                { value: 'MINE', label: 'Meu', testId: 'filter-MINE' },
-                { value: 'PARTNER', label: possessive(partner), testId: 'filter-PARTNER' },
-                { value: 'US', label: 'Nós', testId: 'filter-US' },
-              ]}
-            />
-          }
-        />
+        <SectionHeader id="foco-title" title="Foco do dia" rest="até 3 prioridades" />
+        {/* filtro abaixo do título, na largura toda como na Agenda (ao lado do título ele não podia esticar) */}
+        <div className="mb-3">
+          <Segmented<ScopeFilter>
+            label="Filtrar tarefas por pessoa"
+            value={filter}
+            onChange={(v) => {
+              setFilter(v)
+              setShowAll(false)
+            }}
+            size="sm"
+            stretch
+            options={[
+              { value: 'ALL', label: 'Todos', testId: 'filter-ALL' },
+              { value: 'MINE', label: 'Meu', testId: 'filter-MINE' },
+              { value: 'PARTNER', label: possessive(partner), testId: 'filter-PARTNER' },
+              { value: 'US', label: 'Nós', testId: 'filter-US' },
+            ]}
+          />
+        </div>
         {focus.length === 0 && d.bills.length === 0 ? (
           <EmptyState
             icon={Sparkles}
