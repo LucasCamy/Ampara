@@ -51,10 +51,9 @@
 - **Pedido de ajuda e lembrete carinhoso:** sem "for all"; só quem pede ou manda cria, os dois atualizam, ninguém
   apaga (`help_request_exists`/`nudge_exists` deixam o upsert do par virar update). Na primeira subida cada
   aparelho manda só os seus. Casos no `validate.sql`, espelho no `fake-supabase.ts`.
-- **Gateway:** HSTS. `real_ip` documentado e desligado (depende do que está na frente; ligar sem isso deixa o
-  IP ser forjado e o limite de tentativas ser contornado).
+- **Gateway:** HSTS e `real_ip` pelo `CF-Connecting-IP` do Cloudflare Tunnel (confiável só de endereço privado):
+  o limite de tentativas passa a ser por visitante, não um só para todos. Ensaiado com o nginx real.
 - **E2E na mesma origem:** `e2e/sw-api.spec.ts` (falha com o `sw.js` antigo).
-- Pendente: ligar o `real_ip` quando o proxy da frente for confirmado.
 
 ## Iteração 20 (2026-11-06): Hoje enxuto, PWA, agenda única e acabamento
 

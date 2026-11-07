@@ -119,10 +119,11 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   alguns minutos e feche de novo. O app mostra uma mensagem clara quando o cadastro está fechado.
 - **Limite de tentativas** no gateway (`docker/nginx-prod.conf`): login, cadastro, recuperação e entrada pelo
   convite, 20 por minuto por IP (folga de 20). Ensaiado com o nginx real: 22 passam, o resto recebe 429; o uso
-  normal da API não é afetado. `needs_validation`: atrás do túnel/proxy com TLS todos chegam com o mesmo IP, então
-  o limite vale para todos juntos (quem força senhas também trava o login do casal por um minuto). O `real_ip`
-  está descrito e desligado no `nginx-prod.conf`: só ligue quando o que está na frente sempre regravar o cabeçalho
-  do IP, senão ele pode ser forjado.
+  normal da API não é afetado. O limite é por visitante: atrás do Cloudflare Tunnel o nginx usa o
+  `CF-Connecting-IP` (que a borda da Cloudflare sempre regrava) e só confia nele vindo de endereço privado, de onde
+  chega o cloudflared. Ensaiado com o nginx real: o mesmo visitante recebe 429 depois de 21 pedidos, outro
+  visitante segue entrando e o log mostra o IP de verdade. Limite: quem está na rede local e acessa a porta 8217
+  direto pode mandar o cabeçalho; a porta do LoadBalancer não deve ficar aberta para a internet.
 - **HSTS** (`max-age=31536000`, sem `includeSubDomains`) no gateway; o navegador só aceita por HTTPS.
 - **Backup diário** do banco (CronJob `ampara-backup`, 14 dias) e restauração ensaiada num banco novo
   (`npm run backup:check`). Procedimento em `docs/BACKUP.md`. Limitação: o volume do backup fica no mesmo nó.
