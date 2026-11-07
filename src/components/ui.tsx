@@ -48,10 +48,10 @@ export function StatusBadge({ kind, children, className }: { kind: StatusKind; c
   return (
     <span
       data-status={kind}
-      className={cx('inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[13px] font-semibold', cls, className)}
+      className={cx('inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[13px] font-semibold', cls, className)}
     >
-      <Icon size={15} strokeWidth={2.4} aria-hidden />
-      <span className="tabular">{children}</span>
+      <Icon size={15} strokeWidth={2.4} aria-hidden className="shrink-0" />
+      <span className="tabular min-w-0 break-words">{children}</span>
     </span>
   )
 }
@@ -157,12 +157,15 @@ export function ChoiceChips<T extends string>({
   options,
   onChange,
   error,
+  stack = false,
 }: {
   label: string
   value: T | null
   options: { value: T; label: ReactNode; icon?: LucideIcon; hint?: string; testId?: string }[]
   onChange: (v: T) => void
   error?: string
+  /** uma opção por linha, na largura toda (cartões de Ajustes, rótulos com nomes) */
+  stack?: boolean
 }) {
   const id = useId()
   return (
@@ -170,7 +173,7 @@ export function ChoiceChips<T extends string>({
       <legend id={id} className="mb-2 text-[14px] font-semibold text-ink">
         {label}
       </legend>
-      <div role="radiogroup" aria-labelledby={id} aria-invalid={error ? true : undefined} className="flex flex-wrap gap-2">
+      <div role="radiogroup" aria-labelledby={id} aria-invalid={error ? true : undefined} className={stack ? 'flex flex-col gap-2' : 'flex flex-wrap gap-2'}>
         {options.map((o) => {
           const active = o.value === value
           const Icon = o.icon
@@ -184,6 +187,7 @@ export function ChoiceChips<T extends string>({
               onClick={() => onChange(o.value)}
               className={cx(
                 'press inline-flex min-h-12 items-center gap-2 rounded-[14px] border px-3.5 text-left text-[14px] font-semibold',
+                stack && 'w-full py-2',
                 active ? 'border-action bg-selected text-ink' : 'border-line bg-surface text-ink hoverable',
               )}
             >
@@ -335,6 +339,7 @@ export function Button({
   size = 'md',
   icon: Icon,
   busy = false,
+  block = false,
   className,
   children,
   disabled,
@@ -344,6 +349,8 @@ export function Button({
   size?: 'sm' | 'md' | 'compact' | 'lg'
   icon?: LucideIcon
   busy?: boolean
+  /** largura toda do cartão; o rótulo quebra em vez de vazar (nomes longos) */
+  block?: boolean
 }) {
   const variants = {
     primary: 'btn-primary',
@@ -366,15 +373,16 @@ export function Button({
       disabled={disabled || busy}
       aria-busy={busy || undefined}
       className={cx(
-        'press inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap',
+        'press inline-flex items-center justify-center gap-2 font-semibold',
+        block ? 'w-full py-2 text-center leading-snug' : 'whitespace-nowrap',
         busy ? 'cursor-progress' : 'disabled:opacity-50',
         variants[variant],
         sizes[size],
         className,
       )}
     >
-      {busy ? <LoaderCircle size={iconSize} aria-hidden className="shrink-0 motion-safe:animate-spin" /> : Icon ? <Icon size={iconSize} aria-hidden /> : null}
-      {children}
+      {busy ? <LoaderCircle size={iconSize} aria-hidden className="shrink-0 motion-safe:animate-spin" /> : Icon ? <Icon size={iconSize} aria-hidden className="shrink-0" /> : null}
+      {block ? <span className="min-w-0 break-words">{children}</span> : children}
     </button>
   )
 }
@@ -422,6 +430,11 @@ export function OwnerTag({ tone, children }: { tone: 'a' | 'b' | 'us'; children:
       <span>{children}</span>
     </span>
   )
+}
+
+/** Ações de um cartão: uma por linha, na largura toda (use com <Button block>) */
+export function Actions({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cx('mt-4 flex flex-col gap-2', className)}>{children}</div>
 }
 
 export function SectionHeader({ title, rest, action, id }: { title: string; rest?: string; action?: ReactNode; id?: string }) {

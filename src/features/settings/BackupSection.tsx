@@ -2,7 +2,7 @@ import { Download, Upload } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { exportBackup, restoreBackup } from '../../auth/session'
 import { parseBackup, type BackupFile } from '../../auth/vault'
-import { Button, ChoiceChips, cx, FieldError, SectionHeader, Switch } from '../../components/ui'
+import { Actions, Button, ChoiceChips, cx, FieldError, SectionHeader, Switch } from '../../components/ui'
 import type { PartnerId } from '../../domain/types'
 import { ui } from '../../store/ui'
 
@@ -118,7 +118,7 @@ export function RestoreForm({ replacing, onDone }: { replacing: boolean; onDone?
         ) : null}
       </div>
       {people.length > 1 ? (
-        <ChoiceChips<PartnerId> label="Quem vai entrar" value={who} onChange={setWho} options={people.map((p) => ({ value: p, label: file!.vault.people[p].name }))} />
+        <ChoiceChips<PartnerId> stack label="Quem vai entrar" value={who} onChange={setWho} options={people.map((p) => ({ value: p, label: file!.vault.people[p].name }))} />
       ) : null}
       <Pw label="Senha de quem está no backup" value={pw} onChange={setPw} error={errors.pw} testId="restore-password" />
       {replacing ? (
@@ -133,7 +133,7 @@ export function RestoreForm({ replacing, onDone }: { replacing: boolean; onDone?
           {errors.agree ? <FieldError>{errors.agree}</FieldError> : null}
         </div>
       ) : null}
-      <Button type="submit" variant={replacing ? 'secondary' : 'primary'} icon={Upload} busy={busy} data-testid="restore-submit">
+      <Button block type="submit" variant={replacing ? 'secondary' : 'primary'} icon={Upload} busy={busy} data-testid="restore-submit">
         {busy ? 'Conferindo a senha...' : 'Restaurar backup'}
       </Button>
     </form>
@@ -170,14 +170,14 @@ export function BackupSection() {
       <p className="text-[14px] text-muted">
         Um arquivo com tudo deste aparelho, cifrado do mesmo jeito que aqui. Se o celular sumir ou o navegador limpar os dados, é por ele que vocês voltam. A conexão com a nuvem não vai junto: depois de restaurar, conecte de novo em Ajustes.
       </p>
-      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
-        <Button size="sm" variant="quiet" icon={Download} onClick={() => setPanel(panel === 'export' ? null : 'export')} aria-expanded={panel === 'export'} data-testid="backup-export-open">
+      <Actions>
+        <Button block variant="quiet" icon={Download} onClick={() => setPanel(panel === 'export' ? null : 'export')} aria-expanded={panel === 'export'} data-testid="backup-export-open">
           Baixar backup
         </Button>
-        <Button size="sm" variant="ghost" icon={Upload} onClick={() => setPanel(panel === 'restore' ? null : 'restore')} aria-expanded={panel === 'restore'} data-testid="backup-restore-open">
-          Restaurar
+        <Button block variant="quiet" icon={Upload} onClick={() => setPanel(panel === 'restore' ? null : 'restore')} aria-expanded={panel === 'restore'} data-testid="backup-restore-open">
+          Restaurar backup
         </Button>
-      </div>
+      </Actions>
       {panel === 'export' ? (
         <form onSubmit={doExport} noValidate className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
           <Pw
@@ -190,7 +190,7 @@ export function BackupSection() {
             error={error}
             testId="backup-password"
           />
-          <Button type="submit" variant="primary" icon={Download} busy={busy} data-testid="backup-export">
+          <Button block type="submit" variant="primary" icon={Download} busy={busy} data-testid="backup-export">
             Baixar arquivo .ampara
           </Button>
         </form>

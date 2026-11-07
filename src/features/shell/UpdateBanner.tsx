@@ -1,6 +1,6 @@
 import { RefreshCw, Sparkles, BookOpen } from 'lucide-react'
 import { useState } from 'react'
-import { Button, SectionHeader } from '../../components/ui'
+import { Actions, Button, SectionHeader } from '../../components/ui'
 import { ui } from '../../store/ui'
 import { applyUpdate, checkForUpdate, useUpdate } from '../../sync/update'
 
@@ -47,13 +47,14 @@ export function AboutSection() {
         ) : null}
       </p>
       <p className="mt-1 text-[13px] text-muted">O app confere sozinho ao abrir e ao voltar para ele. Atualizar não apaga nada: os dados ficam no aparelho.</p>
-      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
+      <Actions>
         {available ? (
-          <Button variant="primary" icon={RefreshCw} onClick={() => void applyUpdate()} data-testid="about-apply">
+          <Button block variant="primary" icon={RefreshCw} onClick={() => void applyUpdate()} data-testid="about-apply">
             Atualizar agora
           </Button>
         ) : (
           <Button
+            block
             variant="secondary"
             icon={RefreshCw}
             busy={checking}
@@ -66,10 +67,10 @@ export function AboutSection() {
             Procurar atualização
           </Button>
         )}
-        <Button variant="quiet" icon={BookOpen} onClick={() => ui.openSheet('tour')} data-testid="tour-again">
+        <Button block variant="quiet" icon={BookOpen} onClick={() => ui.openSheet('tour')} data-testid="tour-again">
           Rever a apresentação
         </Button>
-      </div>
+      </Actions>
     </section>
   )
 }

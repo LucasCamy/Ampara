@@ -129,7 +129,7 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
         </dl>
         <div className="mt-5">
           {plan ? (
-            <Button variant="primary" size="lg" icon={ArrowRightLeft} onClick={() => settleMonth(month)} className="w-full" data-testid="settle">
+            <Button block variant="primary" size="lg" icon={ArrowRightLeft} onClick={() => settleMonth(month)} data-testid="settle">
               Registrar acerto de {formatCents(plan.amountCents)}
             </Button>
           ) : (

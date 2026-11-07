@@ -1,7 +1,7 @@
 import { Cloud, CloudOff, LogOut, RefreshCw } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { useAuth } from '../../auth/session'
-import { Button, cx, FieldError, SectionHeader, Segmented, StatusBadge } from '../../components/ui'
+import { Actions, Button, cx, FieldError, SectionHeader, Segmented, StatusBadge } from '../../components/ui'
 import { formatClock } from '../../domain/format'
 import { useData } from '../../store/data'
 import { usePeople } from '../../store/hooks'
@@ -121,14 +121,14 @@ export function CloudSection() {
               <span className="font-data font-semibold">{inviteCode}</span>.
             </p>
           ) : null}
-          <div className="grid gap-2 sm:flex sm:flex-wrap">
-            <Button size="sm" variant="quiet" icon={RefreshCw} onClick={() => void syncNow()} data-testid="cloud-sync">
+          <Actions className="mt-1">
+            <Button block variant="quiet" icon={RefreshCw} onClick={() => void syncNow()} data-testid="cloud-sync">
               Sincronizar agora
             </Button>
-            <Button size="sm" variant="ghost" icon={LogOut} onClick={() => void disconnect()}>
+            <Button block variant="ghost" icon={LogOut} onClick={() => void disconnect()}>
               Desconectar
             </Button>
-          </div>
+          </Actions>
         </div>
       ) : waitingForA ? (
         <p className="text-[14px] text-muted">Peça para {profiles.A.displayName} conectar a nuvem primeiro. Depois volte aqui.</p>
@@ -160,7 +160,7 @@ export function CloudSection() {
             error={errors.pw}
           />
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
-          <Button type="submit" variant="primary" busy={busy} data-testid="cloud-submit">
+          <Button block type="submit" variant="primary" busy={busy} data-testid="cloud-submit">
             {busy ? 'Conectando...' : 'Conectar à nuvem'}
           </Button>
         </form>

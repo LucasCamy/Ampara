@@ -2,7 +2,7 @@ import { KeyRound, Lock, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { changeMyPassword, lock, reinvitePartner, useAuth, wipeDevice } from '../../auth/session'
 import { validatePassword } from '../../auth/vault'
-import { Button, cx, FieldError, SectionHeader, StatusBadge } from '../../components/ui'
+import { Actions, Button, cx, FieldError, SectionHeader, StatusBadge } from '../../components/ui'
 import { ui } from '../../store/ui'
 import { publishInvite } from '../../sync/cloud'
 
@@ -76,17 +76,17 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           {remembered ? 'Conectado por até 14 dias neste aparelho. Bloquear encerra isso.' : 'Bloqueia sozinho após 15 min sem uso.'}
         </li>
       </ul>
-      <div className="grid gap-2 sm:flex sm:flex-wrap">
-        <Button size="sm" variant="quiet" icon={Lock} onClick={() => void lock()}>
+      <Actions className="mt-0">
+        <Button block variant="quiet" icon={Lock} onClick={() => void lock()}>
           Bloquear agora
         </Button>
-        <Button size="sm" variant={panel === 'password' ? 'secondary' : 'quiet'} icon={KeyRound} onClick={() => reset(panel === 'password' ? null : 'password')} aria-expanded={panel === 'password'}>
+        <Button block variant={panel === 'password' ? 'secondary' : 'quiet'} icon={KeyRound} onClick={() => reset(panel === 'password' ? null : 'password')} aria-expanded={panel === 'password'}>
           Trocar senha
         </Button>
-        <Button size="sm" variant={panel === 'reinvite' ? 'secondary' : 'quiet'} icon={UserPlus} onClick={() => reset(panel === 'reinvite' ? null : 'reinvite')} aria-expanded={panel === 'reinvite'}>
+        <Button block variant={panel === 'reinvite' ? 'secondary' : 'quiet'} icon={UserPlus} onClick={() => reset(panel === 'reinvite' ? null : 'reinvite')} aria-expanded={panel === 'reinvite'}>
           Novo convite para {partnerName}
         </Button>
-      </div>
+      </Actions>
 
       {panel === 'password' ? (
         <form
@@ -108,7 +108,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           <PwInput label="Senha atual" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
           <PwInput label="Nova senha" value={next} onChange={setNext} error={errors.next} autoComplete="new-password" />
           <PwInput label="Repita a nova senha" value={next2} onChange={setNext2} error={errors.next2} autoComplete="new-password" />
-          <Button type="submit" variant="primary" busy={busy}>
+          <Button block type="submit" variant="primary" busy={busy}>
             {busy ? 'Protegendo...' : 'Salvar nova senha'}
           </Button>
         </form>
@@ -137,7 +137,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           >
             <p className="text-[14px] text-ink">Use quando {partnerName} esquecer a senha. Confirme com a sua senha.</p>
             <PwInput label="Sua senha" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
-            <Button type="submit" variant="primary" busy={busy}>
+            <Button block type="submit" variant="primary" busy={busy}>
               {busy ? 'Gerando...' : 'Gerar novo convite'}
             </Button>
           </form>
@@ -153,17 +153,17 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           >
             <p className="text-[14px] font-semibold text-ink">Apagar o espaço do casal deste aparelho? Não dá para desfazer.</p>
             <PwInput label="Confirme com sua senha" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
-            <div className="grid gap-2 sm:flex sm:flex-wrap">
-              <Button type="submit" variant="secondary" className="border-err text-err" busy={busy}>
+            <div className="flex flex-col gap-2">
+              <Button block type="submit" variant="secondary" className="border-err text-err" busy={busy}>
                 Apagar tudo deste aparelho
               </Button>
-              <Button variant="quiet" onClick={() => reset(null)}>
+              <Button block variant="quiet" onClick={() => reset(null)}>
                 Cancelar
               </Button>
             </div>
           </form>
         ) : (
-          <Button size="sm" variant="ghost" icon={Trash2} className="text-err" onClick={() => reset('wipe')}>
+          <Button block variant="ghost" icon={Trash2} className="text-err" onClick={() => reset('wipe')}>
             Apagar dados deste aparelho
           </Button>
         )}

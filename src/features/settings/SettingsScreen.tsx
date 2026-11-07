@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useId, useState } from 'react'
-import { Button, ChoiceChips, cx, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
+import { Actions, Button, ChoiceChips, cx, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
 import type { PartnerId } from '../../domain/types'
 import { useAuth } from '../../auth/session'
 import { SecuritySection } from './SecuritySection'
@@ -111,6 +111,7 @@ function CoupleGroup() {
         <section className="module p-4 sm:p-5" aria-labelledby="divisao">
           <SectionHeader id="divisao" title="Divisão padrão" rest="· gastos" />
           <ChoiceChips<'50_50' | 'PROPORTIONAL'>
+            stack
             label="Como vocês dividem por padrão?"
             value={mode}
             onChange={(v) => setSplit(v, couple.ratioABps)}
@@ -171,13 +172,13 @@ function DeviceGroup() {
           <StatusBadge kind="ok" className="mt-3">
             Salvo no aparelho · funciona offline
           </StatusBadge>
-          <div className="mt-3">
+          <div className="mt-4">
             {confirmReset ? (
               <div className={cx('rounded-[16px] border border-err bg-err-soft p-3')} role="alert">
                 <p className="text-[14px] font-semibold text-ink">Apagar os dados deste aparelho e voltar ao exemplo inicial?</p>
-                <div className="mt-2 grid gap-2 sm:flex sm:flex-wrap">
+                <div className="mt-3 flex flex-col gap-2">
                   <Button
-                    size="sm"
+                    block
                     variant="secondary"
                     className="border-err text-err"
                     onClick={() => {
@@ -188,13 +189,13 @@ function DeviceGroup() {
                   >
                     Sim, restaurar exemplo
                   </Button>
-                  <Button size="sm" variant="quiet" onClick={() => setConfirmReset(false)}>
+                  <Button block variant="quiet" onClick={() => setConfirmReset(false)}>
                     Cancelar
                   </Button>
                 </div>
               </div>
             ) : (
-              <Button size="sm" variant="quiet" icon={RotateCcw} onClick={() => setConfirmReset(true)} className="w-full sm:w-auto">
+              <Button block variant="quiet" icon={RotateCcw} onClick={() => setConfirmReset(true)}>
                 Restaurar dados de exemplo
               </Button>
             )}
@@ -249,14 +250,14 @@ function ShortcutsSection() {
                   <p className="font-data mt-1 text-[12px] break-all text-ink">/?quick={s.quick}</p>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button size="sm" variant="primary" icon={Smartphone} onClick={() => ui.launchQuick(s.quick)} data-testid={`try-${s.quick}`}>
-                  Testar
+              <Actions className="mt-3">
+                <Button block variant="primary" icon={Smartphone} onClick={() => ui.launchQuick(s.quick)} data-testid={`try-${s.quick}`}>
+                  Testar agora
                 </Button>
-                <Button size="sm" variant="quiet" icon={copied === s.quick ? CircleCheck : Copy} onClick={() => copy(url, s.quick)}>
-                  {copied === s.quick ? 'Copiado' : 'Copiar'}
+                <Button block variant="quiet" icon={copied === s.quick ? CircleCheck : Copy} onClick={() => copy(url, s.quick)}>
+                  {copied === s.quick ? 'Endereço copiado' : 'Copiar endereço'}
                 </Button>
-              </div>
+              </Actions>
             </li>
           )
         })}
