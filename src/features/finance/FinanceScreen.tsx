@@ -1,13 +1,14 @@
 import { ArrowRightLeft, ChevronLeft, ChevronRight, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Layers, Lock, MoreHorizontal, ReceiptText, Repeat, User, Users } from 'lucide-react'
 import { GoalsSection } from './GoalsSection'
 import { RulesSection } from './RulesSection'
+import { SpendingSummary } from './SpendingSummary'
 import { useMemo, useState } from 'react'
 import { CATEGORIES } from '../../components/categories'
 import { Button, cx, EmptyState, MoneyText, OwnerTag, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
 import { dayOfMonth, monthName, parseDateKey, toDateKey } from '../../domain/dates'
 import { computeCoupleBalance, coupleShareTotal, describeBalance, settlementPlan, shareOf, splitRuleLabel } from '../../domain/finance'
 import { formatCents } from '../../domain/format'
-import { personalTabView } from '../../domain/privacy'
+import { personalTabView, visibleTransactions } from '../../domain/privacy'
 import type { PartnerId, Transaction } from '../../domain/types'
 import { setSharePersonal, settleMonth } from '../../store/actions'
 import { quickPay } from '../../store/financeActions'
@@ -87,12 +88,14 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
       myShare: coupleShareTotal(all, viewer, month),
     }
   }, [txMap, month, viewer])
+  const coupleTx = useMemo(() => Object.values(txMap).filter((t) => t.scope === 'COUPLE'), [txMap])
   const plan = settlementPlan(d.balance.netCents)
   const sentence = describeBalance(d.balance.netCents, viewer, profiles, monthLabel)
   const lastDay = new Date(parseDateKey(`${month}-01`).getFullYear(), parseDateKey(`${month}-01`).getMonth() + 1, 0).getDate()
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
+      <div className="flex flex-col gap-6">
       <section className={cx('module p-4 sm:p-6', plan ? '' : 'ledger-ok')} aria-labelledby="encontro" data-testid="balance-card">
         <p id="encontro" className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">
           Encontro de contas · {monthLabel}
@@ -131,6 +134,8 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
           </p>
         </div>
       </section>
+      <SpendingSummary transactions={coupleTx} month={month} current={today.slice(0, 7)} tone="us" whose="do casal" testId="spend-couple" />
+      </div>
 
       <div className="flex flex-col gap-6">
         <section aria-labelledby="previstos">
@@ -284,6 +289,11 @@ function PersonalTab({ month, owner, today }: { month: string; owner: 'me' | 'pa
   const txMap = useData((s) => s.transactions)
   const ownerId: PartnerId = owner === 'me' ? viewer : partnerId
   const view = useMemo(() => personalTabView(Object.values(txMap), ownerId, viewer, profiles, month), [txMap, ownerId, viewer, profiles, month])
+  // resumo: só o que quem está vendo pode ver (presentes do par nunca entram)
+  const ownTx = useMemo(
+    () => visibleTransactions(Object.values(txMap), viewer, profiles).filter((t) => t.scope === 'PERSONAL' && t.createdBy === ownerId),
+    [txMap, viewer, profiles, ownerId],
+  )
 
   if (view.status === 'closed') {
     return (
@@ -335,6 +345,14 @@ function PersonalTab({ month, owner, today }: { month: string; owner: 'me' | 'pa
           <p className="text-[13px] text-muted">pagos neste mês, fora a parte no casal</p>
           {view.status === 'readonly' ? <p className="mt-2 text-[12px] text-muted">O total pode incluir itens reservados.</p> : null}
         </section>
+        <SpendingSummary
+          transactions={ownTx}
+          month={month}
+          current={today.slice(0, 7)}
+          tone={ownerId === 'A' ? 'a' : 'b'}
+          whose={view.status === 'own' ? 'seus' : `de ${view.ownerName}`}
+          testId="spend-personal"
+        />
         {view.status === 'own' ? <RulesSection scope="PERSONAL" /> : null}
       </div>
 

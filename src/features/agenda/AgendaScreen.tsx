@@ -1,9 +1,10 @@
-import { CalendarPlus, CircleCheck, CircleDashed, ChevronLeft, ChevronRight, Inbox, ListPlus, Mail, MoveRight, Sun } from 'lucide-react'
+import { CalendarPlus, CircleCheck, CircleDashed, ChevronLeft, ChevronRight, Droplet, Heart, HeartHandshake, Inbox, ListPlus, Mail, MoveRight, Sun, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { TaskRow } from '../../components/domain'
 import { Button, cx, EditButton, EmptyState, OwnerTag, Segmented, StatusBadge, Title } from '../../components/ui'
 import { addDays, dayOfMonth, monthGrid, monthName, parseDateKey, relativeDayLabel, toDateKey, weekDays, weekdayLong, weekdayShort } from '../../domain/dates'
 import { formatCents } from '../../domain/format'
+import { agendaMarks, marksForScope, type DayMark, type MarkKind } from '../../domain/agenda'
 import { isScheduledOn } from '../../domain/medication'
 import { dayLoad, filterTasks, inboxTasks, matchesScope, tasksForDay, type DayLoad, type ScopeFilter } from '../../domain/tasks'
 import { eventsVisibleTo } from '../../domain/today'
@@ -27,14 +28,41 @@ export function AgendaScreen() {
   const eventsMap = useData((s) => s.events)
   const txMap = useData((s) => s.transactions)
   const medsMap = useData((s) => s.meds)
+  const specialMap = useData((s) => s.specialDates)
+  const cycleLogsMap = useData((s) => s.cycleLogs)
+  const cycleSettings = useData((s) => s.cycleSettings)
+  const { partnerId, profiles } = usePeople()
 
   const data = useMemo(() => {
     const tasks = filterTasks(Object.values(tasksMap), viewer, scope)
     const events = eventsVisibleTo(Object.values(eventsMap), viewer).filter((e) => matchesScope(e.ownerId, scope, viewer))
-    const bills = Object.values(txMap).filter((t) => t.scope === 'COUPLE' && t.type === 'EXPENSE' && t.status === 'PREDICTED_DASHED' && (scope === 'ALL' || scope === 'US'))
+    // contas que vencem: as do casal e as minhas pessoais (parcelas e fixas entram aqui também)
+    const bills = Object.values(txMap).filter(
+      (t) =>
+        t.type === 'EXPENSE' &&
+        t.status === 'PREDICTED_DASHED' &&
+        ((t.scope === 'COUPLE' && (scope === 'ALL' || scope === 'US')) || (t.scope === 'PERSONAL' && t.createdBy === viewer && (scope === 'ALL' || scope === 'MINE'))),
+    )
     const meds = Object.values(medsMap).filter((m) => (m.ownerId === viewer && (scope === 'ALL' || scope === 'MINE')) || (m.ownerId === null && (scope === 'ALL' || scope === 'US')))
-    return { tasks, events, bills, meds }
-  }, [tasksMap, eventsMap, txMap, medsMap, viewer, scope])
+    // datas especiais e ciclo (o do par só como a dona liberou), numa janela em volta do dia escolhido
+    const marks = marksForScope(
+      agendaMarks(
+        {
+          viewer,
+          partnerId,
+          names: { A: profiles.A.displayName, B: profiles.B.displayName },
+          specialDates: Object.values(specialMap),
+          cycleLogs: Object.values(cycleLogsMap),
+          cycleSettings,
+          today,
+        },
+        addDays(cursor, -45),
+        addDays(cursor, 45),
+      ),
+      scope,
+    )
+    return { tasks, events, bills, meds, marks }
+  }, [tasksMap, eventsMap, txMap, medsMap, specialMap, cycleLogsMap, cycleSettings, viewer, partnerId, profiles, scope, cursor, today])
 
   const step = view === 'DAY' ? 1 : view === 'WEEK' ? 7 : 0
   const move = (dir: 1 | -1) => {
@@ -127,6 +155,24 @@ interface ViewData {
   events: CalendarEvent[]
   bills: Transaction[]
   meds: Medication[]
+  marks: DayMark[]
+}
+
+const MARK_ICON: Record<MarkKind, { icon: LucideIcon; cls: string }> = {
+  SPECIAL: { icon: Heart, cls: 'text-couple' },
+  PERIOD: { icon: Droplet, cls: 'text-partner-b' },
+  CARE: { icon: HeartHandshake, cls: 'text-muted' },
+}
+
+/** Marca do dia (data especial, menstruação, semana de cuidado): ícone + texto, borda tracejada (é previsão) */
+function MarkRow({ m, compact }: { m: DayMark; compact?: boolean }) {
+  const { icon: Icon, cls } = MARK_ICON[m.kind]
+  return (
+    <p className={cx('ledger-dashed flex min-w-0 items-center gap-2 rounded-[12px] text-ink', compact ? 'px-2 py-1.5 text-[13px]' : 'bg-surface p-3 text-[14px] font-semibold')} data-testid="day-mark" data-kind={m.kind}>
+      <Icon size={compact ? 14 : 16} aria-hidden className={cx('shrink-0', cls)} />
+      <span className="min-w-0 break-words">{m.label}</span>
+    </p>
+  )
 }
 
 function EventRow({ e }: { e: CalendarEvent }) {
@@ -151,7 +197,8 @@ function EventRow({ e }: { e: CalendarEvent }) {
   )
 }
 
-function DayView({ day, today, tasks, events, bills, meds }: ViewData & { day: DateKey; today: DateKey }) {
+function DayView({ day, today, tasks, events, bills, meds, marks }: ViewData & { day: DateKey; today: DateKey }) {
+  const dayMarks = marks.filter((m) => m.date === day)
   const dayTasks = tasksForDay(tasks, day)
   const untimed = dayTasks.filter((t) => !t.dueTime)
   const dayEvents = events.filter((e) => e.date === day)
@@ -163,6 +210,13 @@ function DayView({ day, today, tasks, events, bills, meds }: ViewData & { day: D
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
       <section aria-labelledby="sem-horario" className="min-w-0">
+        {dayMarks.length ? (
+          <div className="mb-3 flex flex-col gap-2" aria-label="Neste dia">
+            {dayMarks.map((m) => (
+              <MarkRow key={`${m.kind}${m.owner}`} m={m} />
+            ))}
+          </div>
+        ) : null}
         <h2 id="sem-horario" className="mb-2 text-[15px] font-bold text-ink">
           Demandas do dia <span className="font-medium text-muted">· sem horário fixo</span>
         </h2>
@@ -251,7 +305,7 @@ function LoadMeter({ load }: { load: DayLoad }) {
   )
 }
 
-function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKey; today: DateKey }) {
+function WeekView({ day, today, tasks, events, bills, marks }: ViewData & { day: DateKey; today: DateKey }) {
   const { viewer } = usePeople()
   const days = weekDays(day)
   return (
@@ -270,6 +324,11 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
               </p>
               <LoadMeter load={load} />
             </div>
+            {marks
+              .filter((m) => m.date === d)
+              .map((m) => (
+                <MarkRow key={`${m.kind}${m.owner}`} m={m} compact />
+              ))}
             {evs.map((e) => (
               <button
                 key={e.id}
@@ -347,7 +406,8 @@ function WeekView({ day, today, tasks, events, bills }: ViewData & { day: DateKe
   )
 }
 
-function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { day: DateKey; today: DateKey; onPick: (d: DateKey) => void }) {
+function MonthView({ day, today, onPick, tasks, events, bills, marks }: ViewData & { day: DateKey; today: DateKey; onPick: (d: DateKey) => void }) {
+  const selectedMarks = marks.filter((m) => m.date === day)
   const grid = monthGrid(day)
   const month = parseDateKey(day).getMonth()
   const selectedEvents = events.filter((e) => e.date === day).sort((a, b) => a.start.localeCompare(b.start))
@@ -369,6 +429,19 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-2.5 w-2.5 bg-partner-a" /> Saúde / remédio
           </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Heart size={11} aria-hidden className="text-couple" /> Data especial
+          </span>
+          {marks.some((m) => m.kind === 'PERIOD') ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Droplet size={11} aria-hidden className="text-partner-b" /> Menstruação
+            </span>
+          ) : null}
+          {marks.some((m) => m.kind === 'CARE') ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="h-0.5 w-3 bg-muted" /> Semana de mais cuidado
+            </span>
+          ) : null}
         </div>
         <div role="grid" aria-label={`Calendário de ${monthName(day)}`} className="grid grid-cols-7 gap-1">
           {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((w, i) => (
@@ -381,7 +454,11 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
             const couple = events.some((e) => e.date === d && (e.kind === 'COUPLE' || e.kind === 'PERSONAL'))
             const bill = bills.some((b) => b.competenceDate === d) || events.some((e) => e.date === d && e.kind === 'BILL')
             const health = events.some((e) => e.date === d && e.kind === 'HEALTH')
-            const marks = [couple && 'compromisso', bill && 'conta vence', health && 'saúde'].filter(Boolean).join(', ')
+            const dm = marks.filter((m) => m.date === d)
+            const special = dm.some((m) => m.kind === 'SPECIAL')
+            const period = dm.some((m) => m.kind === 'PERIOD')
+            const care = dm.some((m) => m.kind === 'CARE')
+            const marksLabel = [couple && 'compromisso', bill && 'conta vence', health && 'saúde', ...dm.map((m) => m.label.toLowerCase())].filter(Boolean).join(', ')
             const selected = d === day
             return (
               <button
@@ -389,7 +466,7 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
                 type="button"
                 role="gridcell"
                 aria-selected={selected}
-                aria-label={`${dayOfMonth(d)} de ${monthName(d)}${marks ? `: ${marks}` : ''}`}
+                aria-label={`${dayOfMonth(d)} de ${monthName(d)}${marksLabel ? `: ${marksLabel}` : ''}`}
                 onClick={() => onPick(d)}
                 className={cx(
                   'press flex min-h-12 flex-col items-center justify-start gap-1 rounded-[12px] pt-1.5 text-[14px] sm:min-h-16',
@@ -405,7 +482,10 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
                     </svg>
                   ) : null}
                   {health ? <span className={cx('h-2 w-2', selected ? 'bg-on-action' : 'bg-partner-a')} /> : null}
+                  {special ? <Heart size={9} className={selected ? 'text-on-action' : 'text-couple'} /> : null}
+                  {period ? <Droplet size={9} className={selected ? 'text-on-action' : 'text-partner-b'} /> : null}
                 </span>
+                {care ? <span aria-hidden className={cx('h-0.5 w-3', selected ? 'bg-on-action' : 'bg-muted')} /> : null}
               </button>
             )
           })}
@@ -415,8 +495,15 @@ function MonthView({ day, today, onPick, tasks, events, bills }: ViewData & { da
         <h2 id="dia-sel" className="mb-2 text-[16px] font-bold text-ink first-letter:uppercase">
           {relativeDayLabel(day, today)} · {dayOfMonth(day)} de {monthName(day)}
         </h2>
+        {selectedMarks.length ? (
+          <div className="mb-2 flex flex-col gap-2">
+            {selectedMarks.map((m) => (
+              <MarkRow key={`${m.kind}${m.owner}`} m={m} />
+            ))}
+          </div>
+        ) : null}
         {selectedEvents.length + selectedBills.length + selectedTasks.length === 0 ? (
-          <p className="rounded-[18px] border border-dashed border-line-strong p-4 text-[14px] text-muted">Nada marcado neste dia.</p>
+          selectedMarks.length ? null : <p className="rounded-[18px] border border-dashed border-line-strong p-4 text-[14px] text-muted">Nada marcado neste dia.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {selectedEvents.map((e) => (
