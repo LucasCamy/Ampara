@@ -100,3 +100,9 @@ export async function shot(page: Page, name: string, project: string) {
   await page.waitForTimeout(350)
   await page.screenshot({ path: `test-results/screens/${project}/${name}.png`, fullPage: false })
 }
+
+/** Hoje: abre "Mais para hoje" quando há cartões recolhidos (até 3 ficam à vista) */
+export async function showTodayFeed(page: Page) {
+  const more = page.getByTestId('today-more')
+  if ((await more.count()) && (await more.getAttribute('aria-expanded')) === 'false') await more.click()
+}

@@ -1,4 +1,4 @@
-import { at, expect, goTab, noHorizontalOverflow, open, setViewer, shot, test } from './fixtures'
+import { at, expect, goTab, noHorizontalOverflow, open, setViewer, shot, showTodayFeed, test } from './fixtures'
 
 /** Exemplo do seed: ela fez check-in "Preciso de colo" e tem a lista do que a acalma */
 test('check-in do dia e o que me acalma: o par lê e sabe como ajudar', async ({ page, errors }, info) => {
@@ -15,7 +15,8 @@ test('check-in do dia e o que me acalma: o par lê e sabe como ajudar', async ({
   // o pedido de ajuda dela também mostra o que acalma
   await expect(page.getByTestId('help-request-card').getByTestId('comfort-list')).toContainText('Bolsa de água quente')
 
-  // meu check-in em 1 toque, recado e troca
+  // meu check-in em 1 toque, recado e troca (é o 4º cartão do "Para hoje": fica em "Mais para hoje")
+  await showTodayFeed(page)
   await page.getByTestId('mood-LOW_ENERGY').click()
   const done = page.getByTestId('my-mood-done')
   await expect(done).toContainText('Sem energia')

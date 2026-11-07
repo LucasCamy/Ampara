@@ -68,20 +68,14 @@ export function ComfortList({ owner, title }: { owner: PartnerId; title: string 
   )
 }
 
-/** Hoje: meu check-in (1 toque) e o do par, com o que acalma nos dias difíceis */
-export function MoodTodayCards() {
+/** Hoje: como o par está (e o que acalma, nos dias difíceis) */
+export function PartnerMoodCard() {
   const today = toDateKey(useNow())
-  const { viewer, partnerId, partner } = usePeople()
+  const { partnerId, partner } = usePeople()
   const all = useData((s) => s.moodCheckins)
-  const mine = checkinOf(all, viewer, today)
   const theirs = checkinOf(all, partnerId, today)
-  const [editing, setEditing] = useState(false)
-  const [note, setNote] = useState('')
   const pname = first(partner.displayName)
-
-  return (
-    <>
-      {theirs ? (
+  return theirs ? (
         <section className={cx('module p-4 sm:p-5', needsComfort(theirs.mood) ? 'ledger-solid' : 'ledger-dashed')} data-testid="partner-mood" aria-label={`Check-in de ${pname}`}>
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">
             {(() => {
@@ -95,8 +89,19 @@ export function MoodTodayCards() {
           <p className="mt-1 text-[14px] text-muted">{MOOD_PARTNER_HINT[theirs.mood]}</p>
           {needsComfort(theirs.mood) ? <ComfortList owner={partnerId} title={`O que costuma acalmar ${pname}`} /> : null}
         </section>
-      ) : null}
+  ) : null
+}
 
+/** Hoje: meu check-in em 1 toque (o par vê) */
+export function MyMoodCard() {
+  const today = toDateKey(useNow())
+  const { viewer, partner } = usePeople()
+  const all = useData((s) => s.moodCheckins)
+  const mine = checkinOf(all, viewer, today)
+  const [editing, setEditing] = useState(false)
+  const [note, setNote] = useState('')
+  return (
+    <>
       {!mine || editing ? (
         <section className="card ledger-dashed p-4" data-testid="my-mood" aria-label="Seu check-in de hoje">
           <p className="mb-3 text-[15px] font-semibold text-ink">Como você está hoje? {partner.displayName.split(' ')[0]} vê.</p>

@@ -1,5 +1,5 @@
-import { CalendarClock, Coffee, HandHeart, HeartHandshake, LifeBuoy, ListPlus, Package, Pill, Sparkles, Sunrise } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { CalendarClock, ChevronDown, ChevronUp, Coffee, HandHeart, HeartHandshake, LifeBuoy, ListPlus, Package, Pill, Sparkles, Sunrise } from 'lucide-react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { DoseActions, DoseStatus, doseBorder, TaskRow } from '../../components/domain'
 import { Button, cx, EmptyState, OwnerTag, SectionHeader, Segmented, StatusBadge, Title } from '../../components/ui'
 import { greeting, toDateKey } from '../../domain/dates'
@@ -16,7 +16,7 @@ import { ui } from '../../store/ui'
 import { CycleTodayCards } from '../cycle/CycleSection'
 import { PackTodayCards } from '../routines/PackInfo'
 import { SpecialDatesTodayCards } from '../us/DatesGiftsSection'
-import { ComfortList, MoodTodayCards } from '../us/MoodSection'
+import { ComfortList, MyMoodCard, PartnerMoodCard } from '../us/MoodSection'
 import { FocusTodayCard } from '../us/FocusSection'
 import { ENERGY } from '../shell/TopBar'
 
@@ -90,13 +90,10 @@ export function TodayScreen() {
     </Button>
   )
 
-  const secondary = (
+  // 1) Urgente: o par precisa de mim agora, ou algo está acontecendo. Sempre visível, até no modo sobrecarga.
+  const urgent = (
     <>
       <FocusTodayCard />
-      <MoodTodayCards />
-      <CycleTodayCards />
-      <PackTodayCards />
-      <SpecialDatesTodayCards />
       {d.nudges.map((n) => (
         <section key={n.id} className="module ledger-dashed p-4 sm:p-5" aria-label="Lembrete carinhoso">
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">
@@ -113,28 +110,6 @@ export function TodayScreen() {
 
       {d.helpIn.map((h) => (
         <HelpInCard key={h.id} req={h} partnerName={partner.displayName} />
-      ))}
-
-      {d.helpAnswered.map((h) => (
-        <section key={h.id} className="module ledger-ok p-4 sm:p-5" data-testid="help-answered">
-          <StatusBadge kind="ok">{h.response === 'TAKE_OVER' ? `${partner.displayName} assumiu` : `${partner.displayName} vai fazer junto`}</StatusBadge>
-          <p className="mt-2 text-[16px] font-semibold text-ink">{h.situation}</p>
-          <div className="mt-3">
-            <Button size="sm" variant="quiet" onClick={() => resolveHelp(h.id)}>
-              Combinado, obrigado
-            </Button>
-          </div>
-        </section>
-      ))}
-
-      {d.helpWaiting.map((h) => (
-        <section key={h.id} className="card ledger-dashed p-4" data-testid="help-waiting">
-          <StatusBadge kind="pending">Pedido enviado · aguardando {partner.displayName}</StatusBadge>
-          <p className="mt-2 text-[15px] font-semibold text-ink">{h.situation}</p>
-          <p className="text-[13px] text-muted">
-            {HELP_TYPE[h.helpType]} · {URGENCY[h.urgency]}
-          </p>
-        </section>
       ))}
 
       {d.alerts.map((a) => {
@@ -158,6 +133,38 @@ export function TodayScreen() {
           </section>
         )
       })}
+    </>
+  )
+
+  // 3) Para hoje: o que pede atenção sem ser urgente, na ordem de importância. Até 3 à vista; o resto recolhido.
+  const soft = (
+    <TodayFeed>
+      {d.helpAnswered.map((h) => (
+        <section key={h.id} className="module ledger-ok p-4 sm:p-5" data-testid="help-answered">
+          <StatusBadge kind="ok">{h.response === 'TAKE_OVER' ? `${partner.displayName} assumiu` : `${partner.displayName} vai fazer junto`}</StatusBadge>
+          <p className="mt-2 text-[16px] font-semibold text-ink">{h.situation}</p>
+          <div className="mt-3">
+            <Button size="sm" variant="quiet" onClick={() => resolveHelp(h.id)}>
+              Combinado, obrigado
+            </Button>
+          </div>
+        </section>
+      ))}
+
+      <PartnerMoodCard />
+      <CycleTodayCards />
+      <SpecialDatesTodayCards />
+      <MyMoodCard />
+      <PackTodayCards />
+      {d.helpWaiting.map((h) => (
+        <section key={h.id} className="card ledger-dashed p-4" data-testid="help-waiting">
+          <StatusBadge kind="pending">Pedido enviado · aguardando {partner.displayName}</StatusBadge>
+          <p className="mt-2 text-[15px] font-semibold text-ink">{h.situation}</p>
+          <p className="text-[13px] text-muted">
+            {HELP_TYPE[h.helpType]} · {URGENCY[h.urgency]}
+          </p>
+        </section>
+      ))}
 
       {d.leftovers.length > 0 ? (
         <section className="card ledger-dashed p-4" aria-label="Recomeço leve">
@@ -183,7 +190,11 @@ export function TodayScreen() {
           </div>
         </section>
       ) : null}
+    </TodayFeed>
+  )
 
+  // 2) Núcleo: o que fazer agora e o que vem nas próximas horas
+  const focusSection = (
       <section aria-labelledby="foco-title">
         <SectionHeader
           id="foco-title"
@@ -233,11 +244,12 @@ export function TodayScreen() {
         ) : null}
       </section>
 
+  )
+  const nextHours = (
       <section aria-labelledby="proximas-title">
         <SectionHeader id="proximas-title" title="Próximas horas" rest="sem surpresa" />
         <Timeline doses={d.doses} events={d.upcoming} now={now} />
       </section>
-    </>
   )
 
   if (overload) {
@@ -254,7 +266,13 @@ export function TodayScreen() {
               </span>
               <span className="text-[13px] font-medium text-muted">Recolhido no modo sobrecarga</span>
             </summary>
-            <div className="flex flex-col gap-4 border-t border-line p-4">{secondary}</div>
+            <div className="flex flex-col gap-4 border-t border-line p-4">
+              {/* modo sobrecarga: uma coisa por vez; o urgente do par vem primeiro aqui dentro */}
+              {urgent}
+              {focusSection}
+              {soft}
+              {nextHours}
+            </div>
           </details>
         </div>
       </div>
@@ -273,7 +291,12 @@ export function TodayScreen() {
             </Button>
           </div>
         </div>
-        <div className="flex flex-col gap-4">{secondary}</div>
+        <div className="flex flex-col gap-4">
+          {urgent}
+          {focusSection}
+          {soft}
+          {nextHours}
+        </div>
       </div>
     </div>
   )
@@ -428,5 +451,46 @@ function Timeline({ doses, events, now }: { doses: DoseItem[]; events: ReturnTyp
         </li>
       ))}
     </ol>
+  )
+}
+
+/**
+ * "Para hoje": mostra até 3 cartões e recolhe o resto em "Mais para hoje (N)". Conta o que os filhos
+ * renderizaram de fato (cada cartão decide se aparece), sem duplicar as regras de cada um aqui.
+ */
+function TodayFeed({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [count, setCount] = useState(0)
+  const [open, setOpen] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => setCount(el.children.length)
+    update()
+    const mo = new MutationObserver(update)
+    mo.observe(el, { childList: true })
+    return () => mo.disconnect()
+  }, [])
+  const hidden = Math.max(0, count - 3)
+  return (
+    <section aria-labelledby="para-hoje-title" className={count ? undefined : 'hidden'} data-testid="today-feed-section">
+      <SectionHeader id="para-hoje-title" title="Para hoje" rest="· sem pressa" />
+      <div ref={ref} id="para-hoje-lista" className={cx('flex flex-col gap-4', !open && '[&>*:nth-child(n+4)]:hidden')} data-testid="today-feed">
+        {children}
+      </div>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-controls="para-hoje-lista"
+          data-testid="today-more"
+          className="press hoverable mt-2 inline-flex min-h-12 items-center gap-1.5 rounded-[14px] px-3 text-[14px] font-semibold text-action"
+        >
+          {open ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
+          {open ? 'Mostrar menos' : `Mais para hoje (${hidden})`}
+        </button>
+      ) : null}
+    </section>
   )
 }

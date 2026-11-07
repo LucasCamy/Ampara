@@ -1,6 +1,6 @@
 import { expect, goTab, open, PASSWORDS, test } from './fixtures'
 
-const fireSwMessage = (url: string) => (u: string) =>
+const fireSwMessage = () => (u: string) =>
   navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: { type: 'OPEN_URL', url: u } }))
 
 test('atualização do app instalado: avisa a versão nova e recarrega; procurar manual', async ({ page, errors }, info) => {
@@ -36,21 +36,21 @@ test('notificação com o app aberto ou bloqueado abre a tela certa', async ({ p
   await goTab(page, 'financas')
 
   // app aberto: lembrete do remédio abre a confirmação
-  await page.evaluate(fireSwMessage(''), '/?quick=med')
+  await page.evaluate(fireSwMessage(), '/?quick=med')
   await expect(page.getByTestId('sheet-med')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('sheet-med')).toBeHidden()
 
   // atraso do par / pedido de ajuda: vai para o Hoje
-  await page.evaluate(fireSwMessage(''), '/#/rotinas')
+  await page.evaluate(fireSwMessage(), '/#/rotinas')
   await expect(page).toHaveURL(/#\/rotinas$/)
-  await page.evaluate(fireSwMessage(''), '/#/hoje')
+  await page.evaluate(fireSwMessage(), '/#/hoje')
   await expect(page).toHaveURL(/#\/hoje$/)
 
   // app bloqueado: o destino espera o login
   await page.locator('[data-testid="lock"]:visible').first().click()
   await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 15_000 })
-  await page.evaluate(fireSwMessage(''), '/?quick=med')
+  await page.evaluate(fireSwMessage(), '/?quick=med')
   await page.getByTestId('login-password').fill(PASSWORDS.A)
   await page.getByTestId('login-submit').click()
   await expect(page.getByTestId('sheet-med')).toBeVisible({ timeout: 15_000 })
