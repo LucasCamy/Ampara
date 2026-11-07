@@ -70,12 +70,12 @@ export function NotificationsSection() {
                 label="Mostrar o nome do remédio"
                 description="Desligado, a tela bloqueada diz só “Hora do seu remédio”. Quem pegar o celular não vê o que você toma."
               />
-              <Button variant="secondary" icon={BellOff} disabled={busy} onClick={() => void run(disablePush, 'Lembretes desligados neste aparelho')} data-testid="push-disable" className="self-start">
+              <Button variant="secondary" icon={BellOff} busy={busy} onClick={() => void run(disablePush, 'Lembretes desligados neste aparelho')} data-testid="push-disable" className="self-start">
                 Desligar neste aparelho
               </Button>
             </>
           ) : (
-            <Button variant="primary" icon={BellRing} disabled={busy} onClick={() => void run(enablePush, 'Lembretes ativados neste aparelho')} data-testid="push-enable" className="self-start">
+            <Button variant="primary" icon={BellRing} busy={busy} onClick={() => void run(enablePush, 'Lembretes ativados neste aparelho')} data-testid="push-enable" className="self-start">
               {busy ? 'Ativando...' : 'Ativar lembretes'}
             </Button>
           )}

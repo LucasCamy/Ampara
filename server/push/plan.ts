@@ -127,7 +127,7 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
           push({
             key: `late:${id}`,
             tag: `late-${id}`,
-            url: '/',
+            url: '/#/hoje',
             title: 'Rede de apoio',
             body: sub.showDetails
               ? `O remédio das ${time} de ${partnerName} (${med.name}) ainda consta pendente. Um lembrete gentil ajuda.`
@@ -146,7 +146,7 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
       push({
         key: `help:${h.id}`,
         tag: `help-${h.id}`,
-        url: '/',
+        url: '/#/hoje',
         title: `${partnerName} pediu ajuda`,
         body: sub.showDetails ? h.situation : 'Abra o Ampara para ver.',
       })

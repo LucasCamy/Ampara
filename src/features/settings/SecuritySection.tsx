@@ -108,7 +108,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           <PwInput label="Senha atual" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
           <PwInput label="Nova senha" value={next} onChange={setNext} error={errors.next} autoComplete="new-password" />
           <PwInput label="Repita a nova senha" value={next2} onChange={setNext2} error={errors.next2} autoComplete="new-password" />
-          <Button type="submit" variant="primary" disabled={busy}>
+          <Button type="submit" variant="primary" busy={busy}>
             {busy ? 'Protegendo...' : 'Salvar nova senha'}
           </Button>
         </form>
@@ -137,7 +137,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
           >
             <p className="text-[14px] text-ink">Use quando {partnerName} esquecer a senha. Confirme com a sua senha.</p>
             <PwInput label="Sua senha" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
-            <Button type="submit" variant="primary" disabled={busy}>
+            <Button type="submit" variant="primary" busy={busy}>
               {busy ? 'Gerando...' : 'Gerar novo convite'}
             </Button>
           </form>
@@ -154,7 +154,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
             <p className="text-[14px] font-semibold text-ink">Apagar o espaço do casal deste aparelho? Não dá para desfazer.</p>
             <PwInput label="Confirme com sua senha" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" variant="secondary" className="border-err text-err" disabled={busy}>
+              <Button type="submit" variant="secondary" className="border-err text-err" busy={busy}>
                 Apagar tudo deste aparelho
               </Button>
               <Button variant="quiet" onClick={() => reset(null)}>

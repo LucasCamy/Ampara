@@ -46,7 +46,7 @@ export function RoutinesScreen() {
   return (
     <div>
       <div className="mb-5">
-        <Title anchor="Remédios e rotinas," rest="sem cegueira de alarme." />
+        <Title anchor="Cuidados," rest="remédios, rotinas e ciclo sem cegueira de alarme." />
         <p className="mt-2 max-w-[60ch] text-[14px] text-muted">
           Confirme em dois estágios: <strong className="text-ink">Já engoli</strong> registra o horário exato.{' '}
           <strong className="text-ink">Pegando água</strong> segura a lembrança por 5 minutos.

@@ -67,7 +67,7 @@ export function PeriodSheet({ id, onDone }: { id?: string; onDone: () => void })
         />
       ) : null}
       <p className="text-[13px] text-muted">
-        Fica cifrado no seu aparelho. Quem vê o quê você escolhe em Remédios › Ciclo.
+        Fica cifrado no seu aparelho. Quem vê o quê você escolhe em Cuidados › Ciclo.
       </p>
       {id ? <DeleteButton label="Excluir registro" testId="period-delete" onClick={() => deletePeriod(id) && onDone()} /> : null}
     </form>

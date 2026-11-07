@@ -489,3 +489,8 @@ export async function restoreBackup(text: string, who: PartnerId, password: stri
   broadcast('lock')
   authStore.set((s) => ({ ...s, status: 'locked', people: headerOf(file.vault) }))
 }
+
+/** Espera a última gravação cifrada terminar (antes de recarregar o app para atualizar) */
+export async function flushSaves(): Promise<void> {
+  await writeChain.catch(() => undefined)
+}

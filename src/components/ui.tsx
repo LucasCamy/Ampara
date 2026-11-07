@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDashed, Clock, HeartHandshake, Pencil, SkipForward, SquareX, type LucideIcon } from 'lucide-react'
+import { CircleCheck, CircleDashed, Clock, HeartHandshake, LoaderCircle, Pencil, SkipForward, SquareX, type LucideIcon } from 'lucide-react'
 import { useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(' ')
@@ -326,17 +326,24 @@ export function Switch({
   )
 }
 
+/**
+ * Botão padrão. `busy`: trabalhando (salvando, conectando). Mantém rótulo e largura, troca o ícone por um
+ * indicador que gira (parado com movimento reduzido), anuncia aria-busy e não fica "apagado" como desabilitado.
+ */
 export function Button({
   variant = 'secondary',
   size = 'md',
   icon: Icon,
+  busy = false,
   className,
   children,
+  disabled,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'quiet'
   size?: 'sm' | 'md' | 'compact' | 'lg'
   icon?: LucideIcon
+  busy?: boolean
 }) {
   const variants = {
     primary: 'btn-primary',
@@ -351,13 +358,22 @@ export function Button({
     compact: 'min-h-12 px-3 text-[14px] rounded-[16px]',
     lg: 'min-h-14 px-5 text-[16px] rounded-[18px]',
   }
+  const iconSize = size === 'lg' ? 20 : 18
   return (
     <button
       type="button"
       {...rest}
-      className={cx('press inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap disabled:opacity-50', variants[variant], sizes[size], className)}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      className={cx(
+        'press inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap',
+        busy ? 'cursor-progress' : 'disabled:opacity-50',
+        variants[variant],
+        sizes[size],
+        className,
+      )}
     >
-      {Icon ? <Icon size={size === 'lg' ? 20 : 18} aria-hidden /> : null}
+      {busy ? <LoaderCircle size={iconSize} aria-hidden className="shrink-0 motion-safe:animate-spin" /> : Icon ? <Icon size={iconSize} aria-hidden /> : null}
       {children}
     </button>
   )

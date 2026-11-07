@@ -179,7 +179,7 @@ function CloudEntryScreen({ onBack }: { onBack: () => void }) {
         ) : null}
         <Switch checked={remember} onChange={setRemember} label="Manter conectado neste aparelho (14 dias)" />
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
-        <Button type="submit" variant="primary" size="lg" icon={Cloud} disabled={busy} className="w-full" data-testid="cloud-entry-submit">
+        <Button type="submit" variant="primary" size="lg" icon={Cloud} busy={busy} className="w-full" data-testid="cloud-entry-submit">
           {busy ? 'Baixando com segurança...' : 'Entrar'}
         </Button>
       </form>
@@ -319,7 +319,7 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
         </div>
 
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
-        <Button type="submit" variant="primary" size="lg" disabled={busy} data-testid="setup-submit" className="w-full">
+        <Button type="submit" variant="primary" size="lg" busy={busy} data-testid="setup-submit" className="w-full">
           {busy ? 'Protegendo os dados...' : 'Criar nosso espaço'}
         </Button>
       </form>
@@ -473,7 +473,7 @@ function PasswordForm({ who, person }: { who: PartnerId; person: PersonHeader })
         maxLength={128}
       />
       <Switch checked={remember} onChange={setRemember} label="Manter conectado neste aparelho (14 dias)" />
-      <Button type="submit" variant="primary" size="lg" icon={LockKeyhole} disabled={busy || wait > 0} data-testid="login-submit" className="w-full">
+      <Button type="submit" variant="primary" size="lg" icon={LockKeyhole} busy={busy} disabled={wait > 0} data-testid="login-submit" className="w-full">
         {busy ? 'Abrindo...' : wait > 0 ? `Aguarde ${wait} s` : 'Entrar'}
       </Button>
       <details className="text-[14px] text-muted">
@@ -531,7 +531,7 @@ function ActivateForm({ who, person }: { who: PartnerId; person: PersonHeader })
       />
       <TextField label="Repita a senha" type="password" value={pw2} onChange={setPw2} error={errors.pw2} autoComplete="new-password" testId="activate-password2" maxLength={128} />
       <Switch checked={remember} onChange={setRemember} label="Manter conectado neste aparelho (14 dias)" />
-      <Button type="submit" variant="primary" size="lg" disabled={busy || wait > 0} data-testid="activate-submit" className="w-full">
+      <Button type="submit" variant="primary" size="lg" busy={busy} disabled={wait > 0} data-testid="activate-submit" className="w-full">
         {busy ? 'Protegendo...' : wait > 0 ? `Aguarde ${wait} s` : 'Ativar e entrar'}
       </Button>
     </form>

@@ -133,7 +133,7 @@ export function RestoreForm({ replacing, onDone }: { replacing: boolean; onDone?
           {errors.agree ? <FieldError>{errors.agree}</FieldError> : null}
         </div>
       ) : null}
-      <Button type="submit" variant={replacing ? 'secondary' : 'primary'} icon={Upload} disabled={busy} data-testid="restore-submit">
+      <Button type="submit" variant={replacing ? 'secondary' : 'primary'} icon={Upload} busy={busy} data-testid="restore-submit">
         {busy ? 'Conferindo a senha...' : 'Restaurar backup'}
       </Button>
     </form>
@@ -190,7 +190,7 @@ export function BackupSection() {
             error={error}
             testId="backup-password"
           />
-          <Button type="submit" variant="primary" icon={Download} disabled={busy} data-testid="backup-export">
+          <Button type="submit" variant="primary" icon={Download} busy={busy} data-testid="backup-export">
             Baixar arquivo .ampara
           </Button>
         </form>

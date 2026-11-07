@@ -45,7 +45,7 @@ function Day({ d }: { d: string }) {
 
 const inDays = (n: number) => (n === 0 ? 'hoje' : n === 1 ? 'amanhã' : `em ${n} dias`)
 
-/** Ciclo da pessoa logada + o que o par compartilhou. Mora na aba Remédios. */
+/** Ciclo da pessoa logada + o que o par compartilhou. Mora na aba Cuidados. */
 export function CycleSection() {
   const today = toDateKey(useNow())
   const { viewer, partnerId, partner } = usePeople()

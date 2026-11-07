@@ -36,6 +36,19 @@ const cspMeta = (supabaseUrl: string | undefined): Plugin => ({
   },
 })
 
+/**
+ * Versão do build: o app instalado compara com /version.json (nunca em cache) para oferecer a atualização.
+ * Um id por build (data + sufixo aleatório): não depende do .git, que não entra na imagem Docker.
+ */
+const APP_VERSION = `${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}`
+const versionFile = (): Plugin => ({
+  name: 'ampara-version',
+  apply: 'build',
+  generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version: APP_VERSION, builtAt: new Date().toISOString() }) })
+  },
+})
+
 /** Cabeçalhos que meta tags não cobrem (anti-clickjacking etc.). Repetidos em public/_headers para hospedagem. */
 const securityHeaders = {
   'X-Frame-Options': 'DENY',
@@ -47,7 +60,8 @@ const securityHeaders = {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), cspMeta(loadEnv(mode, process.cwd(), 'VITE_').VITE_SUPABASE_URL?.replace(/\/+$/, ''))],
+  plugins: [react(), tailwindcss(), versionFile(), cspMeta(loadEnv(mode, process.cwd(), 'VITE_').VITE_SUPABASE_URL?.replace(/\/+$/, ''))],
+  define: { __APP_VERSION__: JSON.stringify(mode === 'test' ? 'test' : APP_VERSION) },
   server: { headers: securityHeaders },
   preview: { headers: securityHeaders },
   test: {

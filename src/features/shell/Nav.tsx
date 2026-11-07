@@ -1,4 +1,4 @@
-import { CalendarDays, CircleCheck, Heart, LifeBuoy, ListPlus, Pill, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
+import { CalendarDays, CircleCheck, Heart, HeartPulse, LifeBuoy, ListPlus, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/ui'
 import { ui, useUi, type SheetKind, type Tab } from '../../store/ui'
 import { BatterySelector, LockButton, PerspectiveSwitch, SyncPill, ThemeToggle } from './TopBar'
@@ -7,7 +7,7 @@ export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'hoje', label: 'Hoje', icon: Sun },
   { id: 'agenda', label: 'Agenda', icon: CalendarDays },
   { id: 'nos', label: 'Nós', icon: Heart },
-  { id: 'rotinas', label: 'Remédios', icon: Pill },
+  { id: 'rotinas', label: 'Cuidados', icon: HeartPulse },
   { id: 'financas', label: 'Finanças', icon: Wallet },
 ]
 

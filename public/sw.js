@@ -1,5 +1,5 @@
 /* Ampara service worker: app shell offline (network-first para navegação, cache-first para assets) */
-const CACHE = 'ampara-v3'
+const CACHE = 'ampara-v4'
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon.svg', '/theme-init.js'])).then(() => self.skipWaiting()))
 })
@@ -10,7 +10,10 @@ self.addEventListener('activate', (e) => {
 })
 self.addEventListener('fetch', (e) => {
   const req = e.request
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return
+  const url = new URL(req.url)
+  if (req.method !== 'GET' || url.origin !== location.origin) return
+  // versão e o próprio service worker sempre da rede: é assim que o app instalado descobre a versão nova
+  if (url.pathname === '/version.json' || url.pathname === '/sw.js') return
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)
@@ -36,6 +39,11 @@ self.addEventListener('fetch', (e) => {
         }),
     ),
   )
+})
+
+// O app pede para trocar já pela versão nova (botão Atualizar)
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 /* ---------- lembretes (Web Push) ---------- */
@@ -69,7 +77,11 @@ self.addEventListener('notificationclick', (e) => {
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
       const open = wins.find((w) => new URL(w.url).origin === url.origin)
-      if (open) return open.navigate(url.href).then((w) => (w || open).focus())
+      if (open) {
+        // o app já está aberto: avisa o destino por mensagem (WindowClient.navigate não existe no iOS)
+        open.postMessage({ type: 'OPEN_URL', url: url.pathname + url.search + url.hash })
+        return open.focus()
+      }
       return self.clients.openWindow(url.href)
     }),
   )

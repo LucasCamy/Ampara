@@ -5,37 +5,24 @@ import { FinanceScreen } from './features/finance/FinanceScreen'
 import { RoutinesScreen } from './features/routines/RoutinesScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { BottomNav, Dock, Sidebar } from './features/shell/Nav'
+import { UpdateBanner } from './features/shell/UpdateBanner'
 import { ContextRow, TopBar } from './features/shell/TopBar'
 import { LoadingScreen, LoginScreen, SetupScreen, WelcomeScreen } from './features/auth/AuthScreens'
 import { useAuth } from './auth/session'
 import { SheetHost } from './features/sheets/SheetHost'
 import { TodayScreen } from './features/today/TodayScreen'
 import { UsScreen } from './features/us/UsScreen'
-import { ui, useUi, type SheetKind } from './store/ui'
+import { useUi } from './store/ui'
+import { consumeLaunchLink } from './sync/deeplink'
 import { useData } from './store/data'
 import { useNow } from './store/clock'
 import { toDateKey } from './domain/dates'
 import { materializeRecurrences } from './store/financeActions'
 
-const QUICK_KINDS: Record<string, SheetKind> = { task: 'task', expense: 'expense', med: 'med', sos: 'sos' }
-
-/** Atalhos do iPhone: /?quick=task|expense|med|sos (+ title, amount) */
+/** Entrar no lugar certo: /?quick=task|expense|med|sos, #/aba, ou o destino de uma notificação que esperou o login */
 function useQuickLaunch() {
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const quick = params.get('quick')
-    const kind = quick ? QUICK_KINDS[quick] : undefined
-    if (!kind) return
-    const extra: Record<string, string> = {}
-    for (const k of ['title', 'amount', 'scope']) {
-      const v = params.get(k)
-      if (v) extra[k] = v
-    }
-    ui.launchQuick(kind, extra)
-    params.delete('quick')
-    for (const k of ['title', 'amount', 'scope']) params.delete(k)
-    const qs = params.toString()
-    history.replaceState(null, '', `${location.pathname}${qs ? `?${qs}` : ''}${location.hash}`)
+    consumeLaunchLink()
   }, [])
 }
 
@@ -80,6 +67,7 @@ function AppShell() {
         <TopBar />
         <ContextRow />
         <main id="conteudo" className="mx-auto w-full max-w-[720px] px-4 pt-4 pb-[calc(160px+env(safe-area-inset-bottom))] lg:max-w-[1180px] lg:px-8 lg:pt-8 lg:pb-12">
+          <UpdateBanner />
           <Screen />
         </main>
       </div>

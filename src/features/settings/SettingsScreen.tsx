@@ -7,6 +7,7 @@ import { SecuritySection } from './SecuritySection'
 import { BackupSection } from './BackupSection'
 import { CloudSection } from './CloudSection'
 import { NotificationsSection } from './NotificationsSection'
+import { AboutSection } from '../shell/UpdateBanner'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
 import { useCouple, usePeople } from '../../store/hooks'
@@ -75,6 +76,8 @@ export function SettingsScreen() {
 
           <NotificationsSection />
 
+          <AboutSection />
+
           <section className="module p-4 sm:p-5" aria-labelledby="divisao">
             <SectionHeader id="divisao" title="Divisão padrão" rest="· gastos do casal" />
             <ChoiceChips<'50_50' | 'PROPORTIONAL'>
@@ -110,15 +113,18 @@ export function SettingsScreen() {
 
         <div className="flex flex-col gap-6">
           <section className="module p-4 sm:p-5" aria-labelledby="atalhos">
-            <SectionHeader id="atalhos" title="Atalhos do iPhone" rest="· captura sem procurar o app" />
-            <ol className="mb-4 flex list-decimal flex-col gap-1 pl-5 text-[14px] text-muted">
-              <li>Abra o app Atalhos e crie um atalho novo.</li>
-              <li>Adicione a ação "Abrir URL" com o endereço do atalho abaixo.</li>
+            <SectionHeader id="atalhos" title="Atalhos de captura" rest="· direto na gaveta certa" />
+            <ul className="mb-4 flex flex-col gap-2 text-[14px] text-muted" data-testid="shortcuts-howto">
               <li>
-                Coloque no Botão de Ação, no Toque Atrás (Ajustes {'>'} Acessibilidade {'>'} Toque) ou na Tela Bloqueada.
+                <strong className="text-ink">Android e computador:</strong> segure o ícone do Ampara instalado e escolha o atalho. Abre no app, na gaveta
+                certa.
               </li>
-              <li>Com o Ampara instalado na Tela de Início, o atalho abre direto na gaveta certa.</li>
-            </ol>
+              <li>
+                <strong className="text-ink">iPhone:</strong> o iOS abre os endereços do app Atalhos no Safari, que é separado do Ampara da Tela de Início
+                (outro login, outros dados). Isso é uma limitação da Apple para apps instalados pelo navegador. No iPhone, os caminhos rápidos são as
+                notificações (abrem direto na confirmação do remédio) e a barra de captura dentro do app.
+              </li>
+            </ul>
             <ul className="flex flex-col gap-3">
               {SHORTCUTS.map((s) => {
                 const url = `${base}?quick=${s.quick}`

@@ -160,7 +160,7 @@ export function CloudSection() {
             error={errors.pw}
           />
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
-          <Button type="submit" variant="primary" disabled={busy} data-testid="cloud-submit">
+          <Button type="submit" variant="primary" busy={busy} data-testid="cloud-submit">
             {busy ? 'Conectando...' : 'Conectar à nuvem'}
           </Button>
         </form>
