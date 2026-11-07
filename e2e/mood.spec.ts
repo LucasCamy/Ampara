@@ -20,6 +20,13 @@ test('check-in do dia e o que me acalma: o par lê e sabe como ajudar', async ({
   await page.getByTestId('mood-LOW_ENERGY').click()
   const done = page.getByTestId('my-mood-done')
   await expect(done).toContainText('Sem energia')
+  // coluna estreita (lateral do Hoje no computador): o texto não é espremido; o recado desce para a linha de baixo
+  const textBox = await done.locator('p').first().boundingBox()
+  const cardBox = await done.boundingBox()
+  expect(textBox!.width, 'texto do check-in espremido').toBeGreaterThanOrEqual(Math.min(180, cardBox!.width - 32))
+  expect(textBox!.height, 'texto do check-in quebrando palavra por palavra').toBeLessThan(48)
+  await done.scrollIntoViewIfNeeded()
+  await shot(page, '69-checkin-recado', info.project.name)
   await page.getByTestId('mood-note').fill('Dia puxado no trabalho')
   await page.getByTestId('mood-note-save').click()
   await expect(done).toContainText('Dia puxado no trabalho')

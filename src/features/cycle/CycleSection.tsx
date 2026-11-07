@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { CalendarHeart, CloudRain, Droplet, HeartHandshake, Leaf, Lock, Plus, Sprout, Sun, type LucideIcon } from 'lucide-react'
 import { useMemo } from 'react'
 import { Button, cx, EditButton, SectionHeader, Segmented, StatusBadge, Switch } from '../../components/ui'
@@ -97,7 +98,7 @@ export function CycleSection() {
         ) : (
           <>
             <MyCycleCard cycle={d.cycle} upcoming={d.upcoming} today={today} />
-            <ShareCard share={d.settings.share} suggestCalm={d.settings.suggestCalm} partnerName={partner.displayName} />
+            <ShareCard share={d.settings.share} suggestCalm={d.settings.suggestCalm} partnerName={firstName(partner.displayName)} />
             {d.mine.length ? (
               <div className="card p-4">
                 <h3 className="text-[15px] font-bold text-ink">Registros</h3>
@@ -254,7 +255,7 @@ function PartnerCycleCard({ view, partner, today }: { view: Exclude<PartnerCycle
   return (
     <div className={cx('card p-4', view.active ? 'ledger-solid' : 'ledger-dashed')} data-testid="partner-cycle">
       <p className="flex items-center gap-2 text-[15px] font-bold text-ink">
-        <HeartHandshake size={18} aria-hidden className="text-couple" /> Ciclo de {partner.displayName}
+        <HeartHandshake size={18} aria-hidden className="text-couple" /> Ciclo de {firstName(partner.displayName)}
       </p>
       {view.status === 'full' ? (
         <p className="mt-1 text-[14px] text-ink">
@@ -337,17 +338,17 @@ export function CycleTodayCards() {
 function PartnerWarn({ view, partner, today }: { view: Exclude<PartnerCycleView, { status: 'hidden' }>; partner: Profile; pid: PartnerId; today: string }) {
   const to = view.status === 'gentle' ? view.to : view.cycle.daysUntilNext < 0 ? today : view.cycle.sensitiveTo
   return (
-    <section className={cx('module p-4 sm:p-5', view.active ? 'ledger-solid' : 'ledger-dashed')} data-testid="partner-cycle-warn" aria-label={`Semana de mais cuidado de ${partner.displayName}`}>
+    <section className={cx('module p-4 sm:p-5', view.active ? 'ledger-solid' : 'ledger-dashed')} data-testid="partner-cycle-warn" aria-label={`Semana de mais cuidado de ${firstName(partner.displayName)}`}>
       <p className="flex items-center gap-2 text-[13px] font-bold text-couple">
         <HeartHandshake size={16} aria-hidden /> Semana de mais cuidado
       </p>
       <p className="mt-2 text-[16px] font-semibold text-ink">
         {view.active ? (
           <>
-            {partner.displayName} está na semana de mais cuidado, até <Day d={to} />.
+            {firstName(partner.displayName)} está na semana de mais cuidado, até <Day d={to} />.
           </>
         ) : (
-          <>A semana de mais cuidado de {partner.displayName} começa {inDays(view.startsIn)}.</>
+          <>A semana de mais cuidado de {firstName(partner.displayName)} começa {inDays(view.startsIn)}.</>
         )}
       </p>
       <p className="mt-1 text-[14px] text-muted">Mais paciência e menos cobrança. Assumir uma tarefa ou levar um chá costuma ajudar.</p>

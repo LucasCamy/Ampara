@@ -12,7 +12,7 @@ import {
 } from '../domain/catalog'
 import { addDays, toDateKey } from '../domain/dates'
 import { buildSettlement, computeCoupleBalance, computeShares, nonPayerShare } from '../domain/finance'
-import { formatCents } from '../domain/format'
+import { firstName, formatCents } from '../domain/format'
 import { dayInMonth, payTx } from '../domain/ledger'
 import { confirmTaken, emptyLog, logId, skipDose, snoozeWater } from '../domain/medication'
 import { uuid } from '../domain/seed'
@@ -41,7 +41,7 @@ import { ui, uiStore } from './ui'
 const nowIso = () => new Date().toISOString()
 const today = () => toDateKey(new Date())
 const viewer = () => uiStore.get().viewer
-const nameOf = (id: PartnerId) => dataStore.get().profiles[id]?.displayName ?? (id === 'A' ? 'Parceiro A' : 'Parceira B')
+const nameOf = (id: PartnerId) => firstName(dataStore.get().profiles[id]?.displayName) || (id === 'A' ? 'Parceiro A' : 'Parceira B')
 
 const ENERGY_LABEL: Record<EnergyLevel, string> = { FULL: '100% cheia', MEDIUM: '50% média', OVERLOAD: '10% modo sobrecarga' }
 

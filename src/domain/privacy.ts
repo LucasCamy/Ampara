@@ -1,4 +1,5 @@
 import { monthKey } from './dates'
+import { firstName } from './format'
 import type { PartnerId, Profile, Transaction } from './types'
 
 /**
@@ -53,12 +54,12 @@ export function personalTabView(
 
   if (owner === viewer) return { status: 'own', items: sorted(mine), totalCents: total }
   if (!profiles[owner].sharePersonalFinances) {
-    return { status: 'closed', ownerName: profiles[owner].displayName }
+    return { status: 'closed', ownerName: firstName(profiles[owner].displayName) }
   }
   return {
     status: 'readonly',
     items: sorted(mine.filter((t) => canViewTransaction(t, viewer, profiles))),
     totalCents: total,
-    ownerName: profiles[owner].displayName,
+    ownerName: firstName(profiles[owner].displayName),
   }
 }

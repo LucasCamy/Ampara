@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { CalendarCheck, CircleCheck, CircleDashed, Gift, Layers, Repeat as RepeatIcon, User, Users } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import { CATEGORIES, CATEGORY_ORDER } from '../../components/categories'
@@ -151,7 +152,7 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
             onChange={setPaidBy}
             options={[
               { value: viewer, label: 'Eu paguei' },
-              { value: partnerId, label: `${partner.displayName} pagou` },
+              { value: partnerId, label: `${firstName(partner.displayName)} pagou` },
             ]}
           />
           <ChoiceChips<SplitRule>
@@ -166,7 +167,7 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
           />
           {preview ? (
             <p className="text-[14px] text-ink" data-testid="expense-preview">
-              Sua parte: <span className="font-data font-semibold whitespace-nowrap">{formatCents(preview.mine)}</span> · Parte de {partner.displayName}:{' '}
+              Sua parte: <span className="font-data font-semibold whitespace-nowrap">{formatCents(preview.mine)}</span> · Parte de {firstName(partner.displayName)}:{' '}
               <span className="font-data font-semibold whitespace-nowrap">{formatCents(preview.theirs)}</span>
             </p>
           ) : null}
@@ -182,7 +183,7 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
                 <Gift size={17} aria-hidden className="text-couple" /> Presente / Surpresa
               </span>
             }
-            description={`Fica oculto para ${partner.displayName}, mesmo com a transparência ligada. ${me.sharePersonalFinances ? '' : 'Sua aba pessoal já está fechada agora.'}`}
+            description={`Fica oculto para ${firstName(partner.displayName)}, mesmo com a transparência ligada. ${me.sharePersonalFinances ? '' : 'Sua aba pessoal já está fechada agora.'}`}
           />
         </div>
       )}

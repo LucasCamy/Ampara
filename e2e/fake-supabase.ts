@@ -209,7 +209,9 @@ export class FakeSupabase {
     // PostgREST
     const tableName = path.replace('/rest/v1/', '')
     const t = this.table(tableName)
-    const keyOf = (row: Row) => (tableName === 'profiles' || tableName === 'cycle_settings' ? `${String(row.couple_id)}|${String(row.id)}` : String(row.id))
+    // chave (couple_id, id): perfis, ajustes do ciclo e check-in ("A@data" se repete entre casais)
+    const composite = tableName === 'profiles' || tableName === 'cycle_settings' || tableName === 'mood_checkins'
+    const keyOf = (row: Row) => (composite ? `${String(row.couple_id)}|${String(row.id)}` : String(row.id))
     if (!me) return json(403, { message: 'not a member' })
 
     if (req.method() === 'GET') {
@@ -247,10 +249,12 @@ export class FakeSupabase {
     }
     if (req.method() === 'PATCH') {
       const id = url.searchParams.get('id')?.replace(/^eq\./, '') ?? ''
-      const row = t.get(id)
+      const couple = url.searchParams.get('couple_id')?.replace(/^eq\./, '') ?? me.couple_id
+      const key = composite ? `${couple}|${id}` : id
+      const row = t.get(key)
       // update sem permissão no using: 0 linhas, sem erro (como no PostgREST)
       if (!row || !this.canWrite(tableName, row, me)) return json(204, null)
-      t.set(id, { ...row, ...body, synced_at: this.stamp() })
+      t.set(key, { ...row, ...body, synced_at: this.stamp() })
       return json(204, null)
     }
     return json(405, { message: 'method not allowed' })

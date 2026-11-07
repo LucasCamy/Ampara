@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { CircleDashed, ListX, Trash2 } from 'lucide-react'
 import { CATEGORIES } from '../../components/categories'
 import { Button, StatusBadge } from '../../components/ui'
@@ -42,7 +43,7 @@ export function TxSheet({ id, onDone }: { id: string; onDone: () => void }) {
         {badge ? <span className="font-semibold text-couple">{badge}</span> : null}
         <span>
           {tx.scope === 'COUPLE' ? 'Do casal' : 'Pessoal'} · competência <span className="font-data">{ddmm(tx.competenceDate)}</span>
-          {tx.status === 'CONFIRMED_SOLID' ? ` · pago por ${tx.paidBy === viewer ? 'você' : profiles[tx.paidBy].displayName}` : ''}
+          {tx.status === 'CONFIRMED_SOLID' ? ` · pago por ${tx.paidBy === viewer ? 'você' : firstName(profiles[tx.paidBy].displayName)}` : ''}
         </span>
       </div>
 

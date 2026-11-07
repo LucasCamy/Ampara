@@ -1,6 +1,6 @@
 import { toDateKey } from '../domain/dates'
 import { nonPayerShare } from '../domain/finance'
-import { formatCents } from '../domain/format'
+import { firstName, formatCents } from '../domain/format'
 import {
   buildInstallments,
   canViewRule,
@@ -116,7 +116,7 @@ export function saveEntry(input: EntryInput): boolean {
   else if (isCouple) {
     // o que importa no casal: quanto da parte do outro entra no acerto
     const np = nonPayerShare(t)
-    const name = dataStore.get().profiles[np.who]?.displayName ?? 'seu par'
+    const name = firstName(dataStore.get().profiles[np.who]?.displayName) || 'seu par'
     msg = `Gasto salvo · ${np.who === who ? 'Sua parte' : `Parte de ${name}`}: ${formatCents(np.cents)} no acerto do mês`
   }
   ui.toast(msg, { undo })

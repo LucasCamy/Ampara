@@ -44,3 +44,12 @@ export function formatClock(iso: string): string {
   const d = new Date(iso)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+
+/**
+ * Primeiro nome para as telas do dia a dia ("Pedir ajuda para Julia" em vez do nome completo).
+ * O nome completo fica no cadastro (Ajustes › Casal) e nos rótulos de acessibilidade da troca de pessoa.
+ */
+export function firstName(name: string | undefined | null): string {
+  const n = (name ?? '').trim()
+  return n.split(/\s+/)[0] ?? n
+}

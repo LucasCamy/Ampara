@@ -624,7 +624,7 @@ end $$;
 -- Iteração 13: check-in do dia e "o que me acalma" (cada um grava o seu; o casal lê)
 -- =====================================================================
 create table if not exists mood_checkins (
-  id text primary key, -- ownerId@data: um por pessoa por dia
+  id text not null, -- ownerId@data: um por pessoa por dia (repete entre casais, por isso a chave inclui o casal)
   couple_id text not null references couples (id) on delete cascade,
   owner_id text not null check (owner_id in ('A', 'B')),
   date date not null,
@@ -632,8 +632,20 @@ create table if not exists mood_checkins (
   note text not null default '' check (length(note) <= 120),
   updated_at timestamptz not null default now(),
   deleted boolean not null default false,
-  synced_at timestamptz not null default clock_timestamp()
+  synced_at timestamptz not null default clock_timestamp(),
+  primary key (couple_id, id)
 );
+-- Bancos criados antes: a chave era só "id" e o "A@2026-11-07" de um casal colidia com o de outro. Troca uma vez.
+do $$
+declare pk text;
+begin
+  select c.conname into pk from pg_constraint c
+   where c.conrelid = 'mood_checkins'::regclass and c.contype = 'p' and array_length(c.conkey, 1) = 1;
+  if pk is not null then
+    execute format('alter table mood_checkins drop constraint %I', pk);
+    alter table mood_checkins add primary key (couple_id, id);
+  end if;
+end $$;
 create index if not exists idx_mood_checkins_pull on mood_checkins (couple_id, updated_at);
 
 create table if not exists comfort_items (

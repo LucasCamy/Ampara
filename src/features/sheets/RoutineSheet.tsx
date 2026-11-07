@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { User, UserRound, Users } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ChoiceChips, cx, TextField } from '../../components/ui'
@@ -115,7 +116,7 @@ export function RoutineSheet({ id, onDone }: { id?: string; onDone: () => void }
         options={[
           { value: 'ANY', label: 'Qualquer um', icon: Users },
           { value: 'ME', label: 'Meu', icon: User },
-          { value: 'PARTNER', label: `De ${partner.displayName}`, icon: UserRound },
+          { value: 'PARTNER', label: `De ${firstName(partner.displayName)}`, icon: UserRound },
         ]}
       />
 

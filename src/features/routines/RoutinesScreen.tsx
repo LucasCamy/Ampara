@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { HandHeart, Package, Pill, Plus, Repeat } from 'lucide-react'
 import { useMemo } from 'react'
 import { DoseActions, DoseStatus, doseBorder } from '../../components/domain'
@@ -89,7 +90,7 @@ export function RoutinesScreen() {
               <h3 className="mt-6 mb-2 text-[15px] font-bold text-ink">Estoque e rede de apoio</h3>
               <ul className="flex flex-col gap-3">
                 {d.myMeds.map((m) => (
-                  <MedSettings key={m.id} med={m} partnerName={partner.displayName} />
+                  <MedSettings key={m.id} med={m} partnerName={firstName(partner.displayName)} />
                 ))}
               </ul>
             </>
@@ -136,7 +137,7 @@ export function RoutinesScreen() {
                         </div>
                         {m.assignee ? (
                           <OwnerTag tone={toneOf(m.assignee)}>
-                            Responsável: {m.assignee === viewer ? 'você' : profiles[m.assignee]?.displayName}
+                            Responsável: {m.assignee === viewer ? 'você' : firstName(profiles[m.assignee]?.displayName)}
                           </OwnerTag>
                         ) : null}
                         <p className="text-[13px] break-words text-muted">
@@ -145,7 +146,7 @@ export function RoutinesScreen() {
                         <p className="mt-1 text-[13px] text-muted">
                           {last ? (
                             <>
-                              Última vez: {last.by === viewer ? 'você' : profiles[last.by as 'A' | 'B']?.displayName}, às <span className="font-data">{formatClock(last.at)}</span>
+                              Última vez: {last.by === viewer ? 'você' : firstName(profiles[last.by as 'A' | 'B']?.displayName)}, às <span className="font-data">{formatClock(last.at)}</span>
                             </>
                           ) : (
                             'Ainda sem registro'
@@ -169,10 +170,10 @@ export function RoutinesScreen() {
           </section>
 
           <section aria-labelledby="rede-apoio">
-            <SectionHeader id="rede-apoio" title={`Rede de apoio de ${partner.displayName}`} rest="· só o que foi compartilhado" />
+            <SectionHeader id="rede-apoio" title={`Rede de apoio de ${firstName(partner.displayName)}`} rest="· só o que foi compartilhado" />
             {d.partnerDoses.length === 0 ? (
               <p className="rounded-[18px] border border-dashed border-line-strong p-4 text-[14px] text-muted">
-                {partner.displayName} não compartilhou nenhum remédio com a rede de apoio hoje.
+                {firstName(partner.displayName)} não compartilhou nenhum remédio com a rede de apoio hoje.
               </p>
             ) : (
               <ul className="flex flex-col gap-3">

@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { useState, type FormEvent } from 'react'
 import { DateField } from '../../components/pickers'
 import { ChoiceChips, FieldError } from '../../components/ui'
@@ -56,7 +57,7 @@ export function PaySheet({ id, onDone }: { id: string; onDone: () => void }) {
           onChange={setPaidBy}
           options={[
             { value: viewer, label: 'Eu paguei' },
-            { value: partnerId, label: `${partner.displayName} pagou` },
+            { value: partnerId, label: `${firstName(partner.displayName)} pagou` },
           ]}
         />
       ) : null}

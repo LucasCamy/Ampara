@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import {
   ChevronDown,
   CircleCheck,
@@ -93,14 +94,14 @@ function CoupleGroup() {
         <SectionHeader id="pareamento" title="Espaço do casal" />
         {partnerPending ? (
           <p className="text-[14px] text-muted" data-testid="settings-invite">
-            {partner.displayName} ainda não ativou o acesso. Código de convite:{' '}
+            {firstName(partner.displayName)} ainda não ativou o acesso. Código de convite:{' '}
             <span className="font-data text-[18px] font-semibold text-ink">{couple.inviteCode}</span>
           </p>
         ) : (
           <StatusBadge kind="ok">Vocês dois já têm senha própria</StatusBadge>
         )}
         <p className="mt-2 text-[13px] text-muted">
-          Sincronização: {adapterName()}. Para ver a visão de {partner.displayName} neste aparelho, toque no nome no topo: o app pede a senha.
+          Sincronização: {adapterName()}. Para ver a visão de {firstName(partner.displayName)} neste aparelho, toque no nome no topo: o app pede a senha.
         </p>
         <div className="mt-4">
           <NameField key={`${viewer}-${profiles[viewer].displayName}`} id={viewer} value={profiles[viewer].displayName} label="Seu nome" />
@@ -134,12 +135,12 @@ function CoupleGroup() {
             checked={me.sharePersonalFinances}
             onChange={setSharePersonal}
             testId="settings-share-toggle"
-            label={`Deixar meus gastos pessoais visíveis para ${partner.displayName}`}
+            label={`Deixar meus gastos pessoais visíveis para ${firstName(partner.displayName)}`}
             description="Leitura apenas. Itens marcados como Presente / Surpresa nunca aparecem."
           />
           <div className="mt-4 rounded-[16px] bg-subtle p-3">
             <p className="text-[13px] font-semibold text-muted">
-              Status de {partner.displayName} (só {partner.pronoun} pode mudar)
+              Status de {firstName(partner.displayName)} (só {partner.pronoun} pode mudar)
             </p>
             <p className="mt-1 flex items-center gap-2 text-[15px] font-semibold text-ink">
               {partner.sharePersonalFinances ? <Eye size={17} aria-hidden className="text-action" /> : <EyeOff size={17} aria-hidden className="text-muted" />}
@@ -159,7 +160,7 @@ function DeviceGroup() {
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
       <div className="flex flex-col gap-6">
-        <SecuritySection partnerName={partner.displayName} />
+        <SecuritySection partnerName={firstName(partner.displayName)} />
         <AboutSection />
       </div>
       <div className="flex flex-col gap-6">

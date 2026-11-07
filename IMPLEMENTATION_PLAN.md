@@ -37,6 +37,18 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 22 (2026-11-07): vários casais no servidor, cartão do check-in e primeiro nome
+
+- **Check-in com vários casais:** `mood_checkins` passa a ter chave `(couple_id, id)`. O id `A@2026-11-07` se
+  repete entre casais e o segundo casal tomava erro de RLS no upsert. O schema troca a chave uma vez em bancos já
+  criados (idempotente); o app usa `on_conflict=couple_id,id` e mantém `deleted`. Espelho no `fake-supabase.ts` e
+  caso no `validate.sql` com um segundo casal gravando o mesmo `A@hoje`. Os demais ids são uuid (sem colisão).
+- **Cartão `my-mood-done`:** texto e recado com `basis` próprio; na lateral do Hoje no computador o recado desce
+  para a linha de baixo em vez de espremer o texto palavra por palavra (checado no E2E do humor).
+- **Primeiro nome:** `firstName` em `src/domain/format.ts` (antes havia quatro cópias) nas telas do dia a dia,
+  gavetas, toasts, acerto do mês e título salvo de datas especiais. O nome completo fica no campo "Seu nome" de
+  Ajustes, em "Usando como" e nos rótulos de acessibilidade da troca de pessoa.
+
 ## Iteração 21 (2026-11-07): correções de segurança da análise
 
 - **Perfil e espaço no banco:** `couples` e `profiles` saíram do "for all". O par não altera mais o perfil do outro

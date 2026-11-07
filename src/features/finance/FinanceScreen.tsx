@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { ArrowRightLeft, ChevronLeft, ChevronRight, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Layers, Lock, MoreHorizontal, ReceiptText, Repeat, User, Users } from 'lucide-react'
 import { GoalsSection } from './GoalsSection'
 import { RulesSection } from './RulesSection'
@@ -163,7 +164,7 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
                       Eu paguei
                     </Button>
                     <Button size="sm" variant="secondary" className="grow basis-[120px]" onClick={() => quickPay(t.id, partnerId)}>
-                      {partner.displayName.split(' ')[0]} pagou
+                      {firstName(partner.displayName)} pagou
                     </Button>
                     <Button size="sm" variant="secondary" className="grow basis-[120px]" onClick={() => ui.openSheet('pay', { id: t.id })} data-testid="pay-other">
                       Outro valor
@@ -197,8 +198,8 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
                     <TxHeader tx={t} />
                     <SeriesTag tx={t} />
                     <p className="mt-1 text-[13px] text-muted">
-                      Pago por {t.paidBy === viewer ? 'você' : profiles[t.paidBy].displayName} · {splitRuleLabel(t.splitRule, couple.ratioABps)} · parte{' '}
-                      {other === viewer ? 'sua' : `de ${profiles[other].displayName}`}: <span className="font-data whitespace-nowrap text-ink">{formatCents(shareOf(t, other))}</span>
+                      Pago por {t.paidBy === viewer ? 'você' : firstName(profiles[t.paidBy].displayName)} · {splitRuleLabel(t.splitRule, couple.ratioABps)} · parte{' '}
+                      {other === viewer ? 'sua' : `de ${firstName(profiles[other].displayName)}`}: <span className="font-data whitespace-nowrap text-ink">{formatCents(shareOf(t, other))}</span>
                     </p>
                   </li>
                 )
@@ -212,7 +213,7 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
                     <span className="font-data shrink-0 whitespace-nowrap">{formatCents(t.amountCents)}</span>
                   </p>
                   <p className="text-[13px] text-muted">
-                    {t.paidBy === viewer ? 'Você' : profiles[t.paidBy].displayName} transferiu em {dayOfMonth(t.competenceDate)}/{t.competenceDate.slice(5, 7)}
+                    {t.paidBy === viewer ? 'Você' : firstName(profiles[t.paidBy].displayName)} transferiu em {dayOfMonth(t.competenceDate)}/{t.competenceDate.slice(5, 7)}
                   </p>
                 </li>
               ))}
@@ -328,7 +329,7 @@ function PersonalTab({ month, owner, today }: { month: string; owner: 'me' | 'pa
               label={
                 <span className="inline-flex items-center gap-2">
                   {me.sharePersonalFinances ? <Eye size={18} aria-hidden className="text-action" /> : <EyeOff size={18} aria-hidden className="text-muted" />}
-                  Permitir que {partner.displayName} veja meus gastos pessoais
+                  Permitir que {firstName(partner.displayName)} veja meus gastos pessoais
                 </span>
               }
               description={
@@ -397,7 +398,7 @@ function PersonalTab({ month, owner, today }: { month: string; owner: 'me' | 'pa
                   <SeriesTag tx={t} />
                   {t.isSecretGift ? (
                     <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-couple">
-                      <Gift size={13} aria-hidden /> Presente · oculto para {partner.displayName}
+                      <Gift size={13} aria-hidden /> Presente · oculto para {firstName(partner.displayName)}
                     </span>
                   ) : null}
                 </div>

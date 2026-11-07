@@ -1,5 +1,5 @@
 import { monthKey } from './dates'
-import { formatCents } from './format'
+import { firstName, formatCents } from './format'
 import type { Couple, DateKey, PartnerId, Profile, SplitRule, Transaction } from './types'
 import { otherPartner } from './types'
 
@@ -130,8 +130,8 @@ export function describeBalance(
   const plan = settlementPlan(netCents)
   if (!plan) return `R$ 0,00 · Contas de ${monthLabel} em dia`
   const amount = formatCents(plan.amountCents)
-  const name = (id: PartnerId) => (id === viewer ? 'Você' : profiles[id].displayName)
-  const to = plan.to === viewer ? 'você' : profiles[plan.to].displayName
+  const name = (id: PartnerId) => (id === viewer ? 'Você' : firstName(profiles[id].displayName))
+  const to = plan.to === viewer ? 'você' : firstName(profiles[plan.to].displayName)
   return `${name(plan.from)} transfere ${amount} para ${to} para zerar ${monthLabel}`
 }
 

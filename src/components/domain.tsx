@@ -1,3 +1,4 @@
+import { firstName } from '../domain/format'
 import { Brain, Check, CircleDashed, Clock, LifeBuoy, Mail, MoveRight, Zap } from 'lucide-react'
 import { formatClock, formatDuration } from '../domain/format'
 import type { DoseView } from '../domain/medication'
@@ -143,7 +144,7 @@ export function TaskRow({
           {task.dueTime ? <span className="font-data text-[12px] text-muted">{task.dueTime}</span> : null}
           {sentToMe ? (
             <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-couple">
-              <Mail size={13} aria-hidden /> Enviada por {profiles[task.sentBy!].displayName}
+              <Mail size={13} aria-hidden /> Enviada por {firstName(profiles[task.sentBy!].displayName)}
             </span>
           ) : null}
           {sentByMe ? (
@@ -153,7 +154,7 @@ export function TaskRow({
           ) : null}
           {done && task.completedBy ? (
             <StatusBadge kind="ok" className="min-h-6 text-[12px]">
-              Feito por {task.completedBy === viewer ? 'você' : profiles[task.completedBy].displayName}
+              Feito por {task.completedBy === viewer ? 'você' : firstName(profiles[task.completedBy].displayName)}
             </StatusBadge>
           ) : null}
         </div>
@@ -173,7 +174,7 @@ export function TaskRow({
               <button
                 type="button"
                 onClick={() => sendTaskToPartner(task.id)}
-                aria-label={`Enviar para ${partner.displayName}: ${task.title}`}
+                aria-label={`Enviar para ${firstName(partner.displayName)}: ${task.title}`}
                 className="press hoverable inline-flex min-h-11 min-w-0 grow basis-0 items-center justify-center gap-1.5 rounded-[12px] border border-line px-2 text-[13px] font-semibold text-action"
               >
                 <Mail size={15} aria-hidden /> <span className="sm:hidden">Enviar ao amor</span><span className="hidden sm:inline">Enviar para meu amor</span>

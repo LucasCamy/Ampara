@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { CalendarClock, ChevronDown, ChevronUp, Coffee, HandHeart, HeartHandshake, LifeBuoy, ListPlus, Package, Pill, Sparkles, Sunrise } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { DoseActions, DoseStatus, doseBorder, TaskRow } from '../../components/domain'
@@ -64,20 +65,20 @@ export function TodayScreen() {
 
   const header = (
     <div className="mb-5 flex flex-col gap-2">
-      <Title size="xl" anchor={`${greeting(now)}, ${me.displayName}.`} rest={overload ? 'Só uma coisa por vez.' : 'Uma coisa de cada vez.'} />
+      <Title size="xl" anchor={`${greeting(now)}, ${firstName(me.displayName)}.`} rest={overload ? 'Só uma coisa por vez.' : 'Uma coisa de cada vez.'} />
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted">
         <span className="inline-flex items-center gap-1.5">
           {(() => {
             const E = ENERGY[partner.energy]
             return <E.icon size={16} aria-hidden className={partner.energy === 'OVERLOAD' ? 'text-err' : 'text-muted'} />
           })()}
-          {partner.displayName} está com {ENERGY[partner.energy].partner} hoje
+          {firstName(partner.displayName)} está com {ENERGY[partner.energy].partner} hoje
         </span>
       </p>
       {partner.energy === 'OVERLOAD' ? (
         <p data-testid="partner-calm" className="inline-flex items-center gap-2 self-start rounded-[14px] bg-subtle px-3 py-2 text-[14px] font-semibold text-ink">
           <HeartHandshake size={16} aria-hidden className="text-couple" />
-          {partner.displayName} ativou o Modo Calmo hoje. Pegue leve nos pedidos.
+          {firstName(partner.displayName)} ativou o Modo Calmo hoje. Pegue leve nos pedidos.
         </p>
       ) : null}
     </div>
@@ -86,7 +87,7 @@ export function TodayScreen() {
   const now_ = <NowCard next={d.next} overload={overload} />
   const helpButton = (
     <Button variant="secondary" size="lg" icon={LifeBuoy} onClick={() => ui.openSheet('sos')} className="w-full border-err text-err" data-testid="overload-help">
-      Pedir ajuda para {partner.displayName}
+      Pedir ajuda para {firstName(partner.displayName)}
     </Button>
   )
 
@@ -97,7 +98,7 @@ export function TodayScreen() {
       {d.nudges.map((n) => (
         <section key={n.id} className="module ledger-dashed p-4 sm:p-5" aria-label="Lembrete carinhoso">
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">
-            <HandHeart size={16} aria-hidden /> Lembrete carinhoso de {partner.displayName}
+            <HandHeart size={16} aria-hidden /> Lembrete carinhoso de {firstName(partner.displayName)}
           </p>
           <p className="mt-2 text-[16px] font-semibold text-ink">{n.message}</p>
           <div className="mt-3">
@@ -109,7 +110,7 @@ export function TodayScreen() {
       ))}
 
       {d.helpIn.map((h) => (
-        <HelpInCard key={h.id} req={h} partnerName={partner.displayName} />
+        <HelpInCard key={h.id} req={h} partnerName={firstName(partner.displayName)} />
       ))}
 
       {d.alerts.map((a) => {
@@ -118,7 +119,7 @@ export function TodayScreen() {
           <section key={a.log.id} className="module ledger-err p-4 sm:p-5" data-testid="partner-delay-alert">
             <StatusBadge kind="late">Rede de apoio · atrasado</StatusBadge>
             <p className="mt-2 text-[16px] font-semibold text-ink">
-              O remédio das <span className="font-data">{a.log.scheduledTime}</span> de {partner.displayName} ainda consta pendente.
+              O remédio das <span className="font-data">{a.log.scheduledTime}</span> de {firstName(partner.displayName)} ainda consta pendente.
             </p>
             <p className="text-[14px] text-muted">{a.med.name}. Um lembrete gentil costuma ajudar.</p>
             <div className="mt-3">
@@ -141,7 +142,7 @@ export function TodayScreen() {
     <TodayFeed>
       {d.helpAnswered.map((h) => (
         <section key={h.id} className="module ledger-ok p-4 sm:p-5" data-testid="help-answered">
-          <StatusBadge kind="ok">{h.response === 'TAKE_OVER' ? `${partner.displayName} assumiu` : `${partner.displayName} vai fazer junto`}</StatusBadge>
+          <StatusBadge kind="ok">{h.response === 'TAKE_OVER' ? `${firstName(partner.displayName)} assumiu` : `${firstName(partner.displayName)} vai fazer junto`}</StatusBadge>
           <p className="mt-2 text-[16px] font-semibold text-ink">{h.situation}</p>
           <div className="mt-3">
             <Button size="sm" variant="quiet" className="w-full sm:w-auto" onClick={() => resolveHelp(h.id)}>
@@ -158,7 +159,7 @@ export function TodayScreen() {
       <PackTodayCards />
       {d.helpWaiting.map((h) => (
         <section key={h.id} className="card ledger-dashed p-4" data-testid="help-waiting">
-          <StatusBadge kind="pending">Pedido enviado · aguardando {partner.displayName}</StatusBadge>
+          <StatusBadge kind="pending">Pedido enviado · aguardando {firstName(partner.displayName)}</StatusBadge>
           <p className="mt-2 text-[15px] font-semibold text-ink">{h.situation}</p>
           <p className="text-[13px] text-muted">
             {HELP_TYPE[h.helpType]} · {URGENCY[h.urgency]}
@@ -285,7 +286,7 @@ export function TodayScreen() {
           {now_}
           <div className="hidden lg:block">
             <Button variant="secondary" icon={LifeBuoy} onClick={() => ui.openSheet('sos')} className="w-full border-err text-err">
-              Pedir ajuda para {partner.displayName}
+              Pedir ajuda para {firstName(partner.displayName)}
             </Button>
           </div>
         </div>

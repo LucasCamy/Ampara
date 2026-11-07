@@ -1,3 +1,4 @@
+import { firstName } from '../domain/format'
 import { defaultCycleSettings, logsOf, publishedForecast, type PeriodInput } from '../domain/cycle'
 import { toDateKey } from '../domain/dates'
 import { uuid } from '../domain/seed'
@@ -74,7 +75,7 @@ export function updateCycleSettings(patch: Partial<Pick<CycleSettings, 'share' |
   const who = me()
   const undo = transact((tx) => publish(tx, who, patch))
   if (patch.share) {
-    const partner = dataStore.get().profiles[who === 'A' ? 'B' : 'A']?.displayName ?? 'Seu par'
+    const partner = firstName(dataStore.get().profiles[who === 'A' ? 'B' : 'A']?.displayName) || 'Seu par'
     const msg = { NONE: 'Seu ciclo agora é só seu', GENTLE: `${partner} vê só a semana de mais cuidado`, FULL: `${partner} pode ver seu ciclo` }[patch.share]
     ui.toast(msg, { undo, tone: 'info' })
   }

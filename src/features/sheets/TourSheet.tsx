@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { HeartPulse, ListPlus, Lock, Sun, Users, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../../components/ui'
@@ -48,7 +49,7 @@ export function TourSheet({ onDone }: { onDone: () => void }) {
     onDone()
   }
   const Icon = step.icon
-  const pname = partner.displayName.split(' ')[0]!
+  const pname = firstName(partner.displayName)
   return (
     <div className="flex flex-col gap-4 pt-2 pb-2" data-testid="tour" data-step={i + 1}>
       <span className="inline-flex h-12 w-12 items-center justify-center rounded-[16px] bg-subtle text-action">

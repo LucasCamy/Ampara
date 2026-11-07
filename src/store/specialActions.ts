@@ -1,3 +1,4 @@
+import { firstName } from '../domain/format'
 import { specialDateTitle, type SpecialDateInput } from '../domain/specialDates'
 import { uuid } from '../domain/seed'
 import type { GiftIdea, GiftStatus, SpecialDate } from '../domain/types'
@@ -8,7 +9,8 @@ const nowIso = () => new Date().toISOString()
 const viewer = () => uiStore.get().viewer
 const names = () => {
   const p = dataStore.get().profiles
-  return { A: p.A?.displayName ?? 'A', B: p.B?.displayName ?? 'B' }
+  // título salvo da data ("Aniversário de Julia"): primeiro nome, como nas telas do dia a dia
+  return { A: firstName(p.A?.displayName) || 'A', B: firstName(p.B?.displayName) || 'B' }
 }
 
 /* ---------- datas especiais (do casal) ---------- */

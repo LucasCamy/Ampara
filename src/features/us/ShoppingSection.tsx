@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { Check, CircleDashed, Home, Package, Pill, Plus, ReceiptText, ShoppingBasket, ShoppingCart, X, type LucideIcon } from 'lucide-react'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { Button, ChoiceChips, cx, EmptyState, FieldError, SectionHeader } from '../../components/ui'
@@ -109,7 +110,7 @@ export function ShoppingSection() {
             </h3>
             <ul>
               {g.items.map((i) => (
-                <ShopRow key={i.id} item={i} who={i.addedBy === viewer ? 'você' : profiles[i.addedBy].displayName.split(' ')[0]!} />
+                <ShopRow key={i.id} item={i} who={i.addedBy === viewer ? 'você' : firstName(profiles[i.addedBy].displayName)} />
               ))}
             </ul>
           </div>
@@ -121,7 +122,7 @@ export function ShoppingSection() {
             </h3>
             <ul>
               {v.inCart.map((i) => (
-                <ShopRow key={i.id} item={i} who={i.checkedBy === viewer ? 'você' : i.checkedBy ? profiles[i.checkedBy].displayName.split(' ')[0]! : ''} />
+                <ShopRow key={i.id} item={i} who={i.checkedBy === viewer ? 'você' : i.checkedBy ? firstName(profiles[i.checkedBy].displayName) : ''} />
               ))}
             </ul>
             <div className="flex flex-wrap gap-2 p-2">

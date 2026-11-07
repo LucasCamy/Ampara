@@ -148,6 +148,11 @@ export const TABLES: Record<CollectionName, string> = {
 
 /** Tabelas com chave (couple_id, id): um registro por pessoa */
 const PER_PERSON = new Set<CollectionName>(['profiles', 'cycleSettings'])
+/**
+ * Chave (couple_id, id) com id que se repete entre casais (check-in "A@2026-11-07"). Diferente de PER_PERSON,
+ * tem a coluna deleted: mantém deleted no toRow e na exclusão lógica (que já filtra por couple_id).
+ */
+const COUPLE_SCOPED_ID = new Set<CollectionName>(['moodCheckins'])
 
 /**
  * Tabela que o servidor ainda não tem (app publicado antes do schema.sql novo ser aplicado).
@@ -197,7 +202,7 @@ export function fromRow(collection: CollectionName, row: Record<string, unknown>
  * quem criou o espaço sobe o perfil dele(a) na primeira vez; depois só o próprio par altera (profiles_update).
  */
 export async function upsertRow(cfg: RemoteConfig, token: string, collection: CollectionName, row: Record<string, unknown>, onlyCreate = false) {
-  const conflict = PER_PERSON.has(collection) ? '?on_conflict=couple_id,id' : ''
+  const conflict = PER_PERSON.has(collection) || COUPLE_SCOPED_ID.has(collection) ? '?on_conflict=couple_id,id' : ''
   await call(cfg, `/rest/v1/${TABLES[collection]}${conflict}`, {
     method: 'POST',
     token,

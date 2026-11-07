@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { BatteryLow, CloudLightning, DoorOpen, HeartHandshake, Plus, Smile, X, type LucideIcon } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { Button, cx, FieldError, SectionHeader } from '../../components/ui'
@@ -17,7 +18,6 @@ export const MOOD_ICON: Record<Mood, LucideIcon> = {
   OVERWHELMED: CloudLightning,
 }
 
-const first = (name: string) => name.split(' ')[0]!
 
 /** Cinco humores em 1 toque. Troca na hora (anti-flick). */
 export function MoodPicker({ value }: { value: Mood | undefined }) {
@@ -74,7 +74,7 @@ export function PartnerMoodCard() {
   const { partnerId, partner } = usePeople()
   const all = useData((s) => s.moodCheckins)
   const theirs = checkinOf(all, partnerId, today)
-  const pname = first(partner.displayName)
+  const pname = firstName(partner.displayName)
   return theirs ? (
         <section className={cx('module p-4 sm:p-5', needsComfort(theirs.mood) ? 'ledger-solid' : 'ledger-dashed')} data-testid="partner-mood" aria-label={`Check-in de ${pname}`}>
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">
@@ -104,7 +104,7 @@ export function MyMoodCard() {
     <>
       {!mine || editing ? (
         <section className="card ledger-dashed p-4" data-testid="my-mood" aria-label="Seu check-in de hoje">
-          <p className="mb-3 text-[15px] font-semibold text-ink">Como você está hoje? {partner.displayName.split(' ')[0]} vê.</p>
+          <p className="mb-3 text-[15px] font-semibold text-ink">Como você está hoje? {firstName(partner.displayName)} vê.</p>
           <MoodPicker value={mine?.mood} />
           {mine ? (
             <Button size="sm" variant="quiet" className="mt-3 w-full sm:w-auto" onClick={() => setEditing(false)}>
@@ -114,12 +114,14 @@ export function MyMoodCard() {
         </section>
       ) : (
         <section className="card flex flex-wrap items-center gap-x-3 gap-y-2 p-3" data-testid="my-mood-done">
-          <p className="min-w-0 flex-1 text-[14px] text-muted">
+          {/* basis nos dois lados: em coluna estreita (ex.: lateral do Hoje no computador) o recado desce para
+              a linha de baixo com a largura toda, em vez de espremer o texto palavra por palavra */}
+          <p className="min-w-0 flex-1 basis-[180px] text-[14px] text-muted">
             Seu check-in: <strong className="text-ink">{MOOD_LABEL[mine.mood]}</strong>
             {mine.note ? ` · “${mine.note}”` : ''}
           </p>
           <form
-            className="flex w-full gap-2 sm:w-auto"
+            className={mine.note ? 'flex shrink-0 gap-2' : 'flex min-w-0 flex-1 basis-[220px] gap-2'}
             onSubmit={(e: FormEvent) => {
               e.preventDefault()
               setMoodNote(note)
@@ -169,10 +171,10 @@ export function ComfortSection() {
 
   return (
     <section aria-labelledby="acalma-title" data-testid="comfort-section">
-      <SectionHeader id="acalma-title" title="O que me acalma" rest={`· ${first(partner.displayName)} vê nos dias difíceis`} />
+      <SectionHeader id="acalma-title" title="O que me acalma" rest={`· ${firstName(partner.displayName)} vê nos dias difíceis`} />
       <div className="card p-4">
         <p className="text-[14px] text-muted">
-          Escreva com calma, num dia bom. Aparece para {first(partner.displayName)} quando você pede ajuda ou marca “Preciso de colo” ou “No limite”.
+          Escreva com calma, num dia bom. Aparece para {firstName(partner.displayName)} quando você pede ajuda ou marca “Preciso de colo” ou “No limite”.
         </p>
         {mine.length ? (
           <ul className="mt-2 divide-y divide-line" data-testid="my-comfort">
@@ -216,7 +218,7 @@ export function ComfortSection() {
           {error ? <FieldError id="comfort-err">{error}</FieldError> : null}
         </form>
       </div>
-      <ComfortList owner={partnerId} title={`O que acalma ${first(partner.displayName)}`} />
+      <ComfortList owner={partnerId} title={`O que acalma ${firstName(partner.displayName)}`} />
     </section>
   )
 }

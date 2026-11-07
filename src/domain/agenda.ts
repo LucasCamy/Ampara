@@ -1,5 +1,6 @@
 import { cycleToday, logsOf, partnerCycleView, upcomingPeriods } from './cycle'
 import { addDays } from './dates'
+import { firstName } from './format'
 import { describeUpcoming } from './specialDates'
 import type { CycleLog, CycleSettings, DateKey, PartnerId, SpecialDate } from './types'
 
@@ -29,7 +30,6 @@ export interface AgendaMarkInput {
   today: DateKey
 }
 
-const first = (n: string) => n.trim().split(/\s+/)[0] ?? n
 
 function eachDay(from: DateKey, to: DateKey, fn: (d: DateKey) => void) {
   for (let d = from; d <= to; d = addDays(d, 1)) fn(d)
@@ -55,7 +55,7 @@ export function agendaMarks(i: AgendaMarkInput, from: DateKey, to: DateKey): Day
       const last = new Date(y, m!, 0).getDate()
       const on = `${y}-${String(m).padStart(2, '0')}-${String(Math.min(d!, last)).padStart(2, '0')}`
       const years = y - Number(sd.date.slice(0, 4))
-      const person = sd.personId ? (sd.personId === i.viewer ? 'você' : first(i.names[sd.personId])) : undefined
+      const person = sd.personId ? (sd.personId === i.viewer ? 'você' : firstName(i.names[sd.personId])) : undefined
       push({ date: on, kind: 'SPECIAL', owner: 'us', label: describeUpcoming({ item: sd, on, inDays: 0, years: years > 0 ? years : null }, person) })
     }
   }
@@ -69,7 +69,7 @@ export function agendaMarks(i: AgendaMarkInput, from: DateKey, to: DateKey): Day
 
   // ciclo do par: só o que a dona liberou
   const view = partnerCycleView(i.cycleLogs, i.cycleSettings, i.partnerId, i.viewer, i.today)
-  const pname = first(i.names[i.partnerId])
+  const pname = firstName(i.names[i.partnerId])
   if (view.status === 'gentle') {
     eachDay(view.from, view.to, (d) => push({ date: d, kind: 'CARE', owner: 'partner', label: `Semana de mais cuidado de ${pname}` }))
   } else if (view.status === 'full') {

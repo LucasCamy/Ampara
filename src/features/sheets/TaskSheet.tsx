@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { Brain, CalendarDays, Inbox, Lock, Mail, Sun, User, Users, Zap } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { ChoiceChips, cx, FieldError } from '../../components/ui'
@@ -61,7 +62,7 @@ export function TaskSheet({ params, onDone }: { params: Record<string, string>; 
         options={[
           { value: 'ME', label: 'Meu', icon: User },
           { value: 'US', label: 'Nós', icon: Users },
-          { value: 'PARTNER', label: `Enviar p/ ${partner.displayName}`, icon: Mail },
+          { value: 'PARTNER', label: `Enviar p/ ${firstName(partner.displayName)}`, icon: Mail },
         ]}
       />
 
@@ -90,7 +91,7 @@ export function TaskSheet({ params, onDone }: { params: Record<string, string>; 
         <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-[14px] border border-line px-3.5 text-[14px] font-semibold text-ink">
           <input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} className="h-5 w-5 accent-[var(--action)]" />
           <Lock size={16} aria-hidden className="text-muted" />
-          Só eu vejo (não aparece no painel de {partner.displayName})
+          Só eu vejo (não aparece no painel de {firstName(partner.displayName)})
         </label>
       ) : null}
     </form>

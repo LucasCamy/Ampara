@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { Cake, Heart, Star } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { DateField } from '../../components/pickers'
@@ -27,7 +28,7 @@ export function SpecialDateSheet({ id, onDone }: { id?: string; onDone: () => vo
     setForm((f) => ({ ...f, [k]: v }))
     setErrors((e) => ({ ...e, [k]: undefined }))
   }
-  const first = (p: PartnerId) => profiles[p].displayName.split(' ')[0]!
+  const first = (p: PartnerId) => firstName(profiles[p].displayName)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()

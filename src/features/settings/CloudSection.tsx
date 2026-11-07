@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { Cloud, CloudOff, LogOut, RefreshCw } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { useAuth } from '../../auth/session'
@@ -113,11 +114,11 @@ export function CloudSection() {
             ) : (
               'Sincronizando...'
             )}{' '}
-            O servidor só entrega os gastos pessoais de {partner.displayName} se {partner.pronoun} liberar, e nunca os presentes.
+            O servidor só entrega os gastos pessoais de {firstName(partner.displayName)} se {partner.pronoun} liberar, e nunca os presentes.
           </p>
           {viewer === 'A' && !partnerAbsent && inviteCode ? (
             <p className="rounded-[14px] bg-subtle p-3 text-[14px] text-ink">
-              Para {partner.displayName} usar o próprio celular: abrir o Ampara, tocar em <strong>Entrar pela nuvem</strong> e usar o convite{' '}
+              Para {firstName(partner.displayName)} usar o próprio celular: abrir o Ampara, tocar em <strong>Entrar pela nuvem</strong> e usar o convite{' '}
               <span className="font-data font-semibold">{inviteCode}</span>.
             </p>
           ) : null}
@@ -136,7 +137,7 @@ export function CloudSection() {
         <form onSubmit={submit} noValidate className="flex flex-col gap-3" data-testid="cloud-form">
           <p className="flex items-start gap-2 text-[14px] text-muted">
             <Cloud size={17} aria-hidden className="mt-0.5 shrink-0 text-action" />
-            Crie sua conta para usar o Ampara no seu celular e {partner.displayName} no {partner.pronoun === 'ela' ? 'dela' : 'dele'}, sempre em dia.
+            Crie sua conta para usar o Ampara no seu celular e {firstName(partner.displayName)} no {partner.pronoun === 'ela' ? 'dela' : 'dele'}, sempre em dia.
           </p>
           <Segmented<'signup' | 'signin'>
             label="Tipo de acesso"

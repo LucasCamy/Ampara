@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { Cake, Gift, Heart, Lock, PartyPopper, Plus, ShoppingBag, Star, type LucideIcon } from 'lucide-react'
 import { useMemo } from 'react'
 import { Button, cx, EditButton, EmptyState, SectionHeader, StatusBadge } from '../../components/ui'
@@ -22,7 +23,7 @@ function Day({ d }: { d: string }) {
 
 function usePersonName() {
   const { viewer, profiles } = usePeople()
-  return (u: UpcomingDate) => (u.item.personId ? (u.item.personId === viewer ? 'você' : profiles[u.item.personId].displayName.split(' ')[0]!) : undefined)
+  return (u: UpcomingDate) => (u.item.personId ? (u.item.personId === viewer ? 'você' : firstName(profiles[u.item.personId].displayName)) : undefined)
 }
 
 export function DatesGiftsSection() {

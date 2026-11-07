@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { useState, type FormEvent } from 'react'
 import { DateField } from '../../components/pickers'
 import { ChoiceChips, Switch, TextField } from '../../components/ui'
@@ -82,7 +83,7 @@ export function NewMedSheet({ id, onDone }: { id?: string; onDone: () => void })
           onChange={set('shareWithPartner')}
           testId="new-med-share"
           label="Rede de apoio do par (+30 min)"
-          description={`Se você atrasar mais de 30 min, ${partner.displayName} recebe um aviso gentil. Desligado, só você vê este remédio.`}
+          description={`Se você atrasar mais de 30 min, ${firstName(partner.displayName)} recebe um aviso gentil. Desligado, só você vê este remédio.`}
         />
       </div>
       {id ? <DeleteButton label="Excluir remédio" testId="new-med-delete" onClick={() => deleteMedication(id) && onDone()} /> : null}

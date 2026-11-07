@@ -7,6 +7,7 @@ import { usePeople } from '../../store/hooks'
 import { ui, useUi } from '../../store/ui'
 import { lock, switchPerson } from '../../auth/session'
 import { useSync } from '../../sync/engine'
+import { firstName } from '../../domain/format'
 
 export const ENERGY: Record<EnergyLevel, { icon: LucideIcon; short: string; label: string; partner: string }> = {
   FULL: { icon: BatteryFull, short: '100%', label: '100% Cheia', partner: 'bateria cheia' },
@@ -96,7 +97,6 @@ export function ThemeToggle() {
 }
 
 /** Primeiro nome: "Julia Aparecida Beliz" vira "Julia" onde o espaço é curto */
-const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name
 
 export function PerspectiveSwitch({ compact = false }: { compact?: boolean }) {
   const { profiles, viewer } = usePeople()

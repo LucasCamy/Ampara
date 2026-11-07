@@ -474,6 +474,28 @@ do $$ begin
 end $$;
 \echo 'ok  check-in e "o que me acalma": o par lê, só a própria pessoa grava'
 
+-- check-in com o mesmo id em outro casal: a chave é (couple_id, id), "A@hoje" de um não colide com o do outro
+insert into mood_checkins (id, couple_id, owner_id, date, mood) values ('A@hoje', 'space-teste', 'A', current_date, 'GOOD');
+reset role;
+insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values ('dddddddd-0000-4000-8000-00000000000d', 'authenticated', 'authenticated', 'outro-casal@teste.local', '', now(), now(), now());
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"dddddddd-0000-4000-8000-00000000000d","role":"authenticated"}', true) as _ \gset
+select create_couple('space-outro', '50_50', 5000) as _ \gset
+insert into mood_checkins (id, couple_id, owner_id, date, mood) values ('A@hoje', 'space-outro', 'A', current_date, 'OVERWHELMED')
+on conflict (couple_id, id) do update set mood = excluded.mood;
+do $$ begin
+  assert (select count(*) from mood_checkins) = 1 and (select mood from mood_checkins) = 'OVERWHELMED', 'FALHOU: outro casal não gravou o próprio A@hoje';
+end $$;
+reset role;
+do $$ begin
+  assert (select mood from mood_checkins where couple_id = 'space-teste' and id = 'A@hoje') = 'GOOD', 'FALHOU: A@hoje de outro casal sobrescreveu o do Lucas';
+  assert (select count(*) from mood_checkins where id = 'A@hoje') = 2, 'FALHOU: os dois A@hoje deveriam existir';
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+\echo 'ok  check-in: outro casal grava o mesmo A@hoje sem colidir (chave couple_id + id)'
+
 -- ---------------------------------------------------------------- 6f. fazer junto e caixinhas
 -- (Lucas continua logado) cria a caixinha e começa uma sessão; ela entra e guarda dinheiro
 insert into savings_goals (id, couple_id, title, target_cents, created_by) values ('99999999-0000-4000-8000-000000000001', 'space-teste', 'Viagem', 600000, 'A');

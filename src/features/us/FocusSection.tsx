@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { HeartHandshake, Play, Square, Timer, UserPlus } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { Button, cx, FieldError, SectionHeader, Segmented, StatusBadge } from '../../components/ui'
@@ -10,7 +11,6 @@ import { useData } from '../../store/data'
 import { usePeople } from '../../store/hooks'
 import { cancelFocus, finishFocus, joinFocus, startFocus } from '../../store/togetherActions'
 
-const first = (name: string) => name.split(' ')[0]!
 
 /** Sessão em andamento: a mesma no Hoje e na aba Nós. Relógio de minuto (o de segundos é só do "Pegando água"). */
 export function FocusCard({ session, compact }: { session: FocusSession; compact?: boolean }) {
@@ -20,7 +20,7 @@ export function FocusCard({ session, compact }: { session: FocusSession; compact
   const v = focusView(session, new Date())
   const mine = session.startedBy === viewer
   const other = mine ? session.joinedBy : session.startedBy
-  const starter = first(profiles[session.startedBy].displayName)
+  const starter = firstName(profiles[session.startedBy].displayName)
   const together = !!session.joinedBy
   const canJoin = !mine && !session.joinedBy
   return (
@@ -39,7 +39,7 @@ export function FocusCard({ session, compact }: { session: FocusSession; compact
         </StatusBadge>
       )}
       <p className="mt-1 text-[13px] text-muted">
-        {together ? `${other === viewer ? 'Você' : first(profiles[other!].displayName)} ${other === viewer ? 'entrou' : 'está junto'}.` : mine ? 'Esperando seu par entrar. Pode começar sozinho(a).' : `${starter} chamou você para fazer junto.`}
+        {together ? `${other === viewer ? 'Você' : firstName(profiles[other!].displayName)} ${other === viewer ? 'entrou' : 'está junto'}.` : mine ? 'Esperando seu par entrar. Pode começar sozinho(a).' : `${starter} chamou você para fazer junto.`}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {canJoin ? (
@@ -109,7 +109,7 @@ export function FocusSection() {
       ) : (
         <form onSubmit={submit} className="card p-4" noValidate data-testid="focus-form">
           <p className="text-[14px] text-muted">
-            Tarefa chata fica mais leve com {first(partner.displayName)} por perto, mesmo cada um na sua. Comece e {first(partner.displayName)} recebe o convite.
+            Tarefa chata fica mais leve com {firstName(partner.displayName)} por perto, mesmo cada um na sua. Comece e {firstName(partner.displayName)} recebe o convite.
           </p>
           {suggestions.length ? (
             <div className="mt-3 flex flex-col gap-2" aria-label="Tarefas de hoje">

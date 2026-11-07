@@ -1,3 +1,4 @@
+import { firstName } from '../../domain/format'
 import { AlarmClock, ArrowLeft, Brain, CalendarDays, HandHeart, HeartHandshake, Sun, Zap, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { cx } from '../../components/ui'
@@ -87,7 +88,7 @@ export function SosSheet({ params, onDone }: { params: Record<string, string>; o
         <section aria-labelledby="sos-2">
           <p className="mb-1 text-[13px] font-semibold text-muted">{situation}</p>
           <h3 id="sos-2" className="mb-3 text-[17px] font-bold text-ink">
-            Como {partner.displayName} pode ajudar?
+            Como {firstName(partner.displayName)} pode ajudar?
           </h3>
           <div className="flex flex-col gap-2">
             <BigOption icon={HandHeart} title="Assumir por mim" hint="Não vou dar conta, você consegue fazer?" onClick={() => setHelpType('TAKE_OVER')} testId="sos-take-over" />
