@@ -1,5 +1,6 @@
 import { startUpdateChecks } from './sync/update'
 import { openDeepLink } from './sync/deeplink'
+import { handlePushMessage, type PushAlertMessage } from './features/alerts/watch'
 import '@fontsource/plus-jakarta-sans/400.css'
 import '@fontsource/plus-jakarta-sans/500.css'
 import '@fontsource/plus-jakarta-sans/600.css'
@@ -31,8 +32,10 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   // notificação tocada com o app aberto: o service worker manda o destino (o iOS não deixa ele navegar a janela)
-  navigator.serviceWorker.addEventListener('message', (e: MessageEvent<{ type?: string; url?: string }>) => {
-    if (e.data?.type === 'OPEN_URL' && typeof e.data.url === 'string') openDeepLink(e.data.url)
+  // push com o app na frente: a notificação sai calada e o som da categoria toca aqui
+  navigator.serviceWorker.addEventListener('message', (e: MessageEvent<{ type?: string; url?: string } | PushAlertMessage>) => {
+    if (e.data?.type === 'OPEN_URL' && 'url' in e.data && typeof e.data.url === 'string') openDeepLink(e.data.url)
+    if (e.data?.type === 'ALERT') handlePushMessage(e.data as PushAlertMessage)
   })
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {

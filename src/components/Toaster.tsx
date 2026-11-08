@@ -1,11 +1,17 @@
 import { CircleCheck, Clock, Info, Undo2, X } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ui, useUi } from '../store/ui'
+import { useAlerts } from '../store/alerts'
+import { AlertCard } from '../features/alerts/AlertCards'
 import { cx, MoneyText } from './ui'
 
-/** Toast no topo com [Desfazer] por 5 s (ARQ-D). aria-live para leitores de tela. */
+/**
+ * Topo da tela: avisos (o que chega do par, do relógio ou do push, com som por categoria) e, abaixo, os
+ * toasts com [Desfazer] por 5 s (ARQ-D), que só confirmam o que a própria pessoa fez. aria-live para leitores de tela.
+ */
 export function Toaster() {
   const toasts = useUi((s) => s.toasts)
+  const alerts = useAlerts((a) => a)
   const reduce = useReducedMotion()
   return (
     <div
@@ -13,6 +19,9 @@ export function Toaster() {
       className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(12px,env(safe-area-inset-top))]"
     >
       <AnimatePresence initial={false}>
+        {alerts.map((a) => (
+          <AlertCard key={a.id} alert={a} />
+        ))}
         {toasts.map((t) => {
           const Icon = t.tone === 'warn' ? Clock : t.tone === 'info' ? Info : CircleCheck
           return (

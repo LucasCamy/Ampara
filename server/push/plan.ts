@@ -1,3 +1,4 @@
+import { serverAllows, type AlertCategory, type AlertSound, type ServerPrefs } from '../../src/domain/alerts'
 import { minutesOf } from '../../src/domain/dates'
 import { isScheduledOn, logId } from '../../src/domain/medication'
 import type { DoseStatus, Medication, PartnerId } from '../../src/domain/types'
@@ -13,6 +14,8 @@ export interface PushSub {
   partnerId: PartnerId
   tz: string
   showDetails: boolean
+  /** categorias desligadas e horário de silêncio deste aparelho (src/domain/alerts) */
+  prefs: ServerPrefs
 }
 
 export interface DoseLog {
@@ -32,12 +35,33 @@ export interface OpenHelp {
   createdAt: string
 }
 
+export interface OpenNudge {
+  id: string
+  coupleId: string
+  to: PartnerId
+  message: string
+  createdAt: string
+}
+
+export interface OpenFocus {
+  id: string
+  coupleId: string
+  startedBy: PartnerId
+  title: string
+  durationMin: number
+  startedAt: string
+}
+
 export interface PlanInput {
   subs: PushSub[]
   /** remédios e rotinas (não excluídos), com o casal */
   meds: (Medication & { coupleId: string })[]
   logs: DoseLog[]
   help: OpenHelp[]
+  /** lembretes carinhosos ainda não vistos */
+  nudges?: OpenNudge[]
+  /** sessões de foco rodando, sem ninguém junto */
+  focus?: OpenFocus[]
   /** nome de exibição por casal e pessoa */
   names: Record<string, Partial<Record<PartnerId, string>>>
 }
@@ -51,6 +75,13 @@ export interface PushMessage {
   /** agrupa no aparelho (uma dose substitui a notificação anterior da mesma dose) */
   tag: string
   url: string
+  /** categoria do aviso: o aparelho escolhe vibração, insistência e o som (com o app aberto) */
+  category: AlertCategory
+  sound: AlertSound
+  /** "Remédio · 08:00" */
+  label: string
+  /** chave sem o aparelho: o app aberto reconhece o mesmo aviso que ele próprio já mostrou */
+  ref: string
 }
 
 /** Janela para mandar o lembrete do horário (cobre o worker parado por alguns minutos) */
@@ -58,6 +89,7 @@ export const DUE_WINDOW_MIN = 10
 /** Até quanto tempo depois do limite o par ainda é avisado do atraso */
 export const LATE_WINDOW_MIN = 60
 export const HELP_WINDOW_MIN = 15
+export const PARTNER_WINDOW_MIN = 15
 
 /** Data e hora locais no fuso do aparelho */
 export function localParts(now: Date, tz: string): { date: string; minutes: number } {
@@ -81,7 +113,10 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
   for (const sub of input.subs) {
     const { date, minutes } = localParts(now, sub.tz)
     const partnerName = first(input.names[sub.coupleId]?.[sub.partnerId === 'A' ? 'B' : 'A'], 'Seu par')
-    const push = (m: Omit<PushMessage, 'endpoint'>) => out.push({ endpoint: sub.endpoint, ...m, key: `${m.key}|${sub.endpoint}` })
+    const push = (m: Omit<PushMessage, 'endpoint' | 'ref' | 'sound'> & { sound?: AlertSound }) => {
+      if (!serverAllows(sub.prefs, m.category, minutes)) return
+      out.push({ endpoint: sub.endpoint, ...m, sound: m.sound ?? m.category, ref: m.key, key: `${m.key}|${sub.endpoint}` })
+    }
 
     for (const med of input.meds) {
       if (med.coupleId !== sub.coupleId || !isScheduledOn(med, date)) continue
@@ -103,6 +138,8 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
             key: `due:${id}`,
             tag: `dose-${id}`,
             url: '/?quick=med',
+            category: routine ? 'home' : 'med',
+            label: `${routine ? 'Rotina' : 'Remédio'} · ${time}`,
             title: routine ? (sub.showDetails ? `Rotina: ${med.name}` : 'Uma rotina da casa está na hora') : sub.showDetails ? `Hora do remédio: ${med.name}` : 'Hora do seu remédio',
             body: sub.showDetails ? `${time} · ${med.dosage}. Já engoliu ou vai pegar água?` : `${time}. Abra o Ampara para confirmar.`,
           })
@@ -116,6 +153,9 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
               key: `snooze:${id}#${log.snoozeCount}`,
               tag: `dose-${id}`,
               url: '/?quick=med',
+              category: 'med',
+              sound: 'water',
+              label: `Remédio · ${time}`,
               title: 'Pegou a água?',
               body: sub.showDetails ? `Hora de confirmar ${med.name}.` : 'Hora de confirmar o remédio.',
             })
@@ -128,6 +168,8 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
             key: `late:${id}`,
             tag: `late-${id}`,
             url: '/#/hoje',
+            category: 'support',
+            label: `Rede de apoio · ${late} min de atraso`,
             title: 'Rede de apoio',
             body: sub.showDetails
               ? `O remédio das ${time} de ${partnerName} (${med.name}) ainda consta pendente. Um lembrete gentil ajuda.`
@@ -147,8 +189,43 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
         key: `help:${h.id}`,
         tag: `help-${h.id}`,
         url: '/#/hoje',
+        category: 'help',
+        label: 'Pedido de ajuda',
         title: `${partnerName} pediu ajuda`,
         body: sub.showDetails ? h.situation : 'Abra o Ampara para ver.',
+      })
+    }
+
+    // 5) lembrete carinhoso do par
+    for (const n of input.nudges ?? []) {
+      if (n.coupleId !== sub.coupleId || n.to !== sub.partnerId) continue
+      const age = (now.getTime() - new Date(n.createdAt).getTime()) / 60_000
+      if (age < -2 || age > PARTNER_WINDOW_MIN) continue
+      push({
+        key: `nudge:${n.id}`,
+        tag: `nudge-${n.id}`,
+        url: '/#/hoje',
+        category: 'partner',
+        label: 'Lembrete carinhoso',
+        title: `${partnerName} lembrou de você`,
+        // a mensagem cita o remédio: só com os detalhes liberados
+        body: sub.showDetails ? n.message : 'Abra o Ampara para ver.',
+      })
+    }
+
+    // 6) foco junto: o par começou e chamou
+    for (const f of input.focus ?? []) {
+      if (f.coupleId !== sub.coupleId || f.startedBy === sub.partnerId) continue
+      const age = (now.getTime() - new Date(f.startedAt).getTime()) / 60_000
+      if (age < -2 || age > Math.min(PARTNER_WINDOW_MIN, f.durationMin)) continue
+      push({
+        key: `focus:${f.id}`,
+        tag: `focus-${f.id}`,
+        url: '/#/hoje',
+        category: 'partner',
+        label: `Foco junto · ${f.durationMin} min`,
+        title: `${partnerName} chamou você para focar junto`,
+        body: sub.showDetails ? f.title : 'Entre junto pelo Ampara.',
       })
     }
   }

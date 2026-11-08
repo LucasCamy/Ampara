@@ -32,7 +32,7 @@ export class FakeSupabase {
   /** pedidos recebidos com Authorization ausente ou chave anônima tentando gravar */
   anonWrites = 0
   /** inscrições de push (espelho de save_push_subscription / delete_push_subscription) */
-  pushSubs = new Map<string, { couple_id: string; partner_id: 'A' | 'B'; p256dh: string; auth: string; tz: string; show_details: boolean }>()
+  pushSubs = new Map<string, { couple_id: string; partner_id: 'A' | 'B'; p256dh: string; auth: string; tz: string; show_details: boolean; prefs: unknown }>()
   /** chave pública VAPID que o "servidor" anuncia (65 bytes, P-256) */
   vapidPublicKey = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
   failures: string[] = []
@@ -166,6 +166,8 @@ export class FakeSupabase {
       if (name === 'save_push_subscription') {
         if (!me) return json(400, { message: 'not paired' })
         if (!/^https:\/\//.test(String(body.p_endpoint))) return json(400, { message: 'invalid subscription' })
+        const prefs = body.p_prefs ?? {}
+        if (typeof prefs !== 'object' || Array.isArray(prefs) || JSON.stringify(prefs).length > 1000) return json(400, { message: 'invalid prefs' })
         this.pushSubs.set(String(body.p_endpoint), {
           couple_id: me.couple_id,
           partner_id: me.partner_id,
@@ -173,6 +175,7 @@ export class FakeSupabase {
           auth: String(body.p_auth),
           tz: String(body.p_tz || 'America/Sao_Paulo'),
           show_details: body.p_show_details === true,
+          prefs,
         })
         return json(200, null)
       }

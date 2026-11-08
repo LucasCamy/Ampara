@@ -533,6 +533,13 @@ select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-0000000
 select save_push_subscription('https://push.exemplo.test/ela-1', 'p256dh-dela', 'auth-dela', 'America/Sao_Paulo', false) as _ \gset
 do $$ begin
   assert (select count(*) from push_subscriptions) = 1, 'FALHOU: ela não vê a própria inscrição';
+  assert (select prefs->'off'->>0 from push_subscriptions) = 'home', 'FALHOU: preferências de aviso não gravadas';
+  begin
+    perform save_push_subscription('https://push.exemplo.test/ela-1', 'p256dh-dela', 'auth-dela', '', false, '[1,2]'::jsonb);
+    raise exception 'FALHOU: aceitou preferências que não são objeto';
+  exception when raise_exception then
+    if sqlerrm like 'FALHOU%' then raise; end if;
+  end;
   assert push_public_key() is not null, 'FALHOU: chave pública indisponível para quem está logado';
   begin
     perform private_key from push_config;
@@ -540,7 +547,7 @@ do $$ begin
   exception when insufficient_privilege then null;
   end;
   begin
-    perform save_push_subscription('http://inseguro.test/x', 'a', 'b', '', false);
+    perform save_push_subscription('http://inseguro.test/x', 'a', 'b', '', false, '{}'::jsonb);
     raise exception 'FALHOU: aceitou endpoint sem https';
   exception when raise_exception then
     if sqlerrm like 'FALHOU%' then raise; end if;
@@ -616,6 +623,12 @@ do $$ begin
   assert (select count(*) from medications) >= 2, 'FALHOU: worker não lê os remédios de todos os casais';
   assert (select count(*) from profiles) >= 2, 'FALHOU: worker não lê os nomes';
   perform 1 from medication_logs; perform 1 from help_requests; perform 1 from push_subscriptions;
+  perform 1 from nudges; perform 1 from focus_sessions;
+  begin
+    perform 1 from mood_checkins;
+    raise exception 'FALHOU: worker leu o check-in';
+  exception when insufficient_privilege then null;
+  end;
   insert into push_sent (key) values ('teste-worker');
   delete from push_sent where key = 'teste-worker';
   begin
@@ -645,7 +658,7 @@ do $$ begin
   end;
 end $$;
 reset role;
-\echo 'ok  worker: lê remédios, doses, ajuda e nomes; não lê lançamentos, ciclo nem presentes; não altera nada do casal'
+\echo 'ok  worker: lê remédios, doses, ajuda, lembretes carinhosos, foco e nomes; não lê lançamentos, ciclo, presentes nem check-in; não altera nada do casal'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;

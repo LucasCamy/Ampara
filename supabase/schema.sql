@@ -771,25 +771,30 @@ create or replace function push_public_key() returns text language sql stable se
   select public_key from push_config where id = 1
 $$;
 
-create or replace function save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_tz text, p_show_details boolean)
-returns void language plpgsql security definer set search_path = public as $$
+-- Iteração 23: preferências de aviso do aparelho (categorias desligadas e horário de silêncio) vão junto.
+-- A assinatura mudou (p_prefs): a versão antiga sai para não ficar uma sobrecarga sem preferências.
+alter table push_subscriptions add column if not exists prefs jsonb not null default '{}'::jsonb;
+drop function if exists save_push_subscription(text, text, text, text, boolean);
+create or replace function save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_tz text, p_show_details boolean, p_prefs jsonb default '{}'::jsonb)
+returns void language plpgsql security definer set search_path = public as $
 declare v_couple text := my_couple_id(); v_partner text := my_partner_id();
 begin
   if v_couple is null then raise exception 'not paired'; end if;
   if p_endpoint !~ '^https://' or length(p_endpoint) > 1000 or length(p_p256dh) > 200 or length(p_auth) > 100 then raise exception 'invalid subscription'; end if;
-  insert into push_subscriptions (endpoint, couple_id, partner_id, p256dh, auth, tz, show_details)
-  values (p_endpoint, v_couple, v_partner, p_p256dh, p_auth, coalesce(nullif(p_tz, ''), 'America/Sao_Paulo'), coalesce(p_show_details, false))
+  if p_prefs is not null and (jsonb_typeof(p_prefs) <> 'object' or length(p_prefs::text) > 1000) then raise exception 'invalid prefs'; end if;
+  insert into push_subscriptions (endpoint, couple_id, partner_id, p256dh, auth, tz, show_details, prefs)
+  values (p_endpoint, v_couple, v_partner, p_p256dh, p_auth, coalesce(nullif(p_tz, ''), 'America/Sao_Paulo'), coalesce(p_show_details, false), coalesce(p_prefs, '{}'::jsonb))
   on conflict (endpoint) do update set couple_id = excluded.couple_id, partner_id = excluded.partner_id, p256dh = excluded.p256dh,
-    auth = excluded.auth, tz = excluded.tz, show_details = excluded.show_details, created_at = now();
-end $$;
+    auth = excluded.auth, tz = excluded.tz, show_details = excluded.show_details, prefs = excluded.prefs, created_at = now();
+end $;
 
 create or replace function delete_push_subscription(p_endpoint text)
 returns void language sql security definer set search_path = public as $$
   delete from push_subscriptions where endpoint = p_endpoint and couple_id = my_couple_id() and partner_id = my_partner_id()
 $$;
 
-revoke all on function push_public_key(), save_push_subscription(text, text, text, text, boolean), delete_push_subscription(text) from public, anon;
-grant execute on function push_public_key(), save_push_subscription(text, text, text, text, boolean), delete_push_subscription(text) to authenticated;
+revoke all on function push_public_key(), save_push_subscription(text, text, text, text, boolean, jsonb), delete_push_subscription(text) from public, anon;
+grant execute on function push_public_key(), save_push_subscription(text, text, text, text, boolean, jsonb), delete_push_subscription(text) to authenticated;
 
 -- =====================================================================
 -- Iteração 18: baixa, parcelas e contas fixas
@@ -895,3 +900,18 @@ drop policy if exists worker_insert on push_sent;
 create policy worker_insert on push_sent for insert to ampara_worker with check (true);
 drop policy if exists worker_delete on push_sent;
 create policy worker_delete on push_sent for delete to ampara_worker using (true);
+
+-- =====================================================================
+-- Iteração 23: avisos por categoria (lembrete carinhoso e foco junto na tela bloqueada)
+-- =====================================================================
+-- O worker passa a ler os lembretes carinhosos (sobre doses) e as sessões de foco (título e quem chamou).
+-- Continua sem lançamentos, ciclo, presentes e check-in: a conta do dia e o recado ficam só dentro do app.
+grant select on nudges, focus_sessions to ampara_worker;
+do $$
+declare t text;
+begin
+  foreach t in array array['nudges','focus_sessions'] loop
+    execute format('drop policy if exists %I on %I', 'worker_read', t);
+    execute format('create policy %I on %I for select to ampara_worker using (true)', 'worker_read', t);
+  end loop;
+end $$;

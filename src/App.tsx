@@ -15,6 +15,7 @@ import { useData } from './store/data'
 import { useNow } from './store/clock'
 import { toDateKey } from './domain/dates'
 import { materializeRecurrences } from './store/financeActions'
+import { useAlertWatch } from './features/alerts/watch'
 
 /** Entrar no lugar certo: /?quick=task|expense|med|sos, #/aba, ou o destino de uma notificação que esperou o login */
 function useQuickLaunch() {
@@ -102,6 +103,7 @@ function AppShell() {
   useRecurrences()
   usePrefetchTabs()
   useTour()
+  useAlertWatch()
   return (
     <div className="flex min-h-dvh" data-testid="app">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:rounded-[12px] focus:bg-surface focus:p-3">

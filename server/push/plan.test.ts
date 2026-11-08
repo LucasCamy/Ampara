@@ -22,8 +22,8 @@ const med = (p: Partial<Medication> = {}): Medication & { coupleId: string } => 
   coupleId: 'c1',
   ...p,
 })
-const ela: PushSub = { endpoint: 'https://push.test/ela', coupleId: 'c1', partnerId: 'B', tz: SP, showDetails: false }
-const ele: PushSub = { endpoint: 'https://push.test/ele', coupleId: 'c1', partnerId: 'A', tz: SP, showDetails: true }
+const ela: PushSub = { endpoint: 'https://push.test/ela', coupleId: 'c1', partnerId: 'B', tz: SP, showDetails: false, prefs: { off: [], quiet: null } }
+const ele: PushSub = { endpoint: 'https://push.test/ele', coupleId: 'c1', partnerId: 'A', tz: SP, showDetails: true, prefs: { off: [], quiet: null } }
 const base = (p: Partial<PlanInput> = {}): PlanInput => ({ subs: [ela, ele], meds: [med()], logs: [], help: [], names: { c1: { A: 'Lucas Camy', B: 'Julia Aparecida' } }, ...p })
 
 describe('fuso do aparelho', () => {
@@ -88,5 +88,36 @@ describe('o que mandar agora', () => {
   it('outro casal nunca recebe', () => {
     const outro: PushSub = { ...ele, endpoint: 'https://push.test/outro', coupleId: 'c2' }
     expect(planNotifications(base({ subs: [outro] }), at('08:03'))).toEqual([])
+  })
+})
+
+describe('categorias e preferências do aparelho', () => {
+  it('cada lembrete sai com categoria, som e etiqueta; a chave sem o aparelho vai junto', () => {
+    const [due] = planNotifications(base(), at('08:03'))
+    expect(due).toMatchObject({ category: 'med', sound: 'med', label: 'Remédio · 08:00', ref: 'due:venv@2026-11-06@08:00' })
+    const lixo = med({ id: 'lixo', kind: 'ROUTINE', ownerId: null, name: 'Lixo', times: ['20:00'], notifyPartnerOnDelay: false, assignee: 'A' })
+    expect(planNotifications(base({ meds: [lixo] }), at('20:01'))[0]).toMatchObject({ category: 'home', label: 'Rotina · 20:00' })
+    expect(planNotifications(base(), at('08:31'))[0]).toMatchObject({ category: 'support', label: 'Rede de apoio · 31 min de atraso' })
+  })
+
+  it('categoria desligada não sai; no silêncio só o pedido de ajuda fura (se a pessoa deixou)', () => {
+    expect(planNotifications(base({ subs: [{ ...ela, prefs: { off: ['med'], quiet: null } }] }), at('08:03'))).toEqual([])
+    const quiet = { start: '07:00', end: '09:00', helpBreaks: true }
+    expect(planNotifications(base({ subs: [{ ...ela, prefs: { off: [], quiet } }] }), at('08:03'))).toEqual([])
+    const help = [{ id: 'h1', coupleId: 'c1', requesterId: 'B' as const, situation: 'Socorro', createdAt: at('08:00').toISOString() }]
+    expect(planNotifications(base({ meds: [], help, subs: [{ ...ele, prefs: { off: [], quiet } }] }), at('08:03'))).toHaveLength(1)
+    expect(planNotifications(base({ meds: [], help, subs: [{ ...ele, prefs: { off: [], quiet: { ...quiet, helpBreaks: false } } }] }), at('08:03'))).toEqual([])
+  })
+
+  it('lembrete carinhoso e foco junto vão para o par, sem detalhes quando ele não liberou', () => {
+    const nudges = [{ id: 'n1', coupleId: 'c1', to: 'B' as const, message: 'Toma o Venvanse?', createdAt: at('10:00').toISOString() }]
+    const focus = [{ id: 'f1', coupleId: 'c1', startedBy: 'B' as const, title: 'Arrumar a sala', durationMin: 25, startedAt: at('10:00').toISOString() }]
+    const msgs = planNotifications(base({ meds: [], nudges, focus }), at('10:02'))
+    expect(msgs.map((m) => [m.endpoint, m.category, m.title, m.body])).toEqual([
+      [ela.endpoint, 'partner', 'Lucas lembrou de você', 'Abra o Ampara para ver.'],
+      [ele.endpoint, 'partner', 'Julia chamou você para focar junto', 'Arrumar a sala'],
+    ])
+    expect(planNotifications(base({ meds: [], nudges, focus }), at('10:30'))).toEqual([])
+    expect(planNotifications(base({ meds: [], nudges, subs: [{ ...ela, prefs: { off: ['partner'], quiet: null } }] }), at('10:02'))).toEqual([])
   })
 })

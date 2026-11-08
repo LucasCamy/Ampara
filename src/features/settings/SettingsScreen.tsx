@@ -21,6 +21,7 @@ import { SecuritySection } from './SecuritySection'
 import { BackupSection } from './BackupSection'
 import { CloudSection } from './CloudSection'
 import { NotificationsSection } from './NotificationsSection'
+import { AlertsSection } from './AlertsSection'
 import { AboutSection } from '../shell/UpdateBanner'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
@@ -160,6 +161,7 @@ function DeviceGroup() {
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
       <div className="flex flex-col gap-6">
+        <AlertsSection />
         <SecuritySection partnerName={firstName(partner.displayName)} />
         <AboutSection />
       </div>

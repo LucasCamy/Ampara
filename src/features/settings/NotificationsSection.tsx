@@ -33,7 +33,11 @@ export function NotificationsSection() {
     <section className="module p-4 sm:p-5" aria-labelledby="lembretes" data-testid="push-section">
       <SectionHeader id="lembretes" title="Lembretes" rest="· na tela bloqueada" />
       <p className="text-[14px] text-muted">
-        Remédio na hora, “pegou a água?” depois de 5 min, aviso quando o remédio do par atrasa (rede de apoio) e pedido de ajuda.
+        Remédio na hora, “pegou a água?” depois de 5 min, rede de apoio, pedido de ajuda, lembrete carinhoso e foco junto.
+      </p>
+      <p className="mt-2 text-[13px] text-muted" data-testid="push-categories-note">
+        Com o app fechado o som é o padrão do celular, mas cada tipo vibra diferente (Android) e remédio e pedido de ajuda ficam na
+        tela até você responder. Quais avisos chegam e o horário de silêncio ficam em <strong>Ajustes &gt; Aparelho &gt; Avisos</strong>.
       </p>
 
       {support === 'needs-install' ? (

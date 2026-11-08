@@ -49,7 +49,7 @@ src/
                e inscrição de lembretes (push.ts)
 server/push/   backend: migrate.ts (aplica o schema.sql ao subir), plan.ts (decide os lembretes, puro e testado) e worker.ts (banco + envio)
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
-  features/    telas: today, agenda, us (aba Nós), routines, cycle, finance, settings, sheets, shell
+  features/    telas: today, agenda, us (aba Nós), routines, cycle, finance, settings, sheets, shell; alerts (avisos com som por categoria)
   styles/      tokens.css (fonte única de cor, raio, sombra e motion)
 supabase/      schema.sql (idempotente, RLS da privacidade) e tests/validate.sql
 docker/       roles do Postgres e gateway nginx do docker-compose.yml

@@ -1,5 +1,7 @@
 import { createStore, useStore } from '../store/createStore'
 import { cloudRpc } from './cloud'
+import { toServerPrefs } from '../domain/alerts'
+import { alertPrefsStore } from '../store/alerts'
 
 /**
  * Lembretes com a tela bloqueada (Web Push). O servidor (worker) decide quando mandar; aqui só inscrevemos
@@ -65,6 +67,8 @@ async function save(sub: PushSubscription, showDetails: boolean) {
     p_auth: j.keys.auth,
     p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
     p_show_details: showDetails,
+    // categorias desligadas e horário de silêncio: o servidor nem manda o que a pessoa calou
+    p_prefs: toServerPrefs(alertPrefsStore.get()),
   })
 }
 
@@ -112,5 +116,26 @@ export function setShowDetails(value: boolean): Promise<void> {
     const reg = await registration()
     const sub = reg ? await reg.pushManager.getSubscription() : null
     if (sub) await save(sub, value)
+  })
+}
+
+let prefsTimer: ReturnType<typeof setTimeout> | undefined
+let prefsSuperseded: (() => void) | undefined
+/** Preferências de aviso mudaram: reenvia a inscrição (agrupa toques seguidos num envio só) */
+export function syncPushPrefs(): Promise<void> {
+  if (prefsTimer) clearTimeout(prefsTimer)
+  // o envio anterior foi absorvido por este: quem esperava por ele não fica pendurado
+  prefsSuperseded?.()
+  return new Promise((resolve, reject) => {
+    prefsSuperseded = resolve
+    prefsTimer = setTimeout(() => {
+      prefsSuperseded = undefined
+      void (async () => {
+        if (pushSupport() !== 'ok' || permission() !== 'granted') return
+        const reg = await registration()
+        const sub = reg ? await reg.pushManager.getSubscription() : null
+        if (sub) await save(sub, pushStore.get().showDetails)
+      })().then(resolve, reject)
+    }, 600)
   })
 }

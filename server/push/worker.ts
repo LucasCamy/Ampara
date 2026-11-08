@@ -1,7 +1,8 @@
 import pg from 'pg'
 import webpush from 'web-push'
 import type { DoseStatus, Medication, PartnerId } from '../../src/domain/types'
-import { planNotifications, type DoseLog, type OpenHelp, type PlanInput, type PushMessage, type PushSub } from './plan'
+import { fromServerPrefs } from '../../src/domain/alerts'
+import { planNotifications, type DoseLog, type OpenFocus, type OpenHelp, type OpenNudge, type PlanInput, type PushMessage, type PushSub } from './plan'
 
 /**
  * Worker de lembretes (Web Push). A cada ciclo: lê o necessário no Postgres, decide com planNotifications
@@ -33,9 +34,9 @@ export async function ensureVapid(db: pg.Pool | pg.PoolClient): Promise<{ public
 const asPartner = (v: unknown): PartnerId => (v === 'B' ? 'B' : 'A')
 
 export async function loadInput(db: pg.Pool): Promise<PlanInput & { keys: Map<string, { p256dh: string; auth: string }> }> {
-  const subs = (await db.query<Row>('select endpoint, couple_id, partner_id, p256dh, auth, tz, show_details from push_subscriptions')).rows
+  const subs = (await db.query<Row>('select endpoint, couple_id, partner_id, p256dh, auth, tz, show_details, prefs from push_subscriptions')).rows
   const couples = [...new Set(subs.map((s) => String(s.couple_id)))]
-  if (!couples.length) return { subs: [], meds: [], logs: [], help: [], names: {}, keys: new Map() }
+  if (!couples.length) return { subs: [], meds: [], logs: [], help: [], nudges: [], focus: [], names: {}, keys: new Map() }
 
   const meds = (await db.query<Row>('select * from medications where deleted = false and couple_id = any($1)', [couples])).rows
   const logs = (
@@ -50,6 +51,18 @@ export async function loadInput(db: pg.Pool): Promise<PlanInput & { keys: Map<st
       [couples],
     )
   ).rows
+  const nudges = (
+    await db.query<Row>(
+      "select id, couple_id, \"to\", message, created_at from nudges where deleted = false and seen_at is null and couple_id = any($1) and created_at > now() - interval '30 minutes'",
+      [couples],
+    )
+  ).rows
+  const focus = (
+    await db.query<Row>(
+      "select id, couple_id, started_by, title, duration_min, started_at from focus_sessions where deleted = false and status = 'RUNNING' and joined_by is null and couple_id = any($1) and started_at > now() - interval '30 minutes'",
+      [couples],
+    )
+  ).rows
   const profiles = (await db.query<Row>('select couple_id, id, display_name from profiles where couple_id = any($1)', [couples])).rows
 
   const names: PlanInput['names'] = {}
@@ -61,6 +74,7 @@ export async function loadInput(db: pg.Pool): Promise<PlanInput & { keys: Map<st
     partnerId: asPartner(s.partner_id),
     tz: String(s.tz),
     showDetails: s.show_details === true,
+    prefs: fromServerPrefs(s.prefs),
   }))
   const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v))
 
@@ -99,6 +113,17 @@ export async function loadInput(db: pg.Pool): Promise<PlanInput & { keys: Map<st
     help: help.map(
       (h): OpenHelp => ({ id: String(h.id), coupleId: String(h.couple_id), requesterId: asPartner(h.requester_id), situation: String(h.situation), createdAt: iso(h.created_at) ?? '' }),
     ),
+    nudges: nudges.map((n): OpenNudge => ({ id: String(n.id), coupleId: String(n.couple_id), to: asPartner(n.to), message: String(n.message), createdAt: iso(n.created_at) ?? '' })),
+    focus: focus.map(
+      (f): OpenFocus => ({
+        id: String(f.id),
+        coupleId: String(f.couple_id),
+        startedBy: asPartner(f.started_by),
+        title: String(f.title),
+        durationMin: Number(f.duration_min),
+        startedAt: iso(f.started_at) ?? '',
+      }),
+    ),
     names,
   }
 }
@@ -128,8 +153,8 @@ export async function tick(db: pg.Pool, opts: WorkerOptions, now = new Date()): 
     try {
       await webpush.sendNotification(
         { endpoint: msg.endpoint, keys },
-        JSON.stringify({ title: msg.title, body: msg.body, tag: msg.tag, url: msg.url }),
-        { TTL: 15 * 60, urgency: 'high', vapidDetails: { subject: opts.subject, publicKey: vapid.publicKey, privateKey: vapid.privateKey }, timeout: 10_000 },
+        JSON.stringify({ title: msg.title, body: msg.body, tag: msg.tag, url: msg.url, category: msg.category, sound: msg.sound, label: msg.label, key: msg.ref }),
+        { TTL: 15 * 60, urgency: msg.category === 'help' || msg.category === 'med' ? 'high' : 'normal', vapidDetails: { subject: opts.subject, publicKey: vapid.publicKey, privateKey: vapid.privateKey }, timeout: 10_000 },
       )
       r.sent += 1
       await db.query('update push_subscriptions set last_ok_at = now() where endpoint = $1', [msg.endpoint])

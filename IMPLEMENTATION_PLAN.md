@@ -37,6 +37,27 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Iteração 23 (2026-11-08): avisos por categoria, com som, vibração e silêncio
+
+- **Cinco categorias reais** (`src/domain/alerts.ts`, puro e testado): Remédio (dose e "pegou a água?"), Pedido de
+  ajuda, Rede de apoio, Do seu par (lembrete carinhoso, foco junto, tarefa enviada, check-in/recado) e Casa e contas
+  (rotina da casa, conta do casal que vence hoje). Cada uma com ícone, cor de token, traço, vibração e se fica na tela.
+- **Avisos dentro do app** (`src/features/alerts`, `src/store/alerts.ts`): separados dos toasts (que continuam só
+  confirmando o que a própria pessoa fez). Chegam pelo relógio, pela sincronização (o que é novo, do par e recente)
+  e pelo push recebido com o app na frente. Botões fazem a mesma ação da tela (Já engoli, Pegando água, Eu assumo,
+  Fazemos juntos, Entrar junto, Recebi). Ao abrir o app, o que já está no Hoje não toca.
+- **Sons gerados com Web Audio** (sem arquivo, offline), um motivo por categoria + o da água. Volume baixo/médio/alto.
+- **Ajustes > Aparelho > Avisos**: ligar/desligar cada categoria, Ouvir cada som, volume, vibrar, horário de silêncio
+  (atravessa a meia-noite; pedido de ajuda pode furar). Preferências do aparelho em `ampara:alerts`.
+- **Push**: o payload leva `category`, `sound`, `label` e a chave; o `sw.js` muda vibração, insistência
+  (`requireInteraction`) e botão por categoria e, com o app visível, sai calado e o app toca o som. Novos lembretes na
+  tela bloqueada: lembrete carinhoso e foco junto. Categorias desligadas e silêncio vão em `push_subscriptions.prefs`
+  (`save_push_subscription` ganhou `p_prefs`) e o `plan.ts` respeita.
+- **Limite da plataforma**: com o app fechado, o navegador não deixa escolher o som da notificação (é o do sistema).
+  Som próprio na tela bloqueada exige app nativo (canal de notificação no Android): fica em Pendências.
+- **Privacidade**: o worker passou a ler `nudges` e `focus_sessions`; continua sem lançamentos, ciclo, presentes e
+  check-in. Por isso a conta do dia e o recado do par avisam só com o app aberto.
+
 ## Iteração 22 (2026-11-07): vários casais no servidor, cartão do check-in e primeiro nome
 
 - **Check-in com vários casais:** `mood_checkins` passa a ter chave `(couple_id, id)`. O id `A@2026-11-07` se

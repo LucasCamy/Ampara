@@ -51,7 +51,18 @@ self.addEventListener('message', (e) => {
 })
 
 /* ---------- lembretes (Web Push) ---------- */
-// O servidor manda { title, body, tag, url } cifrado; só este aparelho decifra.
+// O servidor manda { title, body, tag, url, category, sound, label, key } cifrado; só este aparelho decifra.
+// O navegador não deixa escolher o som da notificação (é sempre o do sistema). Cada categoria muda então o que
+// dá para mudar: vibração (Android), se fica na tela até responder e o botão. Mesmas regras de src/domain/alerts.ts.
+const KINDS = {
+  med: { vibrate: [200, 100, 200], sticky: true, action: 'Confirmar agora' },
+  help: { vibrate: [400, 150, 400, 150, 400], sticky: true, action: 'Responder' },
+  support: { vibrate: [150], sticky: false, action: 'Ver no Hoje' },
+  partner: { vibrate: [60, 60, 60], sticky: false, action: null },
+  home: { vibrate: [], sticky: false, action: null },
+}
+const SOUNDS = ['med', 'water', 'help', 'support', 'partner', 'home']
+
 self.addEventListener('push', (e) => {
   let data = {}
   try {
@@ -59,16 +70,34 @@ self.addEventListener('push', (e) => {
   } catch {
     data = { body: e.data ? e.data.text() : '' }
   }
-  const title = typeof data.title === 'string' && data.title ? data.title : 'Ampara'
+  const str = (v) => (typeof v === 'string' ? v : '')
+  const category = Object.prototype.hasOwnProperty.call(KINDS, data.category) ? data.category : 'home'
+  const sound = SOUNDS.includes(data.sound) ? data.sound : category
+  const kind = KINDS[category]
+  const title = str(data.title) || 'Ampara'
+  const tag = str(data.tag) || undefined
   e.waitUntil(
-    self.registration.showNotification(title, {
-      body: typeof data.body === 'string' ? data.body : '',
-      tag: typeof data.tag === 'string' ? data.tag : undefined,
-      // nova dose do mesmo horário substitui a anterior, mas toca de novo
-      renotify: typeof data.tag === 'string',
-      icon: '/icon.svg',
-      badge: '/icon.svg',
-      data: { url: typeof data.url === 'string' && data.url.startsWith('/') ? data.url : '/' },
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      // app na frente: a notificação sai calada e o próprio app toca o som da categoria e mostra o aviso
+      const front = wins.filter((w) => w.visibilityState === 'visible')
+      front.forEach((w) => w.postMessage({ type: 'ALERT', key: str(data.key), category, sound, title, body: str(data.body), label: str(data.label) }))
+      const quiet = front.length > 0
+      const options = {
+        body: str(data.body),
+        tag,
+        // nova notificação do mesmo assunto substitui a anterior, mas toca de novo
+        renotify: !!tag && !quiet,
+        silent: quiet,
+        requireInteraction: kind.sticky,
+        icon: '/icon-192.png',
+        badge: '/icon.svg',
+        timestamp: Date.now(),
+        data: { url: str(data.url).startsWith('/') ? data.url : '/', category },
+      }
+      // vibrate junto com silent é erro na especificação
+      if (!quiet && kind.vibrate.length) options.vibrate = sound === 'water' ? [120] : kind.vibrate
+      if (kind.action) options.actions = [{ action: 'open', title: kind.action }]
+      return self.registration.showNotification(title, options)
     }),
   )
 })
