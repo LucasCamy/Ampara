@@ -776,7 +776,7 @@ $$;
 alter table push_subscriptions add column if not exists prefs jsonb not null default '{}'::jsonb;
 drop function if exists save_push_subscription(text, text, text, text, boolean);
 create or replace function save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_tz text, p_show_details boolean, p_prefs jsonb default '{}'::jsonb)
-returns void language plpgsql security definer set search_path = public as $
+returns void language plpgsql security definer set search_path = public as $$
 declare v_couple text := my_couple_id(); v_partner text := my_partner_id();
 begin
   if v_couple is null then raise exception 'not paired'; end if;
@@ -786,7 +786,7 @@ begin
   values (p_endpoint, v_couple, v_partner, p_p256dh, p_auth, coalesce(nullif(p_tz, ''), 'America/Sao_Paulo'), coalesce(p_show_details, false), coalesce(p_prefs, '{}'::jsonb))
   on conflict (endpoint) do update set couple_id = excluded.couple_id, partner_id = excluded.partner_id, p256dh = excluded.p256dh,
     auth = excluded.auth, tz = excluded.tz, show_details = excluded.show_details, prefs = excluded.prefs, created_at = now();
-end $;
+end $$;
 
 create or replace function delete_push_subscription(p_endpoint text)
 returns void language sql security definer set search_path = public as $$
