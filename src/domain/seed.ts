@@ -284,7 +284,7 @@ export function buildSeed(now: Date): DataState {
   return {
     schemaVersion: 1,
     couple: {
-      couple: { id: 'couple', mode: 'COUPLE', inviteCode: '482 913', pairedAt: iso, splitMode: '50_50', ratioABps },
+      couple: { id: 'couple', mode: 'COUPLE', soloOwnerId: null, inviteCode: '482 913', pairedAt: iso, splitMode: '50_50', ratioABps },
     },
     profiles: {
       A: { id: 'A', displayName: 'Lucas', pronoun: 'ele', energy: 'MEDIUM', energyUpdatedAt: iso, sharePersonalFinances: true, monthlyBudgetCents: null, enabledModules: defaultEnabledModules('COUPLE'), updatedAt: iso },
@@ -321,7 +321,8 @@ export function normalizeState(state: DataState): DataState {
   let next: DataState = missing.length ? { ...state, ...Object.fromEntries(missing.map((c) => [c, {}])) } : state
   const couple = next.couple.couple
   const mode: SpaceMode = couple?.mode === 'SOLO' ? 'SOLO' : 'COUPLE'
-  if (couple && couple.mode !== mode) next = { ...next, couple: { ...next.couple, couple: { ...couple, mode } } }
+  const soloOwnerId = mode === 'SOLO' ? couple?.soloOwnerId === 'B' ? 'B' : 'A' : null
+  if (couple && (couple.mode !== mode || couple.soloOwnerId !== soloOwnerId)) next = { ...next, couple: { ...next.couple, couple: { ...couple, mode, soloOwnerId } } }
   const defaults = defaultEnabledModules(mode)
   let profiles = next.profiles
   for (const p of Object.values(next.profiles)) {
@@ -356,15 +357,17 @@ export interface CoupleIdentity {
   shareA?: boolean
   shareB?: boolean
   mode?: SpaceMode
+  soloOwnerId?: PartnerId
 }
 
 /** Aplica nomes, pronomes, convite e preferências iniciais a um estado (exemplo ou vazio) */
 export function withIdentity(state: DataState, id: CoupleIdentity): DataState {
   const couple = state.couple.couple
+  const mode = id.mode ?? couple?.mode ?? 'COUPLE'
   return {
     ...state,
     couple: couple
-      ? { couple: { ...couple, mode: id.mode ?? couple.mode ?? 'COUPLE', inviteCode: id.inviteCode, splitMode: id.splitMode ?? couple.splitMode } }
+      ? { couple: { ...couple, mode, soloOwnerId: mode === 'SOLO' ? id.soloOwnerId ?? couple.soloOwnerId ?? 'A' : null, inviteCode: id.inviteCode, splitMode: id.splitMode ?? couple.splitMode } }
       : state.couple,
     profiles: {
       A: { ...state.profiles.A!, displayName: id.a.name, pronoun: id.a.pronoun, sharePersonalFinances: id.shareA ?? state.profiles.A!.sharePersonalFinances },
@@ -374,11 +377,11 @@ export function withIdentity(state: DataState, id: CoupleIdentity): DataState {
 }
 
 /** Estado sem lançamentos: casal recém-criado que não quer dados de exemplo */
-export function buildEmpty(now: Date, mode: SpaceMode = 'COUPLE'): DataState {
+export function buildEmpty(now: Date, mode: SpaceMode = 'COUPLE', soloOwnerId: PartnerId = 'A'): DataState {
   const seed = buildSeed(now)
   return {
     ...seed,
-    couple: { couple: { ...seed.couple.couple!, mode } },
+    couple: { couple: { ...seed.couple.couple!, mode, soloOwnerId: mode === 'SOLO' ? soloOwnerId : null } },
     profiles: {
       A: { ...seed.profiles.A!, enabledModules: defaultEnabledModules(mode) },
       B: { ...seed.profiles.B!, enabledModules: defaultEnabledModules(mode) },

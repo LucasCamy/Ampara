@@ -6,6 +6,7 @@
 create table if not exists couples (
   id text primary key,
   mode text not null default 'COUPLE' check (mode in ('SOLO', 'COUPLE')),
+  solo_owner_id text check (solo_owner_id in ('A', 'B')),
   invite_code text unique not null,
   paired_at timestamptz not null default now(),
   split_mode text not null check (split_mode in ('50_50', 'PROPORTIONAL')),
@@ -16,9 +17,13 @@ create table if not exists couple_members (
   couple_id text not null references couples (id) on delete cascade,
   user_id uuid not null references auth.users (id) on delete cascade,
   partner_id text not null check (partner_id in ('A', 'B')),
-  primary key (couple_id, partner_id),
-  unique (user_id)
+  revoked_at timestamptz,
+  primary key (couple_id, partner_id)
 );
+-- Um vínculo revogado continua reservando a autoria histórica do slot, mas não impede um espaço novo.
+alter table couple_members add column if not exists revoked_at timestamptz;
+alter table couple_members drop constraint if exists couple_members_user_id_key;
+create unique index if not exists idx_couple_members_active_user on couple_members (user_id) where revoked_at is null;
 
 create table if not exists profiles (
   id text not null check (id in ('A', 'B')),
@@ -150,12 +155,12 @@ create table if not exists nudges (
 
 -- Helpers de identidade
 create or replace function my_couple_id() returns text language sql stable security definer set search_path = public as $$
-  select couple_id from couple_members where user_id = auth.uid()
+  select couple_id from couple_members where user_id = auth.uid() and revoked_at is null
 $$;
 create or replace function my_partner_id() returns text language sql stable security definer set search_path = public as $$
-  select partner_id from couple_members where user_id = auth.uid()
+  select partner_id from couple_members where user_id = auth.uid() and revoked_at is null
 $$;
--- A pessoa já entrou na nuvem? Antes disso quem criou o espaço ainda cuida do perfil dela (primeira subida).
+-- A pessoa já entrou alguma vez? Um vínculo revogado não reabre a edição do perfil nem a aba pessoal dela.
 create or replace function partner_joined(p_couple_id text, p_partner_id text) returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from couple_members where couple_id = p_couple_id and partner_id = p_partner_id)
 $$;
@@ -182,15 +187,18 @@ create policy couples_insert on couples for insert with check (id = my_couple_id
 create policy couples_update on couples for update using (id = my_couple_id()) with check (id = my_couple_id());
 -- Perfis: o par lê, mas cada pessoa só altera o próprio (share_personal_finances libera tx_read, então
 -- o par não pode abrir a aba pessoal de ninguém). Exceção: antes do par entrar, quem criou o espaço sobe e
--- ajusta o perfil dele(a). Criar uma linha que ainda não existe é livre dentro do casal: o aparelho de quem
--- criou o espaço reenvia o perfil do par com ON CONFLICT DO NOTHING, e no Postgres o with check do insert vale
--- mesmo quando o conflito descarta a linha. Uma linha já existente nunca muda por insert. Sem política de delete.
+-- ajusta o perfil dele(a). Um perfil ausente de quem já entrou só pode ser criado pela própria pessoa:
+-- criá-lo com share_personal_finances ligado também abriria seu histórico privado. Uma linha existente ainda
+-- passa no INSERT para ON CONFLICT DO NOTHING; qualquer atualização passa pela política própria. Sem delete.
 drop policy if exists couple_rw on profiles;
 drop policy if exists profiles_read on profiles;
 drop policy if exists profiles_insert on profiles;
 drop policy if exists profiles_update on profiles;
 create policy profiles_read on profiles for select using (couple_id = my_couple_id());
-create policy profiles_insert on profiles for insert with check (couple_id = my_couple_id());
+create policy profiles_insert on profiles for insert with check (
+  couple_id = my_couple_id() and (id = my_partner_id() or not partner_joined(couple_id, id)
+    or exists (select 1 from profiles p where p.couple_id = profiles.couple_id and p.id = profiles.id))
+);
 create policy profiles_update on profiles for update
   using (couple_id = my_couple_id() and (id = my_partner_id() or not partner_joined(couple_id, id)))
   with check (couple_id = my_couple_id() and (id = my_partner_id() or not partner_joined(couple_id, id)));
@@ -362,6 +370,16 @@ alter table couples alter column invite_code drop not null;
 alter table couples add column if not exists mode text not null default 'COUPLE';
 alter table couples drop constraint if exists couples_mode_check;
 alter table couples add constraint couples_mode_check check (mode in ('SOLO', 'COUPLE'));
+alter table couples add column if not exists solo_owner_id text;
+update couples c set solo_owner_id = coalesce(
+  (select m.partner_id from couple_members m where m.couple_id = c.id and m.revoked_at is null order by m.partner_id limit 1), 'A'
+) where c.mode = 'SOLO' and c.solo_owner_id is null;
+alter table couples drop constraint if exists couples_solo_owner_id_check;
+alter table couples add constraint couples_solo_owner_id_check check (solo_owner_id in ('A', 'B'));
+alter table couples drop constraint if exists couples_mode_owner_check;
+alter table couples add constraint couples_mode_owner_check check (
+  (mode = 'SOLO' and solo_owner_id is not null) or (mode = 'COUPLE' and solo_owner_id is null)
+);
 alter table profiles add column if not exists monthly_budget_cents integer;
 alter table profiles add column if not exists enabled_modules jsonb;
 alter table tasks add column if not exists steps jsonb not null default '[]'::jsonb;
@@ -378,18 +396,29 @@ create table if not exists couple_invites (
 alter table couple_invites enable row level security; -- sem política: só as funções abaixo acessam
 alter table couple_members enable row level security;
 drop policy if exists members_read on couple_members;
-create policy members_read on couple_members for select using (couple_id = my_couple_id());
+create policy members_read on couple_members for select using (couple_id = my_couple_id() and revoked_at is null);
 
--- Cria o espaço na nuvem: quem chama vira a pessoa A, também no modo Solo.
-create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer, p_mode text)
+-- Cria o espaço na nuvem. A assinatura com dono permite que B suba seu Solo ou o mesmo espaço
+-- retomado como Casal antes da primeira conexão, sem trocar a autoria dos registros.
+create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer, p_mode text, p_owner_id text)
 returns text language plpgsql security definer set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'not authenticated'; end if;
-  if exists (select 1 from couple_members where user_id = auth.uid()) then raise exception 'already paired'; end if;
-  insert into couples (id, split_mode, ratio_a_bps, mode) values (p_couple_id, p_split_mode, p_ratio_a_bps, p_mode);
-  insert into couple_members (couple_id, user_id, partner_id) values (p_couple_id, auth.uid(), 'A');
+  if p_owner_id is null or p_owner_id not in ('A', 'B') then
+    raise exception 'invalid space owner' using errcode = '22023';
+  end if;
+  if exists (select 1 from couple_members where user_id = auth.uid() and revoked_at is null) then raise exception 'already paired'; end if;
+  insert into couples (id, split_mode, ratio_a_bps, mode, solo_owner_id)
+    values (p_couple_id, p_split_mode, p_ratio_a_bps, p_mode, case when p_mode = 'SOLO' then p_owner_id else null end);
+  insert into couple_members (couple_id, user_id, partner_id) values (p_couple_id, auth.uid(), p_owner_id);
   return p_couple_id;
 end $$;
+
+-- Dono A por padrão sem sobrecargas com DEFAULT ambíguas para o PostgREST.
+create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer, p_mode text)
+returns text language sql security definer set search_path = public as $$
+  select create_couple(p_couple_id, p_split_mode, p_ratio_a_bps, p_mode, 'A')
+$$;
 
 -- Assinatura anterior: aparelhos antigos continuam criando espaços de casal.
 create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer)
@@ -400,12 +429,15 @@ $$;
 -- Registra o convite do par (o código em texto claro nunca é gravado)
 create or replace function create_invite(p_code text)
 returns void language plpgsql security definer set search_path = public, extensions as $$
-declare v_couple text := my_couple_id(); v_partner text;
+declare v_couple text := my_couple_id(); v_partner text; v_who text; v_mode text;
 begin
   if v_couple is null then raise exception 'not paired'; end if;
-  if (select mode from couples where id = v_couple) <> 'COUPLE' then raise exception 'invite requires couple mode'; end if;
-  v_partner := case my_partner_id() when 'A' then 'B' else 'A' end;
-  if exists (select 1 from couple_members where couple_id = v_couple and partner_id = v_partner) then raise exception 'partner already joined'; end if;
+  select c.mode into v_mode from couples c where c.id = v_couple for update;
+  select m.partner_id into v_who from couple_members m where m.couple_id = v_couple and m.user_id = auth.uid() and m.revoked_at is null;
+  if v_who is null then raise exception 'not paired' using errcode = '42501'; end if;
+  if v_mode <> 'COUPLE' then raise exception 'invite requires couple mode'; end if;
+  v_partner := case v_who when 'A' then 'B' else 'A' end;
+  if exists (select 1 from couple_members where couple_id = v_couple and partner_id = v_partner and revoked_at is null) then raise exception 'partner already joined'; end if;
   delete from couple_invites where couple_id = v_couple;
   insert into couple_invites (code_hash, couple_id, partner_id)
   values (encode(digest(upper(regexp_replace(p_code, '[^A-Za-z0-9]', '', 'g')), 'sha256'), 'hex'), v_couple, v_partner);
@@ -414,15 +446,29 @@ end $$;
 -- Entra no espaço com o convite: devolve o casal e qual parceiro a pessoa é
 create or replace function join_couple(p_code text)
 returns table (couple_id text, partner_id text) language plpgsql security definer set search_path = public, extensions as $$
-declare v_inv couple_invites;
+declare v_inv couple_invites; v_couple text; v_mode text; v_hash text; v_member couple_members;
 begin
   if auth.uid() is null then raise exception 'not authenticated'; end if;
-  select * into v_inv from couple_invites
-   where code_hash = encode(digest(upper(regexp_replace(p_code, '[^A-Za-z0-9]', '', 'g')), 'sha256'), 'hex')
+  v_hash := encode(digest(upper(regexp_replace(p_code, '[^A-Za-z0-9]', '', 'g')), 'sha256'), 'hex');
+  select i.couple_id into v_couple from couple_invites i where i.code_hash = v_hash;
+  if v_couple is null then raise exception 'invalid invite'; end if;
+  -- A ordem de locks é sempre espaço, depois convite. A conversão usa a mesma ordem.
+  select c.mode into v_mode from couples c where c.id = v_couple for update;
+  if v_mode <> 'COUPLE' then raise exception 'invite requires couple mode'; end if;
+  select * into v_inv from couple_invites i
+   where i.code_hash = v_hash and i.couple_id = v_couple
      and used_at is null and expires_at > now()
    for update;
   if not found then raise exception 'invalid invite'; end if;
-  insert into couple_members (couple_id, user_id, partner_id) values (v_inv.couple_id, auth.uid(), v_inv.partner_id);
+  if exists (select 1 from couple_members m where m.user_id = auth.uid() and m.revoked_at is null) then raise exception 'already paired'; end if;
+  select * into v_member from couple_members m where m.couple_id = v_couple and m.partner_id = v_inv.partner_id for update;
+  if found then
+    if v_member.user_id <> auth.uid() then raise exception 'partner slot belongs to another account' using errcode = '42501'; end if;
+    if v_member.revoked_at is null then raise exception 'partner already joined'; end if;
+    update couple_members m set revoked_at = null where m.couple_id = v_couple and m.partner_id = v_inv.partner_id;
+  else
+    insert into couple_members (couple_id, user_id, partner_id) values (v_couple, auth.uid(), v_inv.partner_id);
+  end if;
   update couple_invites set used_at = now() where code_hash = v_inv.code_hash;
   return query select v_inv.couple_id, v_inv.partner_id;
 end $$;
@@ -430,13 +476,60 @@ end $$;
 -- Quem sou eu no espaço (usado ao entrar em um aparelho novo)
 create or replace function my_membership()
 returns table (couple_id text, partner_id text) language sql stable security definer set search_path = public as $$
-  select couple_id, partner_id from couple_members where user_id = auth.uid()
+  select couple_id, partner_id from couple_members where user_id = auth.uid() and revoked_at is null
 $$;
 
-revoke all on function create_couple(text, text, integer), create_couple(text, text, integer, text), create_invite(text), join_couple(text), my_membership() from public, anon;
+-- Converte o espaço inteiro sem alterar entidades, pessoas ou autoria histórica.
+create or replace function convert_to_solo()
+returns table (solo_owner_id text, updated_at timestamptz) language plpgsql security definer set search_path = public as $$
+declare v_couple text := my_couple_id(); v_who text; v_mode text; v_owner text; v_now timestamptz := clock_timestamp();
+begin
+  if auth.uid() is null or v_couple is null then raise exception 'not paired' using errcode = '42501'; end if;
+  select c.mode, c.solo_owner_id into v_mode, v_owner from couples c where c.id = v_couple for update;
+  -- Outro membro pode ter convertido enquanto esta chamada aguardava o lock.
+  select m.partner_id into v_who from couple_members m where m.couple_id = v_couple and m.user_id = auth.uid() and m.revoked_at is null;
+  if v_who is null or (v_mode = 'SOLO' and v_owner is distinct from v_who) then raise exception 'not the space owner' using errcode = '42501'; end if;
+  update couple_members m set revoked_at = v_now where m.couple_id = v_couple and m.partner_id <> v_who and m.revoked_at is null;
+  delete from couple_invites i where i.couple_id = v_couple;
+  delete from push_subscriptions s where s.couple_id = v_couple and s.partner_id <> v_who;
+  if v_mode <> 'SOLO' then
+    update couples c set mode = 'SOLO', solo_owner_id = v_who, invite_code = null, updated_at = v_now where c.id = v_couple;
+  end if;
+  return query select c.solo_owner_id, c.updated_at from couples c where c.id = v_couple;
+end $$;
+
+-- Só o dono Solo ativo restaura o modo Casal; o antigo par continua revogado até aceitar outro convite.
+create or replace function restore_couple()
+returns table (solo_owner_id text, updated_at timestamptz) language plpgsql security definer set search_path = public as $$
+declare v_couple text := my_couple_id(); v_who text; v_mode text; v_owner text;
+begin
+  if auth.uid() is null or v_couple is null then raise exception 'not paired' using errcode = '42501'; end if;
+  select c.mode, c.solo_owner_id into v_mode, v_owner from couples c where c.id = v_couple for update;
+  select m.partner_id into v_who from couple_members m where m.couple_id = v_couple and m.user_id = auth.uid() and m.revoked_at is null;
+  if v_who is null or (v_mode = 'SOLO' and v_owner is distinct from v_who) then raise exception 'not the space owner' using errcode = '42501'; end if;
+  if v_mode = 'SOLO' then
+    update couples c set mode = 'COUPLE', solo_owner_id = null, updated_at = clock_timestamp() where c.id = v_couple;
+  end if;
+  return query select c.solo_owner_id, c.updated_at from couples c where c.id = v_couple;
+end $$;
+
+-- INVOKER: REST continua atualizando divisão e datas, mas só as RPCs, como proprietárias da tabela,
+-- podem alterar modo/dono. Payloads antigos não podem desfazer uma conversão nem tomar posse do espaço.
+create or replace function protect_couple_mode() returns trigger language plpgsql set search_path = public as $$
+begin
+  if (new.mode is distinct from old.mode or new.solo_owner_id is distinct from old.solo_owner_id)
+    and current_user <> (select pg_get_userbyid(c.relowner) from pg_class c where c.oid = tg_relid) then
+    raise exception 'space mode changes require the dedicated RPC' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_couples_mode on couples;
+create trigger trg_couples_mode before update on couples for each row execute function protect_couple_mode();
+
+revoke all on function create_couple(text, text, integer), create_couple(text, text, integer, text), create_couple(text, text, integer, text, text), create_invite(text), join_couple(text), my_membership(), convert_to_solo(), restore_couple() from public, anon;
 revoke all on function partner_joined(text, text) from public, anon;
 grant execute on function partner_joined(text, text) to authenticated;
-grant execute on function create_couple(text, text, integer), create_couple(text, text, integer, text), create_invite(text), join_couple(text), my_membership() to authenticated;
+grant execute on function create_couple(text, text, integer), create_couple(text, text, integer, text), create_couple(text, text, integer, text, text), create_invite(text), join_couple(text), my_membership(), convert_to_solo(), restore_couple() to authenticated;
 
 -- Cursor de pull carimbado pelo servidor: relógios diferentes entre aparelhos não fazem perder alterações.
 -- updated_at continua sendo o relógio de quem editou (usado para "última edição vence").
@@ -860,6 +953,10 @@ returns void language plpgsql security definer set search_path = public as $$
 declare v_couple text := my_couple_id(); v_partner text := my_partner_id();
 begin
   if v_couple is null then raise exception 'not paired'; end if;
+  -- Não recria a inscrição do par se uma conversão revogou o vínculo enquanto a RPC esperava.
+  perform 1 from couples c where c.id = v_couple for update;
+  select m.partner_id into v_partner from couple_members m where m.couple_id = v_couple and m.user_id = auth.uid() and m.revoked_at is null;
+  if v_partner is null then raise exception 'not paired' using errcode = '42501'; end if;
   if p_endpoint !~ '^https://' or length(p_endpoint) > 1000 or length(p_p256dh) > 200 or length(p_auth) > 100 then raise exception 'invalid subscription'; end if;
   if p_prefs is not null and (jsonb_typeof(p_prefs) <> 'object' or length(p_prefs::text) > 1000) then raise exception 'invalid prefs'; end if;
   insert into push_subscriptions (endpoint, couple_id, partner_id, p256dh, auth, tz, show_details, prefs)

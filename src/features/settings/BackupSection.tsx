@@ -5,6 +5,7 @@ import { parseBackup, type BackupFile } from '../../auth/vault'
 import { Actions, Button, ChoiceChips, cx, FieldError, SectionHeader, Switch } from '../../components/ui'
 import type { PartnerId } from '../../domain/types'
 import { ui } from '../../store/ui'
+import { downloadEncryptedBackup } from './backupDownload'
 
 function Pw({ label, value, onChange, error, testId, autoComplete = 'current-password' }: { label: string; value: string; onChange: (v: string) => void; error?: string; testId: string; autoComplete?: string }) {
   const id = useId()
@@ -28,17 +29,6 @@ function Pw({ label, value, onChange, error, testId, autoComplete = 'current-pas
       {error ? <FieldError id={`${id}-err`}>{error}</FieldError> : null}
     </div>
   )
-}
-
-function download(name: string, content: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /**
@@ -154,7 +144,7 @@ export function BackupSection() {
     setBusy(true)
     try {
       const { name, content } = await exportBackup(pw)
-      download(name, content)
+      downloadEncryptedBackup({ name, content })
       ui.toast('Backup baixado. Guarde num lugar seu (e-mail, nuvem, pendrive).')
       setPanel(null)
       setPw('')

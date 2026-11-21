@@ -22,8 +22,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
   const [form, setForm] = useState<EventInput>(() => {
     const prev = id ? dataStore.get().events[id] : undefined
     if (prev) {
-      const input = eventToInput(prev)
-      return isSolo ? { ...input, owner: 'ME' } : input
+      return eventToInput(prev)
     }
     return {
       title: params.title ?? '',
@@ -56,7 +55,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
     const next = validateEvent(form)
     setErrors(next)
     if (hasErrors(next)) return
-    if (saveEvent(isSolo ? { ...form, owner: 'ME' } : form, id)) onDone()
+    if (saveEvent(isSolo && !id ? { ...form, owner: 'ME' } : form, id)) onDone()
   }
 
   return (

@@ -168,7 +168,7 @@ const isTimestampKey = (k: string) => k.endsWith('At') || k === 'snoozeUntil'
 export function toRow(collection: CollectionName, entity: unknown, spaceId: string): Record<string, unknown> {
   const e = entity as Record<string, unknown>
   if (collection === 'couple') {
-    return { id: spaceId, mode: e.mode ?? 'COUPLE', paired_at: e.pairedAt, split_mode: e.splitMode, ratio_a_bps: e.ratioABps, updated_at: e.updatedAt ?? new Date().toISOString() }
+    return { id: spaceId, mode: e.mode ?? 'COUPLE', solo_owner_id: e.mode === 'SOLO' ? e.soloOwnerId ?? 'A' : null, paired_at: e.pairedAt, split_mode: e.splitMode, ratio_a_bps: e.ratioABps, updated_at: e.updatedAt ?? new Date().toISOString() }
   }
   const row: Record<string, unknown> = { couple_id: spaceId, deleted: false }
   for (const [k, v] of Object.entries(e)) row[snake(k)] = v
@@ -198,6 +198,7 @@ export function fromRow(collection: CollectionName, row: Record<string, unknown>
     out.spaceId = out.id
     out.id = 'couple'
     out.mode ??= 'COUPLE'
+    out.soloOwnerId = out.mode === 'SOLO' ? out.soloOwnerId ?? 'A' : null
   }
   if (collection === 'profiles') {
     out.monthlyBudgetCents ??= null

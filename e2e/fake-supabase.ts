@@ -18,6 +18,7 @@ interface Member {
   couple_id: string
   user_id: string
   partner_id: 'A' | 'B'
+  revoked_at?: string | null
 }
 
 const norm = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -27,7 +28,7 @@ export class FakeSupabase {
   access = new Map<string, { userId: string; exp: number }>()
   refresh = new Map<string, string>()
   members: Member[] = []
-  invites: { hash: string; couple_id: string; partner_id: 'A' | 'B'; used: boolean }[] = []
+  invites: { hash: string; couple_id: string; partner_id: 'A' | 'B'; used: boolean; expires_at?: string }[] = []
   tables = new Map<string, Map<string, Row>>()
   /** pedidos recebidos com Authorization ausente ou chave anônima tentando gravar */
   anonWrites = 0
@@ -82,7 +83,7 @@ export class FakeSupabase {
     const token = auth.replace(/^Bearer /, '')
     const s = this.access.get(token)
     if (!s || s.exp < Date.now()) return 'anon'
-    return this.members.find((m) => m.user_id === s.userId) ?? null
+    return this.members.find((m) => m.user_id === s.userId && m.revoked_at == null) ?? null
   }
 
   private userOf(route: Route) {
@@ -214,29 +215,58 @@ export class FakeSupabase {
         return json(200, null)
       }
       if (name === 'my_membership') return json(200, me ? [{ couple_id: me.couple_id, partner_id: me.partner_id }] : [])
+      if (name === 'partner_joined') return json(200, this.members.some((member) => member.couple_id === body.p_couple_id && member.partner_id === body.p_partner_id))
       if (name === 'create_couple') {
         if (me) return json(400, { message: 'already paired' })
         const mode = body.p_mode ?? 'COUPLE'
         if (mode !== 'SOLO' && mode !== 'COUPLE') return json(400, { code: '23514', message: 'invalid space mode' })
+        const owner = body.p_owner_id === undefined ? 'A' : body.p_owner_id
+        if (owner !== 'A' && owner !== 'B') return json(400, { code: '22023', message: 'invalid space owner' })
         const id = String(body.p_couple_id)
-        this.table('couples').set(id, { id, mode, split_mode: body.p_split_mode, ratio_a_bps: body.p_ratio_a_bps, synced_at: this.stamp() })
-        this.members.push({ couple_id: id, user_id: uid, partner_id: 'A' })
+        if (this.table('couples').has(id)) return json(409, { code: '23505', message: 'duplicate space' })
+        this.table('couples').set(id, { id, mode, solo_owner_id: mode === 'SOLO' ? owner : null, split_mode: body.p_split_mode, ratio_a_bps: body.p_ratio_a_bps, updated_at: new Date().toISOString(), synced_at: this.stamp() })
+        this.members.push({ couple_id: id, user_id: uid, partner_id: owner, revoked_at: null })
         return json(200, id)
+      }
+      if (name === 'convert_to_solo' || name === 'restore_couple') {
+        if (!me) return json(403, { code: '42501', message: 'not paired' })
+        const space = this.table('couples').get(me.couple_id)
+        if (!space || (space.mode === 'SOLO' && space.solo_owner_id !== me.partner_id)) return json(403, { code: '42501', message: 'not the space owner' })
+        const now = new Date().toISOString()
+        if (name === 'convert_to_solo') {
+          for (const member of this.members) {
+            if (member.couple_id === me.couple_id && member.partner_id !== me.partner_id && member.revoked_at == null) member.revoked_at = now
+          }
+          this.invites = this.invites.filter((invite) => invite.couple_id !== me.couple_id)
+          for (const [endpoint, sub] of this.pushSubs) {
+            if (sub.couple_id === me.couple_id && sub.partner_id !== me.partner_id) this.pushSubs.delete(endpoint)
+          }
+          if (space.mode !== 'SOLO') this.table('couples').set(me.couple_id, { ...space, mode: 'SOLO', solo_owner_id: me.partner_id, invite_code: null, updated_at: now, synced_at: this.stamp() })
+        } else if (space.mode === 'SOLO') {
+          this.table('couples').set(me.couple_id, { ...space, mode: 'COUPLE', solo_owner_id: null, updated_at: now, synced_at: this.stamp() })
+        }
+        const current = this.table('couples').get(me.couple_id)!
+        return json(200, [{ solo_owner_id: current.solo_owner_id, updated_at: current.updated_at }])
       }
       if (name === 'create_invite') {
         if (!me) return json(400, { message: 'not paired' })
         if (this.table('couples').get(me.couple_id)?.mode !== 'COUPLE') return json(400, { message: 'invite requires couple mode' })
         const partner = me.partner_id === 'A' ? 'B' : 'A'
-        if (this.members.some((m) => m.couple_id === me.couple_id && m.partner_id === partner)) return json(400, { message: 'partner already joined' })
+        if (this.members.some((m) => m.couple_id === me.couple_id && m.partner_id === partner && m.revoked_at == null)) return json(400, { message: 'partner already joined' })
         this.invites = this.invites.filter((i) => i.couple_id !== me.couple_id)
-        this.invites.push({ hash: norm(String(body.p_code)), couple_id: me.couple_id, partner_id: partner, used: false })
+        this.invites.push({ hash: norm(String(body.p_code)), couple_id: me.couple_id, partner_id: partner, used: false, expires_at: new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString() })
         return json(200, null)
       }
       if (name === 'join_couple') {
-        const inv = this.invites.find((i) => i.hash === norm(String(body.p_code)) && !i.used)
+        const inv = this.invites.find((i) => i.hash === norm(String(body.p_code)) && !i.used && (i.expires_at == null || i.expires_at > new Date().toISOString()))
         if (!inv || me) return json(400, { message: 'invalid invite' })
+        if (this.table('couples').get(inv.couple_id)?.mode !== 'COUPLE') return json(400, { message: 'invite requires couple mode' })
+        const binding = this.members.find((m) => m.couple_id === inv.couple_id && m.partner_id === inv.partner_id)
+        if (binding && binding.user_id !== uid) return json(403, { code: '42501', message: 'partner slot belongs to another account' })
+        if (binding && binding.revoked_at == null) return json(400, { message: 'partner already joined' })
         inv.used = true
-        this.members.push({ couple_id: inv.couple_id, user_id: uid, partner_id: inv.partner_id })
+        if (binding) binding.revoked_at = null
+        else this.members.push({ couple_id: inv.couple_id, user_id: uid, partner_id: inv.partner_id, revoked_at: null })
         return json(200, [{ couple_id: inv.couple_id, partner_id: inv.partner_id }])
       }
       return json(404, { message: 'unknown rpc' })
@@ -260,7 +290,7 @@ export class FakeSupabase {
     }
     if (req.method() === 'POST') {
       const defaults: Row = tableName === 'couples'
-        ? { mode: 'COUPLE' }
+        ? { mode: 'COUPLE', solo_owner_id: null }
         : tableName === 'profiles'
           ? { monthly_budget_cents: null, enabled_modules: null }
           : tableName === 'tasks'
@@ -271,13 +301,18 @@ export class FakeSupabase {
       }
       const key = keyOf(body)
       const existing = t.get(key)
+      if (tableName === 'couples' && existing && ((body.mode !== undefined && body.mode !== existing.mode) || (body.solo_owner_id !== undefined && body.solo_owner_id !== existing.solo_owner_id))) {
+        return json(403, { code: '42501', message: 'space mode changes require the dedicated RPC' })
+      }
       // upsert: a linha nova passa no with check; a que já existe precisa passar no using do update
       // help_insert / nudges_insert: quem pede ou manda cria; linha existente vira update (os dois atualizam)
       const author = tableName === 'help_requests' ? body.requester_id : tableName === 'nudges' ? body.from : undefined
       const insertOk =
         tableName === 'focus_sessions'
           ? body.couple_id === me.couple_id && (body.started_by === me.partner_id || (!!existing && existing.joined_by !== existing.started_by && this.focusTaskShared(existing)))
-          : tableName === 'tasks' || tableName === 'profiles'
+          : tableName === 'profiles'
+          ? body.couple_id === me.couple_id && (body.id === me.partner_id || !this.members.some((member) => member.couple_id === me.couple_id && member.partner_id === body.id) || !!existing)
+          : tableName === 'tasks'
           ? body.couple_id === me.couple_id
           : author !== undefined
             ? body.couple_id === me.couple_id && (author === me.partner_id || !!existing)
@@ -307,6 +342,9 @@ export class FakeSupabase {
       const row = t.get(key)
       // update sem permissão no using: 0 linhas, sem erro (como no PostgREST)
       if (!row || !this.canWrite(tableName, row, me)) return json(204, null)
+      if (tableName === 'couples' && ((body.mode !== undefined && body.mode !== row.mode) || (body.solo_owner_id !== undefined && body.solo_owner_id !== row.solo_owner_id))) {
+        return json(403, { code: '42501', message: 'space mode changes require the dedicated RPC' })
+      }
       if (tableName === 'focus_sessions') {
         const next = { ...row, ...body }
         if (next.id !== row.id || next.couple_id !== row.couple_id || next.started_by !== row.started_by) return json(403, { code: '42501', message: 'focus identity cannot change' })

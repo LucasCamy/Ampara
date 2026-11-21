@@ -24,12 +24,12 @@ begin
   assert missing is null, 'FALHOU: tabelas sem RLS: ' || coalesce(missing, '');
 
   select string_agg(f, ', ') into missing
-    from unnest(array['create_couple','create_invite','join_couple','my_membership','my_couple_id','my_partner_id','push_public_key','save_push_subscription','delete_push_subscription']) f
+    from unnest(array['create_couple','create_invite','join_couple','my_membership','my_couple_id','my_partner_id','push_public_key','save_push_subscription','delete_push_subscription','convert_to_solo','restore_couple']) f
    where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f);
   assert missing is null, 'FALHOU: funções ausentes: ' || coalesce(missing, '');
 
   select string_agg(v.tbl || '.' || v.col, ', ') into missing
-    from (values ('couples','mode'), ('profiles','monthly_budget_cents'), ('profiles','enabled_modules'),
+    from (values ('couples','mode'), ('couples','solo_owner_id'), ('couple_members','revoked_at'), ('profiles','monthly_budget_cents'), ('profiles','enabled_modules'),
                  ('tasks','steps'), ('tasks','postpone_count')) v(tbl, col)
    where not exists (select 1 from information_schema.columns c where c.table_schema = 'public' and c.table_name = v.tbl and c.column_name = v.col);
   assert missing is null, 'FALHOU: colunas do modo dual ausentes: ' || coalesce(missing, '');
@@ -41,7 +41,7 @@ begin
      and tablename in ('couples','profiles','help_requests','nudges','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences','focus_sessions');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 24 tabelas, RLS ligado em todas, 9 funções'
+\echo 'ok  estrutura: 24 tabelas, RLS ligado em todas, 11 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -759,7 +759,7 @@ do $$ begin
   begin
     update couples set mode = 'INVALID';
     raise exception 'FALHOU: aceitou modo inválido';
-  exception when check_violation then null;
+  exception when insufficient_privilege then null;
   end;
 end $$;
 
@@ -775,7 +775,7 @@ end $$;
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-00000000000e","role":"authenticated"}', true) as _ \gset
-update couples set mode = 'COUPLE' where id = 'space-solo';
+select count(*) as _ from restore_couple() \gset
 insert into profiles (id, couple_id, display_name, pronoun, energy) values ('B', 'space-solo', 'Par', 'ela', 'MEDIUM');
 select create_invite('SOLOB-TESTE') as _ \gset
 do $$ begin
@@ -797,6 +797,222 @@ end $$;
 reset role;
 \echo 'ok  Solo: dados novos persistem; RLS isola; convite exige promoção; Casal preserva tarefas, orçamento e privacidade'
 
+-- ---------------------------------------------------------------- 6k. Casal inteiro vira Solo, com dono B ou A, sem reatribuir nem apagar histórico
+reset role;
+insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values ('99999999-0000-4000-8000-000000000009', 'authenticated', 'authenticated', 'outro-par@teste.local', '', now(), now(), now());
+update profiles set share_personal_finances = false where couple_id = 'space-teste';
+update profiles set monthly_budget_cents = 92345 where couple_id = 'space-teste' and id = 'B';
+insert into tasks (id, couple_id, created_by, assigned_to, title, effort, status, visible_to_partner)
+values ('abab1111-0000-4000-8000-000000000001', 'space-teste', 'B', 'B', 'Tarefa privada de B', 'QUICK_5M', 'PENDING', false);
+insert into transactions (id, couple_id, created_by, paid_by, scope, type, status, amount_cents, category, description, competence_date)
+values ('abab4444-0000-4000-8000-000000000001', 'space-teste', 'B', 'B', 'PERSONAL', 'EXPENSE', 'CONFIRMED_SOLID', 9876, 'HEALTH', 'Privado de B', current_date);
+insert into push_subscriptions (endpoint, couple_id, partner_id, p256dh, auth) values
+  ('https://push.test/solo-a', 'space-teste', 'A', 'teste', 'teste'),
+  ('https://push.test/solo-b', 'space-teste', 'B', 'teste', 'teste');
+insert into couple_invites (code_hash, couple_id, partner_id)
+values (encode(digest('STALESOLO', 'sha256'), 'hex'), 'space-teste', 'A');
+
+-- Compara todas as colunas de todas as entidades, inclusive linhas excluídas logicamente e dados privados.
+create temporary table solo_entity_snapshot (table_name text primary key, payload jsonb not null) on commit drop;
+do $$ declare v_table text; v_payload jsonb; begin
+  foreach v_table in array array['profiles','tasks','events','medications','medication_logs','transactions','help_requests','nudges',
+    'cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','recurrences'] loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(t) order by t.id), ''[]''::jsonb) from %I t where t.couple_id = %L', v_table, 'space-teste') into v_payload;
+    insert into solo_entity_snapshot values (v_table, v_payload);
+  end loop;
+end $$;
+create function pg_temp.assert_solo_entity_snapshot() returns void language plpgsql as $$
+declare v_row record; v_actual jsonb;
+begin
+  for v_row in select * from solo_entity_snapshot loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(t) order by t.id), ''[]''::jsonb) from %I t where t.couple_id = %L', v_row.table_name, 'space-teste') into v_actual;
+    assert v_actual = v_row.payload, 'FALHOU: conversão alterou ou apagou entidades de ' || v_row.table_name;
+  end loop;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+select solo_owner_id as converted_owner, updated_at as converted_at from convert_to_solo() \gset
+do $$ declare v_before timestamptz; v_after timestamptz; v_count int; begin
+  assert (select mode = 'SOLO' and solo_owner_id = 'B' from couples), 'FALHOU: B não virou dona Solo sem remapeamento';
+  assert (select my_partner_id()) = 'B', 'FALHOU: conversão mudou B para A';
+  assert (select monthly_budget_cents from profiles where id = 'B') = 92345, 'FALHOU: conversão perdeu orçamento de B';
+  select updated_at into v_before from couples;
+  select updated_at into v_after from convert_to_solo();
+  assert v_before = v_after, 'FALHOU: conversão repetida não foi idempotente';
+  assert not exists (select 1 from tasks where id = '11111111-0000-4000-8000-000000000002'), 'FALHOU: Solo de B abriu tarefa privada de A';
+  assert not exists (select 1 from transactions where id in ('44444444-0000-4000-8000-000000000002','44444444-0000-4000-8000-000000000003')), 'FALHOU: Solo de B abriu finanças privadas de A';
+  assert exists (select 1 from transactions where id = '44444444-0000-4000-8000-000000000001'), 'FALHOU: Solo perdeu leitura do histórico compartilhado';
+  assert partner_joined('space-teste', 'A'), 'FALHOU: revogação esqueceu vínculo histórico de A';
+  update profiles set share_personal_finances = true where id = 'A';
+  get diagnostics v_count = row_count;
+  assert v_count = 0, 'FALHOU: revogação reabriu edição do perfil de A';
+  begin
+    insert into profiles (id,couple_id,display_name,pronoun,energy,share_personal_finances)
+    values ('A','space-teste','forjado','ele','FULL',true)
+    on conflict (couple_id,id) do update set share_personal_finances = true;
+    raise exception 'FALHOU: upsert abriu finanças do membro revogado';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update couples set mode = 'COUPLE', solo_owner_id = null;
+    raise exception 'FALHOU: REST reverteu Solo para Casal';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update couples set solo_owner_id = 'A';
+    raise exception 'FALHOU: REST trocou dono Solo';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into couples (id,mode,solo_owner_id,split_mode,ratio_a_bps) values ('space-teste','COUPLE',null,'50_50',5000)
+    on conflict (id) do update set mode = excluded.mode, solo_owner_id = excluded.solo_owner_id;
+    raise exception 'FALHOU: upsert antigo reverteu Solo';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+select pg_temp.assert_solo_entity_snapshot() as _ \gset
+do $$ begin
+  assert (select count(*) from couple_members where couple_id = 'space-teste') = 2, 'FALHOU: apagou vínculo histórico';
+  assert (select count(*) from couple_members where couple_id = 'space-teste' and revoked_at is null) = 1, 'FALHOU: Solo manteve dois vínculos ativos';
+  assert exists (select 1 from couple_members where couple_id = 'space-teste' and partner_id = 'A' and revoked_at is not null), 'FALHOU: A não foi revogado';
+  assert not exists (select 1 from push_subscriptions where couple_id = 'space-teste' and partner_id = 'A'), 'FALHOU: push revogado permaneceu';
+  assert exists (select 1 from push_subscriptions where endpoint = 'https://push.test/solo-b'), 'FALHOU: removeu push do dono';
+  assert not exists (select 1 from couple_invites where couple_id = 'space-teste'), 'FALHOU: conversão manteve convite antigo';
+end $$;
+
+-- O token de A continua criptograficamente válido, mas já não autoriza nenhuma leitura ou gravação.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert my_couple_id() is null and my_partner_id() is null and not exists (select 1 from my_membership()), 'FALHOU: identidade revogada continuou ativa';
+  assert (select count(*) from couples) + (select count(*) from profiles) + (select count(*) from tasks) + (select count(*) from transactions) = 0, 'FALHOU: JWT antigo leu dados após revogação';
+  begin
+    perform convert_to_solo();
+    raise exception 'FALHOU: revogado tomou posse por conversão';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform restore_couple();
+    raise exception 'FALHOU: revogado restaurou Casal';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform save_push_subscription('https://push.test/revogado','teste','teste','America/Sao_Paulo',false);
+    raise exception 'FALHOU: revogado recriou inscrição';
+  exception when raise_exception or insufficient_privilege then
+    if sqlerrm like 'FALHOU%' then raise; end if;
+  end;
+end $$;
+-- Mesmo um convite residual não entra num Solo (defesa contra chamadas antigas em voo).
+reset role;
+insert into couple_invites (code_hash, couple_id, partner_id)
+values (encode(digest('RESIDUALSOLO', 'sha256'), 'hex'), 'space-teste', 'A');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  begin
+    perform join_couple('RESIDUALSOLO');
+    raise exception 'FALHOU: convite residual entrou em Solo';
+  exception when raise_exception then
+    if sqlerrm like 'FALHOU%' then raise; end if;
+  end;
+end $$;
+
+-- Restauração só abre o modo: o slot continua reservado à conta original e exige novo convite.
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+select count(*) as _ from convert_to_solo() \gset
+select count(*) as _ from restore_couple() \gset
+select create_invite('RETORNA-A1') as _ \gset
+do $$ begin
+  assert (select mode = 'COUPLE' and solo_owner_id is null from couples), 'FALHOU: dona B não restaurou Casal';
+  assert (select count(*) from couple_members) = 1, 'FALHOU: restauração reativou par sem convite';
+  begin
+    update couples set mode = 'SOLO', solo_owner_id = 'B';
+    raise exception 'FALHOU: REST converteu Casal sem revogar vínculo';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"99999999-0000-4000-8000-000000000009","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  begin
+    perform join_couple('RETORNA-A1');
+    raise exception 'FALHOU: conta nova assumiu privados históricos de A';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+select * from join_couple('RETORNA-A1') \gset
+do $$ begin
+  assert (select my_partner_id()) = 'A', 'FALHOU: conta histórica não voltou ao próprio slot';
+  assert not exists (select 1 from transactions where id = 'abab4444-0000-4000-8000-000000000001'), 'FALHOU: retorno abriu privado de B';
+end $$;
+select count(*) as _ from convert_to_solo() \gset
+do $$ begin
+  assert (select mode = 'SOLO' and solo_owner_id = 'A' from couples), 'FALHOU: A não virou dono Solo';
+  assert not exists (select 1 from tasks where id = 'abab1111-0000-4000-8000-000000000001'), 'FALHOU: Solo de A abriu tarefa privada de B';
+  assert not exists (select 1 from transactions where id = 'abab4444-0000-4000-8000-000000000001'), 'FALHOU: Solo de A abriu finanças privadas de B';
+end $$;
+reset role;
+select pg_temp.assert_solo_entity_snapshot() as _ \gset
+\echo 'ok  Casal para Solo: A ou B preserva todas as entidades; revoga acesso, convites e push do par; REST não reverte e retorno preserva autoria'
+
+-- ---------------------------------------------------------------- 6l. O vínculo histórico não impede um Solo novo de B, sem remapear para A
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+select create_couple('space-solo-b-new','50_50',5000,'SOLO','B') as _ \gset
+insert into profiles (id,couple_id,display_name,pronoun,energy) values ('B','space-solo-b-new','B Solo','ela','MEDIUM');
+insert into tasks (id,couple_id,created_by,assigned_to,title,effort,status,visible_to_partner)
+values ('abab1111-0000-4000-8000-000000000002','space-solo-b-new','B','B','Continuar como B','QUICK_5M','PENDING',false);
+do $$ begin
+  assert my_partner_id() = 'B' and my_couple_id() = 'space-solo-b-new', 'FALHOU: novo Solo remapeou B ou bloqueou vínculo ativo novo';
+  assert (select solo_owner_id from couples) = 'B', 'FALHOU: novo Solo não guardou dona B';
+  assert exists (select 1 from tasks where created_by = 'B' and assigned_to = 'B'), 'FALHOU: novo Solo mudou autoria B';
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"99999999-0000-4000-8000-000000000009","role":"authenticated"}', true) as _ \gset
+select create_couple('space-couple-b-new','50_50',5000,'COUPLE','B') as _ \gset
+do $$ begin
+  assert my_partner_id() = 'B' and my_couple_id() = 'space-couple-b-new', 'FALHOU: Casal retomado antes da nuvem remapeou B';
+  assert (select mode = 'COUPLE' and solo_owner_id is null from couples), 'FALHOU: Casal criado por B guardou modo ou dono incorreto';
+  begin
+    perform create_couple('invalid-owner','50_50',5000,'COUPLE','C');
+    raise exception 'FALHOU: espaço aceitou dono inválido';
+  exception when invalid_parameter_value then null;
+  end;
+end $$;
+reset role;
+\echo 'ok  Solo B: cria espaço e retoma Casal antes da primeira nuvem sem remapear; vínculo histórico fica reservado'
+
+-- ---------------------------------------------------------------- 6m. Um perfil nunca enviado não permite abrir privados históricos por INSERT
+reset role;
+delete from profiles where couple_id = 'space-solo' and id = 'A';
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"ffffffff-0000-4000-8000-00000000000f","role":"authenticated"}', true) as _ \gset
+select count(*) as _ from convert_to_solo() \gset
+do $$ begin
+  assert not exists (select 1 from transactions where id = 'eeee2222-0000-4000-8000-000000000001'), 'FALHOU: conversão expôs pessoal sem perfil';
+  begin
+    insert into profiles (id,couple_id,display_name,pronoun,energy,share_personal_finances)
+    values ('A','space-solo','forjado','ele','FULL',true);
+    raise exception 'FALHOU: INSERT de perfil ausente abriu privados históricos';
+  exception when insufficient_privilege then null;
+  end;
+  assert not exists (select 1 from profiles where id = 'A'), 'FALHOU: criou perfil do membro revogado';
+  assert not exists (select 1 from transactions where id = 'eeee2222-0000-4000-8000-000000000001'), 'FALHOU: histórico privado vazou após INSERT';
+end $$;
+reset role;
+\echo 'ok  perfil histórico ausente: INSERT do par não abre finanças pessoais de quem foi revogado'
+
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;
 set local role anon;
@@ -811,6 +1027,16 @@ do $$ begin
   begin
     perform create_couple('x', '50_50', 5000, 'SOLO');
     raise exception 'FALHOU: anon criou espaço Solo';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform convert_to_solo();
+    raise exception 'FALHOU: anon converteu espaço';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform restore_couple();
+    raise exception 'FALHOU: anon restaurou Casal';
   exception when insufficient_privilege then null;
   end;
 end $$;

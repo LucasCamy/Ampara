@@ -1,6 +1,7 @@
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildEmpty } from '../domain/seed'
+import { COLLECTIONS, type PartnerId } from '../domain/types'
 import { createVault, readData, unlockVault, type Vault } from './vault'
 
 vi.mock('../store/ui', async () => {
@@ -45,7 +46,234 @@ async function solo(remember = false) {
   return { ...session, dataStore, transact, storage }
 }
 
+async function coupleAs(who: PartnerId) {
+  const s = await solo(true)
+  const invite = await s.upgradeSoloToCouple(PASSWORD, { name: 'Marina', pronoun: 'ela' })
+  await s.lock('B')
+  await s.activate('B', invite, 'cha de hortela no jardim', true)
+  if (who === 'A') {
+    await s.lock('A')
+    await s.login('A', PASSWORD, true)
+  }
+  return s
+}
+
 describe('sessão com IndexedDB cifrado', () => {
+  it.each(['A', 'B'] as const)('converte o espaço inteiro para Solo de %s sem remapear registros e troca a chave do cofre', async (who) => {
+    const s = await coupleAs(who)
+    const password = who === 'A' ? PASSWORD : 'cha de hortela no jardim'
+    const other = who === 'A' ? 'B' : 'A'
+    const oldPassword = other === 'A' ? PASSWORD : 'cha de hortela no jardim'
+    s.transact((tx) => {
+      tx.put('comfortItems', { id: 'calma-par', ownerId: other, text: 'Registro original do par', createdAt: '2026-11-20T10:00:00Z', updatedAt: '2026-11-20T10:00:00Z' })
+      tx.put('profiles', { ...tx.get('profiles', who)!, monthlyBudgetCents: 81234, enabledModules: { cycle: true, shopping: false, goals: true } })
+    })
+    await s.flushSaves()
+    const oldVault = await s.storage.readStoredVault() as Vault
+    const oldKey = await unlockVault(oldVault, other, oldPassword)
+    const before = s.dataStore.get()
+    let backup = ''
+    await s.convertCoupleToSolo(password, (file) => { backup = file.content })
+    const after = s.dataStore.get()
+    for (const collection of COLLECTIONS.filter((c) => c !== 'couple')) expect(after[collection]).toEqual(before[collection])
+    expect(after.couple.couple).toMatchObject({ mode: 'SOLO', soloOwnerId: who, inviteCode: '' })
+    expect(after.coupleArchives).toHaveLength(1)
+    expect(after.coupleArchives?.[0]?.collections.couple).toEqual(before.couple)
+    expect(after.profiles[who]?.monthlyBudgetCents).toBe(81234)
+    expect(s.authStore.get()).toMatchObject({ who, remembered: true })
+    expect(s.authStore.get().people?.[other].status).toBe('absent')
+    const vault = await s.storage.readStoredVault() as Vault
+    expect(vault.people[other].wrapped).toBe('')
+    await expect(readData(vault, oldKey)).rejects.toBeTruthy()
+    expect(JSON.stringify(vault)).not.toContain('Registro original do par')
+    const { parseBackup } = await import('./vault')
+    const backedUp = parseBackup(backup)
+    const original = await readData(backedUp.vault, await unlockVault(backedUp.vault, who, password))
+    expect(original.couple.couple?.mode).toBe('COUPLE')
+    expect(original.comfortItems).toEqual(before.comfortItems)
+    await s.lock()
+    await expect(s.login(other, oldPassword, false)).rejects.toMatchObject({ code: 'NOT_ACTIVATED' })
+    await s.login(who, password, false)
+    expect(s.dataStore.get().coupleArchives?.[0]?.collections.comfortItems).toEqual(before.comfortItems)
+    // O mesmo par pode voltar sem trocar os ids, o orçamento ou as autorias.
+    await s.upgradeSoloToCouple(password, { name: before.profiles[other]!.displayName, pronoun: before.profiles[other]!.pronoun })
+    expect(s.dataStore.get().couple.couple).toMatchObject({ mode: 'COUPLE', soloOwnerId: null })
+    expect(s.authStore.get().people?.[other].status).toBe('invited')
+  })
+
+  it('senha incorreta e falha no download impedem a conversão e a chamada remota', async () => {
+    const s = await coupleAs('A')
+    const save = vi.fn()
+    const commit = vi.fn().mockResolvedValue({ solo_owner_id: 'A', updated_at: '2026-11-21T12:00:00Z' })
+    const original = await s.storage.readStoredVault()
+    await expect(s.convertCoupleToSolo('senha incorreta', save, commit)).rejects.toMatchObject({ code: 'BAD_CREDENTIALS' })
+    expect(save).not.toHaveBeenCalled()
+    expect(commit).not.toHaveBeenCalled()
+    await expect(s.convertCoupleToSolo(PASSWORD, () => { throw new Error('Download indisponível') }, commit)).rejects.toThrow('Download indisponível')
+    expect(commit).not.toHaveBeenCalled()
+    expect(await s.storage.readStoredVault()).toEqual(original)
+    expect(s.dataStore.get().couple.couple?.mode).toBe('COUPLE')
+  })
+
+  it('falha da nuvem mantém o cofre original e permite repetir a conversão', async () => {
+    const s = await coupleAs('A')
+    s.transact((tx) => tx.put('couple', { ...tx.get('couple', 'couple')!, spaceId: 'espaco-remoto' }))
+    await s.flushSaves()
+    const original = await s.storage.readStoredVault()
+    await expect(s.convertCoupleToSolo(PASSWORD, vi.fn())).rejects.toThrow('Reconecte a nuvem')
+    const save = vi.fn()
+    await expect(s.convertCoupleToSolo(PASSWORD, save, async () => { throw new Error('Sem conexão') })).rejects.toThrow('Sem conexão')
+    expect(save).toHaveBeenCalledOnce()
+    expect(await s.storage.readStoredVault()).toEqual(original)
+    expect(s.dataStore.get().couple.couple?.mode).toBe('COUPLE')
+    await s.convertCoupleToSolo(PASSWORD, vi.fn(), async () => ({ solo_owner_id: 'A', updated_at: '2026-11-21T12:00:00Z' }))
+    expect(s.dataStore.get().couple.couple).toMatchObject({ mode: 'SOLO', spaceId: 'espaco-remoto', soloOwnerId: 'A' })
+  })
+
+  it('preserva edição concorrente e o segredo da nuvem cifrado, sem incluir o segredo no backup', async () => {
+    const s = await coupleAs('B')
+    const password = 'cha de hortela no jardim'
+    await s.writeCloudSecret('refresh-token-privado')
+    let backup = ''
+    await s.convertCoupleToSolo(password, (file) => { backup = file.content }, async () => {
+      s.transact((tx) => tx.put('comfortItems', { id: 'novo', ownerId: 'B', text: 'Edição durante a conversão', createdAt: '2026-11-21T12:00:00Z', updatedAt: '2026-11-21T12:00:00Z' }))
+      return { solo_owner_id: 'B', updated_at: '2026-11-21T12:00:00Z' }
+    })
+    expect(await s.readCloudSecret()).toBe('refresh-token-privado')
+    expect(backup).not.toContain('refresh-token-privado')
+    expect(JSON.parse(backup).vault.people.B.cloud).toBeUndefined()
+    await s.lock()
+    await s.login('B', password, false)
+    expect(s.dataStore.get().comfortItems.novo?.text).toBe('Edição durante a conversão')
+    expect(await s.readCloudSecret()).toBe('refresh-token-privado')
+  })
+
+  it('bloqueio durante a preparação cancela a conversão sem reabrir a sessão', async () => {
+    const s = await coupleAs('A')
+    const commit = vi.fn()
+    await expect(s.convertCoupleToSolo(PASSWORD, () => {
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: 'ampara:auth:event', newValue: JSON.stringify({ type: 'lock' }) }))
+    }, commit)).rejects.toMatchObject({ code: 'BAD_CREDENTIALS' })
+    expect(commit).not.toHaveBeenCalled()
+    expect(s.authStore.get().status).toBe('locked')
+    const vault = await s.storage.readStoredVault() as Vault
+    const data = await readData(vault, await unlockVault(vault, 'A', PASSWORD))
+    expect(data.couple.couple?.mode).toBe('COUPLE')
+  })
+
+  it('falha local depois da confirmação remota não apaga o cofre e a repetição recupera a conversão', async () => {
+    const s = await coupleAs('A')
+    await s.flushSaves()
+    const before = await s.storage.readStoredVault()
+    const receipt = { solo_owner_id: 'A' as const, updated_at: '2026-11-21T12:00:00Z' }
+    const commit = vi.fn().mockResolvedValue(receipt)
+    vi.spyOn(s.storage, 'writeStoredVault').mockRejectedValueOnce(new Error('Disco cheio'))
+    await expect(s.convertCoupleToSolo(PASSWORD, vi.fn(), commit)).rejects.toThrow('Disco cheio')
+    expect(await s.storage.readStoredVault()).toEqual(before)
+    expect(s.dataStore.get().couple.couple?.mode).toBe('COUPLE')
+    await s.convertCoupleToSolo(PASSWORD, vi.fn(), commit)
+    expect(commit).toHaveBeenCalledTimes(2)
+    expect(s.dataStore.get().couple.couple?.mode).toBe('SOLO')
+    expect(s.dataStore.get().coupleArchives).toHaveLength(1)
+  })
+
+  it('finaliza a troca de chave mesmo se um pull já trouxe Solo depois de falhar o commit local', async () => {
+    const s = await coupleAs('A')
+    const { applySpaceMode } = await import('../domain/space')
+    const before = await s.storage.readStoredVault() as Vault
+    const oldKey = await unlockVault(before, 'A', PASSWORD)
+    const commit = vi.fn().mockResolvedValue({ solo_owner_id: 'A', updated_at: '2026-11-21T12:00:00Z' })
+    vi.spyOn(s.storage, 'writeStoredVault').mockRejectedValueOnce(new Error('Gravação interrompida'))
+    await expect(s.convertCoupleToSolo(PASSWORD, vi.fn(), commit)).rejects.toThrow('Gravação interrompida')
+    s.dataStore.set((cur) => applySpaceMode(cur, { mode: 'SOLO', soloOwnerId: 'A' }))
+    await s.flushSaves()
+    expect((await s.storage.readStoredVault())?.people.B.status).toBe('absent')
+    await s.convertCoupleToSolo(PASSWORD, vi.fn(), commit)
+    const stored = await s.storage.readStoredVault() as Vault
+    await expect(readData(stored, oldKey)).rejects.toBeTruthy()
+    expect((await readData(stored, await unlockVault(stored, 'A', PASSWORD))).couple.couple?.mode).toBe('SOLO')
+  })
+
+  it('uma aba com a chave antiga não sobrescreve um cofre que outra aba converteu', async () => {
+    const s = await coupleAs('B')
+    const { createSingleVault } = await import('./vault')
+    const original = s.dataStore.get()
+    const soloData = { ...original, couple: { couple: { ...original.couple.couple!, mode: 'SOLO' as const, soloOwnerId: 'A' as const, inviteCode: '' } } }
+    const external = await createSingleVault('A', { A: { name: 'Lucas', pronoun: 'ele' }, B: { name: 'Marina', pronoun: 'ela' } }, PASSWORD, soloData, 1000)
+    await s.storage.writeStoredVault(external.vault)
+    s.transact((tx) => tx.put('profiles', { ...tx.get('profiles', 'B')!, monthlyBudgetCents: 99999 }))
+    await s.flushSaves()
+    expect(s.authStore.get().status).toBe('locked')
+    expect(await s.storage.readStoredVault()).toEqual(external.vault)
+    const recovered = await readData(external.vault, await unlockVault(external.vault, 'A', PASSWORD))
+    expect(recovered.couple.couple?.mode).toBe('SOLO')
+    expect(recovered.profiles.B?.monthlyBudgetCents).not.toBe(99999)
+  })
+
+  it('uma aba do dono com a mesma chave respeita Solo remoto e preserva o arquivo cifrado', async () => {
+    const s = await coupleAs('A')
+    const { writeData } = await import('./vault')
+    const before = await s.storage.readStoredVault() as Vault
+    const k = await unlockVault(before, 'A', PASSWORD)
+    const original = s.dataStore.get()
+    const archive = { ownerId: 'A' as const, savedAt: '2026-11-21T12:00:00Z', collections: Object.fromEntries(COLLECTIONS.map((c) => [c, original[c]])) }
+    const external = await writeData(before, k, { ...original, couple: { couple: { ...original.couple.couple!, mode: 'SOLO', soloOwnerId: 'A', inviteCode: '' } }, coupleArchives: [archive as unknown as NonNullable<typeof original.coupleArchives>[number]] })
+    await s.storage.writeStoredVault(external)
+    s.transact((tx) => tx.put('couple', { ...tx.get('couple', 'couple')!, ratioABps: 7200 }))
+    await s.flushSaves()
+    const stored = await s.storage.readStoredVault() as Vault
+    const data = await readData(stored, k)
+    expect(data.couple.couple).toMatchObject({ mode: 'SOLO', soloOwnerId: 'A', ratioABps: 7200 })
+    expect(s.dataStore.get().couple.couple?.mode).toBe('SOLO')
+    expect(data.coupleArchives).toEqual([archive])
+    expect(data.outbox.filter((entry) => entry.entityType === 'couple').every((entry) => (entry.payload as { mode: string }).mode === 'SOLO')).toBe(true)
+    expect(stored.people.B.status).toBe('absent')
+  })
+
+  it('uma aba Solo antiga não apaga o convite depois da retomada em outra aba', async () => {
+    const s = await solo()
+    const { reinvite, writeData } = await import('./vault')
+    const before = await s.storage.readStoredVault() as Vault
+    const k = await unlockVault(before, 'A', PASSWORD)
+    const invitation = await reinvite(before, 'A', PASSWORD, 'B')
+    const original = s.dataStore.get()
+    const external = await writeData(invitation.vault, k, { ...original, couple: { couple: { ...original.couple.couple!, mode: 'COUPLE', soloOwnerId: null, inviteCode: invitation.invite } } })
+    await s.storage.writeStoredVault(external)
+    s.transact((tx) => tx.put('profiles', { ...tx.get('profiles', 'A')!, monthlyBudgetCents: 45000 }))
+    await s.flushSaves()
+    const stored = await s.storage.readStoredVault() as Vault
+    expect((await readData(stored, k)).couple.couple?.mode).toBe('COUPLE')
+    expect((await readData(stored, k)).couple.couple?.inviteCode).toBe(invitation.invite)
+    expect(stored.people.B.status).toBe('invited')
+    expect(stored.people.B.wrapped).toBe(external.people.B.wrapped)
+    expect(s.dataStore.get().profiles.A?.monthlyBudgetCents).toBe(45000)
+  })
+
+  it('sessão lembrada antiga do par não abre o Solo depois de reiniciar o app', async () => {
+    const s = await coupleAs('A')
+    const before = await s.storage.readStoredVault() as Vault
+    const oldKey = await unlockVault(before, 'B', 'cha de hortela no jardim')
+    await s.convertCoupleToSolo(PASSWORD, vi.fn())
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open('ampara-auth', 1)
+      req.onerror = () => reject(req.error)
+      req.onsuccess = () => {
+        const db = req.result
+        const tx = db.transaction('sessions', 'readwrite')
+        tx.objectStore('sessions').put({ who: 'B', key: oldKey, expiresAt: Date.now() + 60_000 }, 'current')
+        tx.oncomplete = () => { db.close(); resolve() }
+        tx.onerror = () => { db.close(); reject(tx.error) }
+      }
+    })
+    vi.resetModules()
+    const next = await import('./session')
+    await next.startAuth()
+    expect(next.authStore.get()).toMatchObject({ status: 'locked', who: null, remembered: false })
+    const { dataStore } = await import('../store/data')
+    expect(dataStore.get().couple.couple?.mode).toBe('COUPLE')
+    expect(next.authStore.get().people?.B.status).toBe('absent')
+  })
+
   it('Solo abre direto, sem convite nem dados de exemplo; senha fica só em memória', async () => {
     const s = await solo()
     expect(s.authStore.get()).toMatchObject({ status: 'unlocked', who: 'A', welcomeInvite: null, remembered: false })

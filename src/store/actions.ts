@@ -114,7 +114,7 @@ export function saveTask(input: TaskInput, id?: string): string | null {
   if (!input.title.trim() || (input.dueDate != null && (!isDateKey(input.dueDate) || toDateKey(parseDateKey(input.dueDate)) !== input.dueDate)) || (id && (!prev || !canViewTask(prev, who)))) return null
   const solo = state.couple.couple?.mode === 'SOLO'
   const dest = solo ? 'ME' : input.dest
-  const assignedTo = dest === 'US' ? null : dest === 'ME' ? who : otherPartner(who)
+  const assignedTo = solo && prev ? prev.assignedTo : dest === 'US' ? null : dest === 'ME' ? who : otherPartner(who)
   const stepIds = new Set<string>()
   const steps = (input.steps ?? prev?.steps ?? [])
     .filter((step) => step.text.trim())
@@ -135,7 +135,7 @@ export function saveTask(input: TaskInput, id?: string): string | null {
     status: prev?.status ?? 'PENDING',
     dueDate: input.dueDate !== undefined ? input.dueDate : input.when === 'TODAY' ? t : input.when === 'TOMORROW' ? addDays(t, 1) : null,
     dueTime: prev?.dueTime ?? null,
-    visibleToPartner: solo ? false : dest === 'ME' ? !input.private : true,
+    visibleToPartner: solo && prev ? prev.visibleToPartner : solo ? false : dest === 'ME' ? !input.private : true,
     sentBy: prev && prev.assignedTo === assignedTo ? prev.sentBy : dest === 'PARTNER' ? who : null,
     completedAt: prev?.completedAt ?? null,
     completedBy: prev?.completedBy ?? null,
@@ -458,10 +458,11 @@ export function saveRoutine(input: RoutineInput, id?: string): string | null {
 }
 
 export function saveEvent(input: EventInput, id?: string): string | null {
-  const draft: EventInput = dataStore.get().couple.couple?.mode === 'SOLO' ? { ...input, owner: 'ME' } : input
-  if (hasErrors(validateEvent(draft))) return null
   const prev = id ? editableEvent(id) : undefined
   if (id && !prev) return null
+  const solo = dataStore.get().couple.couple?.mode === 'SOLO'
+  const draft: EventInput = solo ? { ...input, owner: prev?.ownerId === null ? 'US' : 'ME' } : input
+  if (hasErrors(validateEvent(draft))) return null
   const ev = buildEvent(draft, viewer(), uuid(), nowIso(), prev ?? undefined)
   const undo = transact((tx) => tx.put('events', ev))
   ui.toast(`${prev ? 'Compromisso atualizado' : 'Compromisso salvo'} · ${dayMonth(ev.date)} das ${ev.start} às ${ev.end}`, { undo })

@@ -38,10 +38,19 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
    o fallback no localStorage contém apenas o cofre cifrado. Falhas temporárias não fazem uma cópia antiga do
    IDB sobrescrever o fallback mais novo. O store `kv` guarda somente marcadores não sensíveis do aparelho.
    Apagar os dados limpa ambos os stores e o fallback; uma limpeza pendente impede reaparecerem após uma falha.
-8. **Modo Solo:** usa a mesma cifra e política de senha do Casal, com A ativo e B ausente. Não gera convite no
-   cadastro. A promoção para Casal exige a senha de A, cria o slot B por convite e preserva os registros, o
-   orçamento e as preferências de A. Cofres antigos sem `mode` continuam sendo Casal. Após desbloquear, o app
+8. **Modo Solo:** usa a mesma cifra e política de senha do Casal. `soloOwnerId` mantém A ou B como dona do
+   espaço sem remapear autorias; Solo antigo sem o campo equivale a A. Não gera convite no cadastro. A promoção
+   para Casal exige a senha de quem usa Solo e preserva registros, orçamento e preferências. Se há histórico do
+   par, o convite mantém a mesma pessoa e os nomes originais. Cofres antigos sem `mode` continuam sendo Casal. Após desbloquear, o app
    pede armazenamento persistente ao navegador quando disponível; a negativa não impede o acesso.
+9. **Casal para Solo:** exige a senha atual e inicia o download de um backup `.ampara` antes de mudar o acesso.
+   O cofre recebe uma chave nova, reembrulhada apenas para quem converteu; o segredo da própria nuvem é
+   recifrado e o slot do par deixa de abrir o cofre novo. Escritas entre abas são serializadas com Web Locks
+   onde disponível; uma aba com chave antiga não pode recifrar o cofre novo com a chave vencida. Os ids,
+   autorias, escopos e valores não mudam. Um snapshot das coleções fica em `coupleArchives`, dentro do conteúdo
+   cifrado, fora de `COLLECTIONS` e do outbox. Ele preserva inclusive registros locais que a limpeza de
+   autorização remove das coleções ativas. Esse arquivo local só viaja em backups cifrados, sem criar novas
+   permissões de leitura ou restaurar automaticamente itens antigos na interface.
 
 ## Nuvem (um celular para cada)
 
@@ -84,12 +93,21 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 10. **Reposição de estoque:** a tarefa automática de um remédio privado nasce privada; desligar a rede de apoio
     ou editar o remédio sem compartilhamento recolhe a visibilidade das reposições automáticas ligadas a ele
     no mesmo Desfazer. Tarefas enviadas explicitamente ao par preservam a decisão de compartilhar.
+11. **Mudança do espaço inteiro:** `convert_to_solo` altera modo e dono em uma transação, revoga a membership
+    do par e remove seus convites e inscrições push, preservando todas as tabelas de registros. A membership
+    revogada conserva o vínculo histórico com `auth.uid()`: ela continua protegendo o perfil privado do par,
+    mas não dá leitura, escrita nem acesso às RPCs do espaço. REST não altera modo ou dono; uma fila antiga
+    não consegue desfazer a conversão. `restore_couple` é restrita à pessoa dona ativa; um convite posterior
+    só reativa o mesmo usuário vinculado ao slot histórico. As RPCs de convite, entrada e push usam o mesmo
+    lock do espaço para não recriar acessos depois da conversão. A retomada não reativa a outra pessoa sem
+    convite. Em outro aparelho, modo e dono vindos do servidor prevalecem sobre o relógio local. Sem conexão,
+    um espaço que já usa nuvem não é convertido apenas neste aparelho.
 
 ## Backup cifrado
 
 - O arquivo `.ampara` é o próprio cofre (PBKDF2 600k + AES-GCM 256), sem decifrar nada: sem a senha ele não abre.
   Exportar pede a senha de novo. O arquivo não tem senha nem dado do casal em texto claro (coberto por teste e E2E);
-  só os nomes do cabeçalho, como no cofre local.
+  apenas os metadados do cabeçalho (nomes, estado dos acessos e modo), como no cofre local.
 - Restaurar só substitui o cofre deste aparelho depois que a senha abre o cofre do arquivo; com dados no aparelho,
   pede confirmação explícita. Depois a pessoa entra normalmente (sessão lembrada e tentativas são zeradas).
 - O arquivo NÃO leva a sessão da nuvem (refresh token): quem achar o arquivo e souber a senha abre os dados daquele
@@ -168,7 +186,11 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 - **Limite de tentativas no cliente** pode ser apagado por quem tem acesso ao armazenamento; a defesa real contra
   força bruta offline é o custo do PBKDF2 (600 mil iterações por tentativa).
 - **Troca de senha** reembrulha a DEK, mas não a troca: uma cópia antiga do cofre continua abrindo com a senha
-  antiga. Rotacionar a DEK exige as duas senhas.
+   antiga. Rotacionar a DEK mantendo os dois acessos exige as duas senhas; a conversão para Solo cria uma DEK
+   nova apenas para quem permanece.
+- **Cópias anteriores à conversão:** suspender o acesso online não apaga cópias offline ou backups que já
+  estavam em outro aparelho. Elas conservam os dados e as permissões que existiam quando foram criadas.
+  Ao sincronizar, o aparelho revogado desconecta da nuvem e bloqueia a sessão local.
 - **Se as duas pessoas esquecerem a senha**, os dados deste aparelho não podem ser recuperados (por desenho).
 - **Nuvem validada num Supabase local** (Docker com as imagens oficiais: `npm run db:check` e `npm run e2e:local`).
   No projeto de produção, rode `supabase/tests/validate.sql` no SQL Editor depois de aplicar o schema.

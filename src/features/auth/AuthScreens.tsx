@@ -7,6 +7,7 @@ import { enterFromCloud, useCloud } from '../../sync/cloud'
 import type { PartnerId, Pronoun, SpaceMode, SplitMode } from '../../domain/types'
 import { ThemeToggle } from '../shell/TopBar'
 import { Bone } from '../../components/Skeleton'
+import { Toaster } from '../../components/Toaster'
 import { RestoreForm } from '../settings/BackupSection'
 
 function Shell({ children }: { children: ReactNode }) {
@@ -21,6 +22,7 @@ function Shell({ children }: { children: ReactNode }) {
       <main id="conteudo" className="mx-auto max-w-[480px] px-4 pt-4 pb-12">
         {children}
       </main>
+      <Toaster />
     </div>
   )
 }
@@ -415,7 +417,8 @@ export function WelcomeScreen() {
 export function LoginScreen() {
   const people = useAuth((s) => s.people)
   const preselect = useAuth((s) => s.preselect)
-  const [who, setWho] = useState<PartnerId>(preselect ?? 'A')
+  const defaultWho: PartnerId = people?.A.status === 'absent' && people.B.status !== 'absent' ? 'B' : 'A'
+  const [who, setWho] = useState<PartnerId>(preselect ?? defaultWho)
   useEffect(() => {
     if (preselect) setWho(preselect)
   }, [preselect])

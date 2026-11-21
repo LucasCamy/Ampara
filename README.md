@@ -24,6 +24,14 @@ Abra `http://localhost:5173`. No primeiro acesso escolha **Só para mim** ou **P
   aparelho exige a senha dela. Espaços antigos continuam no modo Casal.
 
 Em **Ajustes > Espaço**, quem começou Solo pode convidar alguém com a senha atual, preservando os dados.
+
+Para transformar o espaço inteiro de Casal em Solo, use **Ajustes > Casal > Usar este espaço em Solo**.
+Confirme sua senha e toque em **Baixar backup e mudar para Solo**. O app inicia o download de um backup
+`.ampara`, mantém os registros com as autorias e privacidade originais e suspende o acesso online do par.
+Quem converteu mantém sua conta e a sincronização entre os próprios aparelhos. Se o espaço já usa nuvem,
+a conversão exige conexão. Depois é possível convidar o mesmo par novamente. Registros privados do par
+continuam privados; cópias offline anteriores em outros aparelhos não são apagadas. O arquivo histórico
+local cifrado acompanha os backups, sem ser enviado como novos registros pela sincronização.
 Ciclo, Compras e Caixinhas podem ser ligados ou desligados por pessoa sem apagar os registros.
 
 O banco local é o IndexedDB **`ampara-local` v1**: `vault.primary` guarda o cofre AES-GCM cifrado e `kv`

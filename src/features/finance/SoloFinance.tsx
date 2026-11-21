@@ -1,13 +1,16 @@
-import { CircleCheck, Pencil, ReceiptText } from 'lucide-react'
+import { ArrowRightLeft, CircleCheck, Pencil, ReceiptText } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import { CATEGORIES } from '../../components/categories'
 import { Button, cx, EmptyState, SectionHeader, StatusBadge } from '../../components/ui'
-import { formatCents } from '../../domain/format'
+import { firstName, formatCents } from '../../domain/format'
+import { shareOf } from '../../domain/finance'
 import { isOverdue, monthTitle } from '../../domain/ledger'
 import { visibleTransactions } from '../../domain/privacy'
 import { useData } from '../../store/data'
 import { MAX_MONTHLY_BUDGET_CENTS, quickPay, setMonthlyBudgetCents } from '../../store/financeActions'
 import { usePeople } from '../../store/hooks'
+import type { PartnerId, Profile, SplitRule, Transaction } from '../../domain/types'
+import { otherPartner } from '../../domain/types'
 import { ui } from '../../store/ui'
 import { GoalsSection, MoneyInput } from './GoalsSection'
 import { RulesSection } from './RulesSection'
@@ -18,21 +21,26 @@ import { DueBadge, SeriesTag, TxHeader } from './TransactionParts'
 export function SoloFinance({ month, today }: { month: string; today: string }) {
   const { viewer, profiles, me } = usePeople()
   const transactions = useData((s) => s.transactions)
-  const own = useMemo(
-    () => visibleTransactions(Object.values(transactions), viewer, profiles).filter((tx) => tx.scope === 'PERSONAL' && tx.createdBy === viewer),
+  const visible = useMemo(
+    () => visibleTransactions(Object.values(transactions), viewer, profiles),
     [transactions, viewer, profiles],
   )
-  const inMonth = own.filter((tx) => tx.competenceDate.slice(0, 7) === month)
+  const accessible = useMemo(() => visible.filter((tx) => tx.scope === 'COUPLE' || tx.createdBy === viewer), [visible, viewer])
+  const partnerHistory = visible.filter((tx) => tx.scope === 'PERSONAL' && tx.createdBy !== viewer && tx.competenceDate.slice(0, 7) === month).sort((a, b) => b.competenceDate.localeCompare(a.competenceDate))
+  const summaryTransactions = useMemo(() => accessible.map((tx) => tx.scope === 'COUPLE' && tx.type === 'EXPENSE' ? { ...tx, amountCents: shareOf(tx, viewer) } : tx), [accessible, viewer])
+  const hasSharedHistory = accessible.some((tx) => tx.scope === 'COUPLE')
+  const inMonth = accessible.filter((tx) => tx.competenceDate.slice(0, 7) === month)
   const bills = inMonth.filter((tx) => tx.type === 'EXPENSE' && tx.status === 'PREDICTED_DASHED').sort((a, b) => a.competenceDate.localeCompare(b.competenceDate))
-  const entries = inMonth.filter((tx) => tx.type !== 'SETTLEMENT' && tx.status === 'CONFIRMED_SOLID').sort((a, b) => b.competenceDate.localeCompare(a.competenceDate))
-  const realized = entries.filter((tx) => tx.type === 'EXPENSE').reduce((total, tx) => total + tx.amountCents, 0)
-  const predicted = bills.reduce((total, tx) => total + tx.amountCents, 0)
+  const entries = inMonth.filter((tx) => tx.status === 'CONFIRMED_SOLID').sort((a, b) => b.competenceDate.localeCompare(a.competenceDate))
+  const monthSummary = summaryTransactions.filter((tx) => tx.competenceDate.slice(0, 7) === month && tx.type === 'EXPENSE')
+  const realized = monthSummary.filter((tx) => tx.status === 'CONFIRMED_SOLID').reduce((total, tx) => total + tx.amountCents, 0)
+  const predicted = monthSummary.filter((tx) => tx.status === 'PREDICTED_DASHED').reduce((total, tx) => total + tx.amountCents, 0)
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start" data-testid="solo-finance">
       <section className="module p-4 sm:p-5 lg:col-start-1 lg:row-start-1" aria-labelledby="solo-month-summary" data-testid="personal-total">
         <SectionHeader id="solo-month-summary" title="Resumo do mês" rest={`· ${monthTitle(month, today.slice(0, 7))}`} />
-        <p className="mb-3 text-[13px] text-muted">Seus gastos neste mês.</p>
+        <p className="mb-3 text-[13px] text-muted">{hasSharedHistory ? 'Seus gastos pessoais e sua parte original nos registros compartilhados. Acertos não somam aos gastos.' : 'Seus gastos neste mês.'}</p>
         <dl className="flex flex-col gap-2">
           <div className="ledger-solid flex flex-wrap items-center justify-between gap-3 rounded-[14px] px-3 py-3">
             <dt><StatusBadge kind="ok">Realizado</StatusBadge></dt>
@@ -59,6 +67,7 @@ export function SoloFinance({ month, today }: { month: string; today: string }) 
                   <DueBadge tx={tx} today={today} />
                   <SeriesTag tx={tx} />
                 </div>
+                {tx.scope === 'COUPLE' ? <SharedOrigin tx={tx} profiles={profiles} /> : null}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button size="compact" variant="primary" icon={CircleCheck} onClick={() => quickPay(tx.id, viewer)} data-testid="pay-me">Paguei</Button>
                   <Button size="compact" onClick={() => ui.openSheet('pay', { id: tx.id })}>Outro valor</Button>
@@ -80,15 +89,25 @@ export function SoloFinance({ month, today }: { month: string; today: string }) 
           <EmptyState icon={ReceiptText} title="Nenhum lançamento realizado neste mês." text="Seus gastos pagos aparecem aqui. As contas previstas ficam acima." />
         ) : (
           <ul className="flex flex-col gap-2" data-testid="personal-list">
-            {entries.map((tx) => (
+            {entries.map((tx) => tx.type === 'SETTLEMENT' ? (
+              <li key={tx.id} className="ledger-ok rounded-[18px] bg-surface p-3" data-testid="settlement-row" data-title={tx.description}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <StatusBadge kind="ok"><ArrowRightLeft size={15} aria-hidden /> Acerto registrado</StatusBadge>
+                  <span className="font-data font-semibold whitespace-nowrap text-ink">{formatCents(tx.amountCents)}</span>
+                </div>
+                <p className="mt-2 text-[13px] text-muted">{firstName(profiles[tx.paidBy].displayName)} transferiu para {firstName(profiles[otherPartner(tx.paidBy)].displayName)} em <span className="font-data">{tx.competenceDate.slice(8, 10)}/{tx.competenceDate.slice(5, 7)}</span>.</p>
+                <p className="mt-1 text-[13px] text-muted">Registrado por {firstName(profiles[tx.createdBy].displayName)} · histórico compartilhado, fora das despesas.</p>
+              </li>
+            ) : (
               <li key={tx.id} className="ledger-solid rounded-[18px] bg-surface p-3" data-testid="personal-row" data-title={tx.description}>
                 <TxHeader tx={tx} />
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-muted">
                   <StatusBadge kind="ok">{tx.type === 'INCOME' ? 'Recebido' : 'Pago'}</StatusBadge>
                   <span>{CATEGORIES[tx.category].label}</span>
-                  <span className="font-data">{tx.competenceDate.slice(8, 10)}/{tx.competenceDate.slice(5, 7)} · seu</span>
+                  <span className="font-data">{tx.competenceDate.slice(8, 10)}/{tx.competenceDate.slice(5, 7)} · {tx.scope === 'COUPLE' ? 'compartilhado' : 'seu'}</span>
                   <SeriesTag tx={tx} />
                 </div>
+                {tx.scope === 'COUPLE' ? <SharedOrigin tx={tx} profiles={profiles} /> : null}
               </li>
             ))}
           </ul>
@@ -96,10 +115,46 @@ export function SoloFinance({ month, today }: { month: string; today: string }) 
       </section>
 
       <div className="lg:col-start-1 lg:row-start-2">
-        <SpendingSummary transactions={own} month={month} current={today.slice(0, 7)} tone={viewer === 'A' ? 'a' : 'b'} whose="seus" testId="spend-personal" />
+        <SpendingSummary transactions={summaryTransactions} month={month} current={today.slice(0, 7)} tone={viewer === 'A' ? 'a' : 'b'} whose={hasSharedHistory ? 'seus e sua parte compartilhada' : 'seus'} testId="spend-personal" />
       </div>
       <div className="lg:col-start-1 lg:row-start-3"><RulesSection scope="PERSONAL" /></div>
       <div className="lg:col-start-2 lg:row-start-3"><GoalsSection /></div>
+      {partnerHistory.length ? (
+        <section aria-labelledby="partner-finance-history" className="lg:col-start-2 lg:row-start-4" data-testid="partner-finance-history">
+          <SectionHeader id="partner-finance-history" title="Histórico pessoal compartilhado" />
+          <p className="mb-3 text-[13px] text-muted">Lançamentos que o outro perfil escolheu compartilhar. Ficam fora do seu resumo e do teto mensal.</p>
+          <ul className="flex flex-col gap-2">
+            {partnerHistory.map((tx) => (
+              <li key={tx.id} className={cx('rounded-[18px] bg-surface p-3', tx.status === 'CONFIRMED_SOLID' ? 'ledger-solid' : 'ledger-dashed')} data-title={tx.description}>
+                <TxHeader tx={tx} />
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-muted">
+                  <StatusBadge kind={tx.status === 'CONFIRMED_SOLID' ? 'ok' : 'pending'}>{tx.status === 'PREDICTED_DASHED' ? 'Previsto' : tx.type === 'INCOME' ? 'Recebido' : 'Pago'}</StatusBadge>
+                  <span>{CATEGORIES[tx.category].label}</span>
+                  <span className="font-data">{tx.competenceDate.slice(8, 10)}/{tx.competenceDate.slice(5, 7)}</span>
+                </div>
+                <p className="mt-2 text-[13px] text-muted">Pessoal de {firstName(profiles[tx.createdBy].displayName)} · {tx.status === 'PREDICTED_DASHED' ? 'pagamento previsto por' : 'pago por'} {firstName(profiles[tx.paidBy].displayName)}.</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  )
+}
+
+const ORIGINAL_SPLIT: Record<SplitRule, string> = {
+  '50_50': 'Divisão original meio a meio',
+  PROPORTIONAL: 'Divisão proporcional original',
+  FULL_FOR_PARTNER: 'Valor destinado ao par na divisão original',
+  CUSTOM: 'Divisão personalizada original',
+}
+
+/** Valores registrados prevalecem sobre a proporção atual do espaço, sem reatribuir o histórico. */
+function SharedOrigin({ tx, profiles }: { tx: Transaction; profiles: Record<PartnerId, Profile> }) {
+  return (
+    <div className="mt-2 text-[13px] text-muted" data-testid="shared-origin">
+      <p>Compartilhado · criado por {firstName(profiles[tx.createdBy].displayName)} · {tx.status === 'PREDICTED_DASHED' ? 'pagamento previsto por' : 'pago por'} {firstName(profiles[tx.paidBy].displayName)}.</p>
+      <p className="mt-1">{tx.splitRule ? ORIGINAL_SPLIT[tx.splitRule] : 'Divisão original'}: {firstName(profiles.A.displayName)} <span className="font-data whitespace-nowrap">{formatCents(tx.partnerAShareCents)}</span> · {firstName(profiles.B.displayName)} <span className="font-data whitespace-nowrap">{formatCents(tx.partnerBShareCents)}</span>.</p>
     </div>
   )
 }

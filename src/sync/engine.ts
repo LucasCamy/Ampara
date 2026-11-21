@@ -23,8 +23,26 @@ export const adapterName = () => (isCloudConnected() ? 'Supabase (nuvem)' : 'só
 
 let running = false
 let again = false
+let paused = 0
+const idleWaiters = new Set<() => void>()
+
+/** Mudanças de acesso esperam o envio em curso e não concorrem com outro lote. */
+export async function withSyncPaused<T>(run: () => Promise<T>): Promise<T> {
+  paused++
+  try {
+    if (running) await new Promise<void>((resolve) => idleWaiters.add(resolve))
+    return await run()
+  } finally {
+    paused--
+    if (!paused) void syncNow()
+  }
+}
 
 export async function syncNow() {
+  if (paused) {
+    again = true
+    return
+  }
   if (running) {
     again = true
     return
@@ -53,7 +71,9 @@ export async function syncNow() {
   } finally {
     running = false
     syncStore.set((s) => ({ ...s, syncing: false }))
-    if (again) {
+    for (const resolve of idleWaiters) resolve()
+    idleWaiters.clear()
+    if (again && !paused) {
       again = false
       void syncNow()
     }

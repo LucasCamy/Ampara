@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildEmpty } from '../domain/seed'
 import { canViewTask } from '../domain/tasks'
+import { otherPartner, type PartnerId } from '../domain/types'
 
 // ui.ts toca no document (tema); aqui basta quem está usando e o Toast
 const toast = vi.fn()
 vi.mock('./ui', async () => {
   const { createStore } = await import('./createStore')
-  return { uiStore: createStore({ viewer: 'B' }), ui: { toast: (...a: unknown[]) => toast(...a) } }
+  return { uiStore: createStore({ viewer: 'B' as PartnerId }), ui: { toast: (...a: unknown[]) => toast(...a) } }
 })
 
 const { dataStore } = await import('./data')
-const { addEvent, addExpense, addMedication, addRoutine, addTask, postponeTask, saveTask, sendTaskToPartner, setEnabledModule, saveMedication, setPartnerSupport, takeDose } = await import('./actions')
+const { uiStore } = await import('./ui')
+const { addEvent, addExpense, addMedication, addRoutine, addTask, postponeTask, saveEvent, saveTask, sendTaskToPartner, setEnabledModule, saveMedication, setPartnerSupport, takeDose } = await import('./actions')
 
 const lastToast = () => toast.mock.calls.at(-1) as [string, { undo?: () => void }]
 
 beforeEach(() => {
+  uiStore.set((state) => ({ ...state, viewer: 'B' }))
   dataStore.set(() => buildEmpty(new Date('2026-11-06T12:00:00Z')))
   toast.mockClear()
 })
@@ -195,6 +198,47 @@ describe('captura no modo Solo', () => {
 
 describe('editar e excluir', () => {
   const medInput = { name: 'Venvanse 30mg', dosage: '1 cápsula', times: ['08:00'], stock: '30', shareWithPartner: false }
+
+  it.each(['A', 'B'] as const)('editar tarefas e eventos compartilhados em Solo %s preserva donos e autoria do histórico', (viewer) => {
+    uiStore.set((state) => ({ ...state, viewer }))
+    const partner = otherPartner(viewer)
+    const taskId = addTask({ title: 'Tarefa conjunta original', dest: 'US', when: 'TODAY', effort: 'QUICK_5M' })!
+    const eventId = addEvent({ title: 'Compromisso conjunto original', date: '2026-11-20', start: '09:00', end: '10:00', owner: 'US', type: 'APPOINTMENT' })!
+    dataStore.set((state) => ({ ...state, couple: { couple: { ...state.couple.couple!, mode: 'SOLO', soloOwnerId: viewer } }, tasks: { ...state.tasks, [taskId]: { ...state.tasks[taskId]!, createdBy: partner, sentBy: partner } } }))
+    const originalTask = dataStore.get().tasks[taskId]!
+    const originalEvent = dataStore.get().events[eventId]!
+    expect(saveTask({ title: 'Título corrigido', dest: 'ME', when: 'TODAY', effort: 'FOCUS', private: true }, taskId)).toBe(taskId)
+    expect(dataStore.get().tasks[taskId]).toMatchObject({ assignedTo: null, createdBy: partner, sentBy: partner, visibleToPartner: true })
+    expect(dataStore.get().outbox.find((entry) => entry.entityId === taskId)?.payload).toMatchObject({ assignedTo: null, createdBy: partner })
+    lastToast()[1].undo!()
+    expect(dataStore.get().tasks[taskId]).toEqual(originalTask)
+    expect(saveEvent({ title: 'Horário corrigido', date: '2026-11-21', start: '09:00', end: '10:00', owner: 'ME', type: 'APPOINTMENT' }, eventId)).toBe(eventId)
+    expect(dataStore.get().events[eventId]).toMatchObject({ ownerId: null, kind: 'COUPLE' })
+    expect(dataStore.get().outbox.find((entry) => entry.entityId === eventId)?.payload).toMatchObject({ ownerId: null, kind: 'COUPLE' })
+    lastToast()[1].undo!()
+    expect(dataStore.get().events[eventId]).toEqual(originalEvent)
+  })
+
+  it.each(['A', 'B'] as const)('Solo %s mantém atribuição antiga de tarefa e recusa editar dados privados do par', (viewer) => {
+    uiStore.set((state) => ({ ...state, viewer }))
+    const partner = otherPartner(viewer)
+    const taskId = addTask({ title: 'Tarefa visível do par', dest: 'PARTNER', when: 'TODAY', effort: 'QUICK_5M' })!
+    uiStore.set((state) => ({ ...state, viewer: partner }))
+    const privateTask = addTask({ title: 'Tarefa privada do par', dest: 'ME', private: true, when: 'TODAY', effort: 'FOCUS' })!
+    const privateEvent = addEvent({ title: 'Evento privado do par', date: '2026-11-20', start: '09:00', end: '10:00', owner: 'ME', type: 'HEALTH' })!
+    uiStore.set((state) => ({ ...state, viewer }))
+    dataStore.set((state) => ({ ...state, couple: { couple: { ...state.couple.couple!, mode: 'SOLO', soloOwnerId: viewer } } }))
+    expect(saveTask({ title: 'Nome corrigido', dest: 'ME', when: 'TODAY', effort: 'FOCUS' }, taskId)).toBe(taskId)
+    expect(dataStore.get().tasks[taskId]).toMatchObject({ assignedTo: partner, createdBy: viewer, sentBy: viewer })
+    const before = dataStore.get()
+    expect(saveTask({ title: 'Não autorizado', dest: 'ME', when: 'TODAY', effort: 'FOCUS' }, privateTask)).toBeNull()
+    expect(saveEvent({ title: 'Não autorizado', date: '2026-11-21', start: '09:00', end: '10:00', owner: 'US', type: 'HEALTH' }, privateEvent)).toBeNull()
+    expect(dataStore.get()).toBe(before)
+    const createdTask = addTask({ title: 'Nova tarefa', dest: 'US', when: 'TODAY', effort: 'QUICK_5M' })!
+    const createdEvent = addEvent({ title: 'Novo evento', date: '2026-11-21', start: '09:00', end: '10:00', owner: 'US', type: 'HEALTH' })!
+    expect(dataStore.get().tasks[createdTask]).toMatchObject({ createdBy: viewer, assignedTo: viewer, visibleToPartner: false })
+    expect(dataStore.get().events[createdEvent]).toMatchObject({ ownerId: viewer, kind: 'HEALTH' })
+  })
 
   it('editar tarefa preserva conclusão, adiamentos, origem e passos concluídos depois de abrir a gaveta', () => {
     const id = addTask({ title: 'Organizar a mesa', dest: 'ME', when: 'INBOX', effort: 'QUICK_5M', steps: [{ id: 'uma-coisa', text: 'Pegar uma folha', done: false }] })!

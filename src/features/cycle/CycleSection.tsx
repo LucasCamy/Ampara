@@ -63,9 +63,9 @@ export function CycleSection() {
       mine,
       cycle: cycleToday(mine, settings, today),
       upcoming: upcomingPeriods(mine, settings, today, 3),
-      partnerView: partnerCycleView(Object.values(allLogs), allSettings, partnerId, viewer, today),
+      partnerView: isSolo ? { status: 'hidden' as const } : partnerCycleView(Object.values(allLogs), allSettings, partnerId, viewer, today),
     }
-  }, [allLogs, allSettings, viewer, partnerId, today])
+  }, [allLogs, allSettings, viewer, partnerId, today, isSolo])
 
   return (
     <section aria-labelledby="ciclo-title" data-testid="cycle-section">
@@ -306,9 +306,9 @@ export function CycleTodayCards() {
     return {
       settings,
       cycle,
-      partnerView: partnerCycleView(Object.values(allLogs), allSettings, partnerId, viewer, today),
+      partnerView: isSolo ? { status: 'hidden' as const } : partnerCycleView(Object.values(allLogs), allSettings, partnerId, viewer, today),
     }
-  }, [allLogs, allSettings, viewer, partnerId, today])
+  }, [allLogs, allSettings, viewer, partnerId, today, isSolo])
 
   const sensitive = d.cycle && (d.cycle.phase === 'PREMENSTRUAL' || d.cycle.phase === 'LATE' || (d.cycle.phase === 'MENSTRUAL' && d.cycle.day <= 2))
   const suggest = !!(sensitive && d.settings?.suggestCalm && me.energy === 'FULL' && !hidden[`${viewer}@${today}`])

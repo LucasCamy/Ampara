@@ -1,10 +1,10 @@
-import type { DataState, PartnerId, Pronoun } from '../domain/types'
+import type { DataState, PartnerId, Pronoun, SpaceMode } from '../domain/types'
 import { normalizeState } from '../domain/seed'
 import { deriveKek, fromB64, generateDek, inviteCode, normalizeInvite, open, PBKDF2_ITERATIONS, randomBytes, seal, toB64, unwrapDek, wrapDek, type Sealed } from './crypto'
 
 /**
  * Cofre local: os dados do casal ficam cifrados em repouso.
- * Só o cabeçalho (nomes para a tela de entrada) fica em texto claro.
+ * O cabeçalho tem nomes, estado dos acessos e modo; registros e segredos continuam cifrados.
  * Nenhuma senha ou hash de senha é gravado: a verificação é a própria abertura da DEK.
  */
 export interface PersonSlot {
@@ -21,6 +21,8 @@ export interface PersonSlot {
 
 export interface Vault {
   v: 1
+  /** Metadado não sensível para identificar uma aba anterior à mudança de modo. O conteúdo cifrado é a fonte. */
+  spaceMode?: SpaceMode
   createdAt: string
   /** incrementa a cada gravação: protege contra aba antiga sobrescrevendo dados novos */
   rev: number
@@ -152,13 +154,18 @@ export async function readData(vault: Vault, key: CryptoKey): Promise<DataState>
 /** Grava os dados cifrados e sincroniza os nomes do cabeçalho com os perfis */
 export async function writeData(vault: Vault, key: CryptoKey, data: DataState): Promise<Vault> {
   const people = { ...vault.people }
+  if (data.couple.couple?.mode === 'SOLO') {
+    const other: PartnerId = (data.couple.couple.soloOwnerId ?? 'A') === 'A' ? 'B' : 'A'
+    const slot = people[other]
+    people[other] = { name: slot.name, pronoun: slot.pronoun, status: 'absent', salt: '', iterations: slot.iterations, wrapped: '' }
+  }
   for (const id of ['A', 'B'] as PartnerId[]) {
     const p = data.profiles[id]
     if (p && (p.displayName !== people[id].name || p.pronoun !== people[id].pronoun)) {
       people[id] = { ...people[id], name: p.displayName, pronoun: p.pronoun }
     }
   }
-  return { ...vault, people, rev: vault.rev + 1, data: await seal(key, JSON.stringify(data), DATA_AAD) }
+  return { ...vault, spaceMode: data.couple.couple?.mode ?? 'COUPLE', people, rev: vault.rev + 1, data: await seal(key, JSON.stringify(data), DATA_AAD) }
 }
 
 /** Atraso progressivo após falhas: 5 tentativas livres, depois 30 s dobrando até 15 min */

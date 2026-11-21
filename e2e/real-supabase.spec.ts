@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { expect, goTab, noHorizontalOverflow, open, skipTour, test, goSettings } from './fixtures'
+import { expect, goTab, noHorizontalOverflow, open, skipTour, test, goSettings, quick, type Page } from './fixtures'
 
 /**
  * Dois aparelhos contra o Supabase real do Docker. Confere a interface E o que ficou gravado no Postgres.
@@ -143,4 +143,148 @@ test('Supabase real: cria conta, sobe os dados, pareia o segundo aparelho e resp
 
   expect(errorsB).toEqual([])
   await ctxB.close()
+})
+
+const SOLO_ENTITY_TABLES = ['profiles', 'tasks', 'events', 'medications', 'medication_logs', 'transactions', 'help_requests', 'nudges', 'cycle_settings', 'cycle_logs', 'shopping_items', 'special_dates', 'gift_ideas', 'mood_checkins', 'comfort_items', 'focus_sessions', 'savings_goals', 'recurrences'] as const
+
+function soloEntitySnapshot(couple: string): unknown {
+  const parts = SOLO_ENTITY_TABLES.map((table) => `select ${lit(table)} as name, coalesce(jsonb_agg(to_jsonb(t) - 'synced_at' order by t.id), '[]'::jsonb) as rows from ${table} t where t.couple_id = ${lit(couple)}`)
+  return JSON.parse(sql(`select jsonb_object_agg(name, rows) from (${parts.join(' union all ')}) entities`))
+}
+
+async function addReservedExpense(page: Page, description: string) {
+  await quick(page, 'expense')
+  const sheet = page.getByTestId('sheet-expense')
+  await sheet.getByTestId('expense-amount').fill('3900')
+  await sheet.getByTestId('expense-description').fill(description)
+  await sheet.getByRole('radio', { name: 'Só meu', exact: true }).click()
+  await sheet.getByTestId('expense-gift').click()
+  await sheet.getByTestId('expense-save').click()
+  await expect(sheet).toBeHidden()
+}
+
+async function enterRealCloud(page: Page, email: string, password: string, invite?: string) {
+  await skipTour(page)
+  await page.goto('/')
+  await page.getByTestId('setup-cloud').click()
+  if (invite) {
+    await page.getByTestId('cloud-entry-code').fill(invite)
+    await page.getByTestId('cloud-entry-password2').fill(password)
+  } else await page.getByTestId('cloud-entry-signin').click()
+  await page.getByTestId('cloud-entry-email').fill(email)
+  await page.getByTestId('cloud-entry-password').fill(password)
+  await page.getByTestId('cloud-entry-submit').click()
+  await expect(page.getByTestId('app')).toBeVisible({ timeout: 30_000 })
+}
+
+test('Supabase real: B converte o espaço para Solo, revoga A e retoma o mesmo par sem perder registros', async ({ browser, page, errors }, info) => {
+  void errors
+  test.setTimeout(180_000)
+  const run = `${info.project.name}-${Date.now()}`
+  const emailA = `converte-a-${run}@ampara.local`
+  const emailB = `converte-b-${run}@ampara.local`
+  const titleA = 'Reserva pessoal original de A'
+  const titleB = 'Reserva pessoal original de B'
+  const shoppingTitle = 'Compra preservada no Solo real'
+  const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({ viewport: page.viewportSize() ?? undefined, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' })))
+  const otherPageErrors: string[] = []
+  let couple = ''
+  let apiHeaders: Record<string, string> | null = null
+  let apiOrigin = ''
+  page.on('request', (request) => {
+    if (!request.url().endsWith('/rest/v1/rpc/my_membership')) return
+    const headers = request.headers()
+    if (!headers.authorization || !headers.apikey) return
+    apiHeaders = { authorization: headers.authorization, apikey: headers.apikey }
+    apiOrigin = new URL(request.url()).origin
+  })
+  try {
+    await open(page)
+    await addReservedExpense(page, titleA)
+    await goTab(page, 'nos')
+    await page.getByTestId('shopping-input').fill(shoppingTitle)
+    await page.getByTestId('shopping-input').press('Enter')
+    await goSettings(page, 'nuvem')
+    await page.getByTestId('cloud-email').fill(emailA)
+    await page.getByTestId('cloud-password').fill(PW_CLOUD_A)
+    await page.getByTestId('cloud-submit').click()
+    const cloud = page.getByTestId('cloud-section')
+    await expect(cloud).toContainText(`Conectado como ${emailA}`, { timeout: 20_000 })
+    const invite = (await cloud.locator('.font-data').filter({ hasText: /^[A-Z2-9]{5}-[A-Z2-9]{5}$/ }).textContent())?.trim() ?? ''
+    expect(invite).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/)
+    await expect(page.locator('[data-testid=sync-pill]:visible')).toHaveAttribute('data-state', 'ok', { timeout: 30_000 })
+    couple = sql(`select couple_id from couple_members where user_id = (select id from auth.users where email = ${lit(emailA)}) and revoked_at is null`)
+    expect(couple).not.toBe('')
+
+    const b = await contexts[0]!.newPage()
+    b.on('pageerror', (error) => otherPageErrors.push(String(error)))
+    await enterRealCloud(b, emailB, PW_B, invite)
+    await addReservedExpense(b, titleB)
+    await expect(b.locator('[data-testid=sync-pill]:visible')).toHaveAttribute('data-state', 'ok', { timeout: 30_000 })
+    const before = soloEntitySnapshot(couple)
+    await goSettings(b, 'casal')
+    await b.getByTestId('conversion-open').click()
+    await b.getByTestId('conversion-password').fill(PW_B)
+    const pendingBackup = b.waitForEvent('download')
+    await b.getByTestId('conversion-submit').click()
+    expect((await pendingBackup).suggestedFilename()).toMatch(/^ampara-antes-do-solo-\d{4}-\d{2}-\d{2}\.ampara$/)
+    await expect(b.getByText('Só para mim', { exact: true })).toBeVisible({ timeout: 30_000 })
+    expect(sql(`select mode || ':' || solo_owner_id from couples where id = ${lit(couple)}`)).toBe('SOLO:B')
+    expect(sql(`select count(*) from couple_members where couple_id = ${lit(couple)} and partner_id = 'A' and revoked_at is not null`)).toBe('1')
+    expect(sql(`select count(*) from couple_members where couple_id = ${lit(couple)} and partner_id = 'B' and revoked_at is null`)).toBe('1')
+    expect(soloEntitySnapshot(couple)).toEqual(before)
+
+    // A conserva um JWT válido, mas a RLS já não entrega linhas nem aceita restaurar o modo.
+    expect(apiHeaders).not.toBeNull()
+    const denied = await page.request.get(`${apiOrigin}/rest/v1/transactions?couple_id=eq.${encodeURIComponent(couple)}`, { headers: apiHeaders! })
+    expect(denied.status()).toBe(200)
+    expect(await denied.json()).toEqual([])
+    const cannotRestore = await page.request.post(`${apiOrigin}/rest/v1/rpc/restore_couple`, { headers: apiHeaders!, data: {} })
+    expect(cannotRestore.status()).toBe(403)
+    const syncA = page.getByTestId('cloud-sync')
+    if (await syncA.isVisible()) {
+      try { await syncA.click({ timeout: 2000 }) } catch (error) { if (!await page.getByTestId('login-form').isVisible()) throw error }
+    }
+    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 20_000 })
+
+    // Aparelho vazio de B: modo e autorias vêm do servidor, sem depender do cofre convertido.
+    const next = await contexts[1]!.newPage()
+    next.on('pageerror', (error) => otherPageErrors.push(String(error)))
+    await enterRealCloud(next, emailB, PW_B)
+    await goSettings(next, 'casal')
+    await expect(next.getByText('Só para mim', { exact: true })).toBeVisible()
+    await expect(next.getByRole('textbox', { name: 'Seu nome', exact: true })).toHaveValue('Namorada')
+    await goTab(next, 'nos')
+    await expect(next.locator('[data-testid=shop-row]').filter({ hasText: shoppingTitle })).toHaveCount(1)
+    await goTab(next, 'financas')
+    await expect(next.getByTestId('personal-list')).toContainText(titleB)
+    await expect(next.getByText(titleA, { exact: true })).toHaveCount(0)
+    await noHorizontalOverflow(next)
+
+    await goSettings(next, 'casal')
+    await next.getByTestId('settings-upgrade').click()
+    await expect(next.getByTestId('upgrade-original-partner')).toHaveText('Retomar com Lucas')
+    await next.getByTestId('upgrade-password').fill(PW_B)
+    await next.getByTestId('upgrade-submit').click()
+    await expect(next.getByTestId('settings-invite')).toBeVisible({ timeout: 20_000 })
+    const renewed = (await next.getByTestId('settings-invite').textContent())?.match(/[A-Z2-9]{5}-[A-Z2-9]{5}/)?.[0] ?? ''
+    expect(renewed).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/)
+    await expect.poll(() => sql(`select mode from couples where id = ${lit(couple)}`), { timeout: 20_000 }).toBe('COUPLE')
+    await expect.poll(() => sql(`select count(*) from couple_invites where couple_id = ${lit(couple)} and used_at is null`), { timeout: 20_000 }).toBe('1')
+
+    const restored = await contexts[2]!.newPage()
+    restored.on('pageerror', (error) => otherPageErrors.push(String(error)))
+    await enterRealCloud(restored, emailA, PW_CLOUD_A, renewed)
+    expect(sql(`select count(*) from couple_members where couple_id = ${lit(couple)} and partner_id = 'A' and revoked_at is null`)).toBe('1')
+    await goTab(restored, 'financas')
+    await restored.getByTestId('fin-MINE').click()
+    await expect(restored.getByTestId('personal-list')).toContainText(titleA)
+    await expect(restored.getByText(titleB, { exact: true })).toHaveCount(0)
+    expect(soloEntitySnapshot(couple)).toEqual(before)
+    expect(otherPageErrors).toEqual([])
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()))
+    if (couple) sql(`delete from couples where id = ${lit(couple)}`)
+    sql(`delete from auth.users where email in (${lit(emailA)},${lit(emailB)})`)
+  }
 })

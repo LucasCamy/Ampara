@@ -37,7 +37,7 @@ export function TaskSheet({ params, onDone }: { params: Record<string, string>; 
     }
     const saved = saveTask({
       title,
-      dest: isSolo ? 'ME' : dest,
+      dest: isSolo && !prev ? 'ME' : dest,
       when: when === 'KEEP' ? 'TODAY' : when,
       ...(when === 'KEEP' ? { dueDate: keptDate } : {}),
       effort,

@@ -67,7 +67,7 @@ export function RitualCard() {
               options={[
                 { value: 'FULL', label: 'Cheia', icon: BatteryFull, testId: 'ritual-energy-full' },
                 { value: 'MEDIUM', label: 'Média', icon: BatteryMedium, testId: 'ritual-energy-medium' },
-                { value: 'OVERLOAD', label: 'Sobrecarga', shortLabel: 'Baixa', icon: BatteryLow, testId: 'ritual-energy-overload' },
+                { value: 'OVERLOAD', label: 'Baixa', ariaLabel: 'Bateria baixa, em sobrecarga', icon: BatteryLow, testId: 'ritual-energy-overload' },
               ]}
             />
           </div>

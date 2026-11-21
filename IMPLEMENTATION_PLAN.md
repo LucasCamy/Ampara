@@ -37,6 +37,38 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Conversão Casal para Solo (2026-11-21)
+
+- **Decisão do usuário:** transformar o espaço inteiro em Solo, mantendo seus dados e permitindo retomar
+  com o mesmo par no futuro. O cadastro Solo/Casal e a promoção Solo para Casal continuam disponíveis.
+- **Ajustes > Casal:** senha atual, início do download de backup `.ampara` anterior à conversão e mudança
+  no mesmo espaço. Funciona com a identidade A ou B; ids, autorias, valores, divisão original, registros,
+  preferências e módulos não são remapeados. Finanças Solo incluem histórico compartilhado e acertos;
+  totais usam a parte original de quem está usando e excluem os acertos e gastos pessoais do par.
+- **Preservação:** nova DEK para quem permanece e remoção do slot local do par. `coupleArchives` guarda
+  snapshots cifrados fora das coleções ativas e do outbox; a limpeza de autorização continua protegendo
+  privados. O arquivo acompanha o backup, sem criar permissões novas ou restaurar automaticamente itens.
+- **Nuvem:** `solo_owner_id`, RPCs transacionais `convert_to_solo`/`restore_couple` e membership revogada
+  preservando o vínculo histórico. Perfil privado continua protegido; convites posteriores só reativam o
+  mesmo `auth.uid()`. Convites e push do par são suspensos; registros ficam intactos. Modo/dono não são
+  editáveis por REST, impedindo reversão por fila antiga. Criação inicial pela pessoa B também funciona
+  depois de uma conversão e retomada offline, sem trocar a autoria dos registros.
+- **Concorrência:** pausa da sincronização cobre conversão e retomada; modo do servidor harmoniza estado
+  e outbox sem perder alterações de divisão. Web Locks serializa o cofre entre abas onde disponível;
+  chave vencida, slot suspenso e modo antigo são checados antes de gravar. Recuperação idempotente permite
+  finalizar a DEK mesmo se o pull já recebeu Solo depois de uma falha local. O aviso de suspensão aparece
+  também na tela de login; o token em memória é esquecido depois de atualizar o estado para bloqueado.
+- **Limite:** cópias offline e backups anteriores em outros aparelhos não são apagados remotamente.
+  Um espaço já conectado exige internet para converter; a conversão só ocorre após ação com senha na UI.
+- **Divergência com os documentos de produto:** os docs originais descrevem apenas o casal; este fluxo
+  expande o modo dual conforme solicitado, preservando as regras de privacidade já implementadas.
+- **Validação:** typecheck, lint e build verdes; 503 testes unitários em 47 arquivos; 144 E2E quick verdes
+  e 4 skips de plataforma previstos; 2 E2E de conversão contra Auth/PostgREST/Postgres reais do Docker;
+  `db:check` com 34 grupos e schema idempotente reexecutado 2 vezes; `push:check` com 17 verificações.
+  A comparação do banco confirmou as 18 tabelas de registros intactas. A auditoria padrão passou em 140
+  telas (360/390/1024/1280, claro/escuro); mais 8 telas de conversão em 360px com Lexend/Atkinson e leitura
+  ampla. Um rótulo de bateria do ritual foi encurtado para também caber no cartão em 1024px.
+
 ## Correção de produção (2026-11-21): analytics inserido pelo Cloudflare
 
 - O proxy inseria `beacon.min.js` no HTML, bloqueado corretamente pela CSP `script-src 'self'` do Ampara.

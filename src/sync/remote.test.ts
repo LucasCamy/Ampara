@@ -7,7 +7,7 @@ describe('mapeamento do modo dual para Supabase', () => {
       id: 'couple', spaceId: 'outro-id', mode: 'SOLO', inviteCode: 'SEGREDO',
       splitMode: '50_50', ratioABps: 5000, pairedAt: '2026-11-20T10:00:00Z',
     }, 'space-solo')
-    expect(row).toMatchObject({ id: 'space-solo', mode: 'SOLO', split_mode: '50_50', ratio_a_bps: 5000 })
+    expect(row).toMatchObject({ id: 'space-solo', mode: 'SOLO', solo_owner_id: 'A', split_mode: '50_50', ratio_a_bps: 5000 })
     expect(row).not.toHaveProperty('invite_code')
     expect(row).not.toHaveProperty('space_id')
     expect(JSON.stringify(row)).not.toContain('SEGREDO')
@@ -19,11 +19,24 @@ describe('mapeamento do modo dual para Supabase', () => {
 
   it('recupera modo e id local sem importar o convite do servidor', () => {
     const { entity } = fromRow('couple', { id: 'space-solo', mode: 'SOLO', invite_code: 'NUNCA', synced_at: 'cursor' })
-    expect(entity).toEqual({ id: 'couple', spaceId: 'space-solo', mode: 'SOLO' })
+    expect(entity).toEqual({ id: 'couple', spaceId: 'space-solo', mode: 'SOLO', soloOwnerId: 'A' })
   })
 
   it('normaliza espaço de servidor antigo para casal', () => {
-    expect(fromRow('couple', { id: 'space-old' }).entity).toEqual({ id: 'couple', spaceId: 'space-old', mode: 'COUPLE' })
+    expect(fromRow('couple', { id: 'space-old' }).entity).toEqual({ id: 'couple', spaceId: 'space-old', mode: 'COUPLE', soloOwnerId: null })
+  })
+
+  it('faz ida e volta de Solo pertencente a B, sem remapear autoria de transações', () => {
+    const row = toRow('couple', { id: 'couple', mode: 'SOLO', soloOwnerId: 'B' }, 'space-b')
+    expect(row).toMatchObject({ id: 'space-b', mode: 'SOLO', solo_owner_id: 'B' })
+    expect(fromRow('couple', row).entity).toMatchObject({ id: 'couple', mode: 'SOLO', soloOwnerId: 'B', spaceId: 'space-b' })
+    const transaction = { id: 'histórico', createdBy: 'A', paidBy: 'B', scope: 'COUPLE', partnerAShareCents: 3000, partnerBShareCents: 7000 }
+    expect(fromRow('transactions', toRow('transactions', transaction, 'space-b')).entity).toEqual(transaction)
+  })
+
+  it('Casal não envia nem conserva dono individual antigo', () => {
+    expect(toRow('couple', { mode: 'COUPLE', soloOwnerId: 'B' }, 'space').solo_owner_id).toBeNull()
+    expect(fromRow('couple', { id: 'space', mode: 'COUPLE', solo_owner_id: 'B' }).entity).toMatchObject({ mode: 'COUPLE', soloOwnerId: null })
   })
 
   it('faz ida e volta do orçamento em centavos e módulos por pessoa', () => {

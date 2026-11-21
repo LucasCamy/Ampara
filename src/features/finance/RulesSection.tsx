@@ -2,26 +2,29 @@ import { ReceiptText, Repeat } from 'lucide-react'
 import { useMemo } from 'react'
 import { Button, EditButton, SectionHeader } from '../../components/ui'
 import { toDateKey } from '../../domain/dates'
-import { formatCents } from '../../domain/format'
+import { firstName, formatCents } from '../../domain/format'
+import { splitRuleLabel } from '../../domain/finance'
 import { canViewRule, monthOf, ruleActiveIn, shiftMonth } from '../../domain/ledger'
 import type { TxScope } from '../../domain/types'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useCouple, useIsSolo, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
 
 /** Contas fixas do casal ou as minhas (as pessoais do par nunca aparecem: canViewRule) */
 export function RulesSection({ scope }: { scope: TxScope }) {
   const today = toDateKey(useNow())
   const current = monthOf(today)
-  const { viewer } = usePeople()
+  const { viewer, profiles } = usePeople()
+  const isSolo = useIsSolo()
+  const couple = useCouple()
   const all = useData((s) => s.recurrences)
   const rules = useMemo(
     () =>
       Object.values(all)
-        .filter((r) => canViewRule(r, viewer) && r.scope === scope && (!r.endMonth || r.endMonth >= current))
+        .filter((r) => canViewRule(r, viewer) && (r.scope === scope || (isSolo && scope === 'PERSONAL' && r.scope === 'COUPLE')) && (!r.endMonth || r.endMonth >= current))
         .sort((a, b) => a.dayOfMonth - b.dayOfMonth || a.description.localeCompare(b.description)),
-    [all, viewer, scope, current],
+    [all, viewer, scope, current, isSolo],
   )
   const total = rules.filter((r) => ruleActiveIn(r, current)).reduce((s, r) => s + r.amountCents, 0)
 
@@ -58,6 +61,7 @@ export function RulesSection({ scope }: { scope: TxScope }) {
                   ) : null}
                   {r.skipMonths.includes(current) || r.skipMonths.includes(shiftMonth(current, 1)) ? ' · com mês pulado' : ''}
                 </p>
+                {isSolo && r.scope === 'COUPLE' ? <p className="mt-1 text-[13px] text-muted">Compartilhada · criada por {firstName(profiles[r.createdBy].displayName)} · pagamento por {firstName(profiles[r.paidBy].displayName)} · divisão preservada: {splitRuleLabel(r.splitRule, couple.ratioABps)}.</p> : null}
               </div>
               <EditButton label={`Editar conta fixa ${r.description}`} onClick={() => ui.openSheet('rule', { id: r.id })} testId="rule-edit" />
             </li>

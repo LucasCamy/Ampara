@@ -1,12 +1,14 @@
-import { isSingleDevice, onSessionChange, readCloudSecret, setupFromCloud, useAuth, writeCloudSecret, authStore } from '../auth/session'
+import { isSingleDevice, lock, onSessionChange, readCloudSecret, setupFromCloud, useAuth, writeCloudSecret, authStore, type SoloConversionReceipt } from '../auth/session'
 import { validatePassword } from '../auth/vault'
 import { applyRemote, purgeUnauthorized, type VisibleIds } from '../domain/merge'
 import type { SyncAdapter } from '../domain/outbox'
 import { buildEmpty, normalizeState, uuid } from '../domain/seed'
 import { canViewFocusSession } from '../domain/together'
-import { COLLECTIONS, type CollectionName, type CycleSettings, type DataState, type FocusSession, type PartnerId, type Profile } from '../domain/types'
+import { applySpaceMode } from '../domain/space'
+import { COLLECTIONS, type Collections, type CollectionName, type CycleSettings, type DataState, type FocusSession, type PartnerId, type Profile } from '../domain/types'
 import { createStore, useStore } from '../store/createStore'
 import { dataStore, enqueueAll } from '../store/data'
+import { ui } from '../store/ui'
 import {
   friendlyAuthError,
   fromRow,
@@ -140,6 +142,7 @@ export const cloudAdapter: SyncAdapter = {
     const token = await accessToken()
     const space = spaceId()
     if (!cfg || !token || !space) return []
+    if (!await verifyMembership(token, space)) return []
     const accepted: string[] = []
     for (const e of batch) {
       // tabela ainda não existe no servidor: fica na fila até o schema novo ser aplicado
@@ -183,6 +186,7 @@ export async function pull(): Promise<number> {
   const space = spaceId()
   const from = secret
   if (!cfg || !token || !space || !from) return 0
+  if (!await verifyMembership(token, space)) return 0
   const single = isSingleDevice()
   // Autorização vencida: o que ainda sobe (fila) e o que mudar depois deste instante não pode sair
   const since = new Date().toISOString()
@@ -246,9 +250,21 @@ export async function pull(): Promise<number> {
     for (const { c, rows } of batches) {
       const r = applyRemote(state, c, rows.map(({ entity, deleted }) => ({ entity: c === 'couple' ? { ...(state.couple.couple ?? {}), ...(entity as object) } : entity, deleted })))
       state = r.state
+      if (c === 'couple') {
+        // O servidor decide modo e acesso, inclusive diante de um relógio local adiantado.
+        const remote = rows.find((row) => !row.deleted)?.entity as DataState['couple']['couple'] | undefined
+        const current = state.couple.couple
+        if (current && remote) {
+          const mode = remote.mode ?? 'COUPLE'
+          const archive = mode === 'SOLO' && cur.couple.couple?.mode !== 'SOLO' && who
+            ? { savedAt: remote.updatedAt ?? since, ownerId: who, collections: Object.fromEntries(COLLECTIONS.map((c) => [c, cur[c]])) as unknown as Collections }
+            : null
+          state = applySpaceMode({ ...state, ...(archive ? { coupleArchives: [...(state.coupleArchives ?? []), archive] } : {}) }, remote)
+        }
+      }
       changed += r.changed
     }
-    return normalizeState(who && single ? purgeUnauthorized(state, who, { visible, protect, since }) : state)
+    return normalizeState(who && (single || state.couple.couple?.mode === 'SOLO') ? purgeUnauthorized(state, who, { visible, protect, since }) : state)
   })
   if (cursor !== from.cursor) {
     secret = { ...from, ...(secret ?? {}), cursor }
@@ -269,6 +285,36 @@ async function membership(token: string): Promise<Membership | null> {
   return rows?.[0] ?? null
 }
 
+async function verifyMembership(token: string, space: string): Promise<boolean> {
+  const current = secret
+  const who = authStore.get().who
+  const mine = await membership(token)
+  if (secret !== current || authStore.get().who !== who) return false
+  if (mine?.couple_id === space && mine.partner_id === who) return true
+  await disconnect()
+  await lock()
+  ui.toast('O acesso desta conta ao espaço foi suspenso. Os dados já guardados neste aparelho continuam no cofre.', { tone: 'warn' })
+  return false
+}
+
+/** Resolve a renovação do token antes da fila do cofre, evitando um bloqueio entre as duas filas. */
+export async function prepareSoloConversion(): Promise<(() => Promise<SoloConversionReceipt>) | undefined> {
+  const space = spaceId()
+  if (!space) return undefined
+  const who = authStore.get().who
+  const token = await accessToken()
+  if (!cfg || !token || !who) throw new Error('Reconecte a nuvem para mudar este espaço em todos os aparelhos.')
+  if (!await verifyMembership(token, space)) throw new Error('Esta conta não tem acesso ativo ao espaço.')
+  const config = cfg
+  return async () => {
+    if (spaceId() !== space || authStore.get().who !== who) throw new Error('Sessão encerrada. Entre novamente.')
+    const rows = await rpc<SoloConversionReceipt[]>(config, token, 'convert_to_solo', {})
+    const receipt = rows?.[0]
+    if (!receipt || receipt.solo_owner_id !== who) throw new Error('A nuvem não confirmou a conversão para Solo.')
+    return receipt
+  }
+}
+
 /** Conecta a pessoa que está usando este aparelho (Ajustes > Nuvem) */
 export async function connect(mode: 'signup' | 'signin', email: string, password: string): Promise<void> {
   if (!cfg) throw new Error('Nuvem não configurada neste aparelho.')
@@ -286,9 +332,9 @@ export async function connect(mode: 'signup' | 'signin', email: string, password
         throw new Error('Esta conta pertence a outra pessoa ou a outro espaço.')
       }
       space = mine.couple_id
-    } else if (who === 'A' && !space) {
+    } else if ((who === 'A' || couple.mode === 'SOLO' || dataStore.get().coupleArchives?.length) && !space) {
       space = uuid()
-      await rpc(cfg, s.accessToken, 'create_couple', { p_couple_id: space, p_split_mode: couple.splitMode, p_ratio_a_bps: couple.ratioABps, p_mode: couple.mode ?? 'COUPLE' })
+      await rpc(cfg, s.accessToken, 'create_couple', { p_couple_id: space, p_split_mode: couple.splitMode, p_ratio_a_bps: couple.ratioABps, p_mode: couple.mode ?? 'COUPLE', p_owner_id: who })
     } else if (space) {
       const joined = await rpc<Membership[]>(cfg, s.accessToken, 'join_couple', { p_code: couple.inviteCode })
       if (joined?.[0]?.partner_id !== who) throw new Error('O convite deste espaço é de outra pessoa.')
@@ -328,13 +374,16 @@ export async function publishInvite(code: string) {
   const couple = dataStore.get().couple.couple
   const who = authStore.get().who
   if (!cfg || !token || !who || !couple?.spaceId || couple.mode === 'SOLO') return
+  // A RPC preserva o vínculo histórico e autoriza a retomada apenas pela pessoa dona do Solo.
+  await rpc(cfg, token, 'restore_couple', {})
   // A promoção local pode ainda estar na fila: publique o modo antes de registrar o convite.
   await upsertRow(cfg, token, 'couple', toRow('couple', couple, couple.spaceId))
   const partner: PartnerId = who === 'A' ? 'B' : 'A'
   const profile = dataStore.get().profiles[partner]
   if (profile && authStore.get().people?.[partner].status === 'invited') {
-    // O Solo já pode ter enviado um perfil vazio. Só antes do par entrar o RLS permite substituí-lo.
-    await upsertRow(cfg, token, 'profiles', toRow('profiles', profile, couple.spaceId))
+    const historical = await rpc<boolean>(cfg, token, 'partner_joined', { p_couple_id: couple.spaceId, p_partner_id: partner })
+    // Perfil histórico continua protegido mesmo com o acesso suspenso. Só o placeholder novo é editável.
+    if (!historical) await upsertRow(cfg, token, 'profiles', toRow('profiles', profile, couple.spaceId))
   }
   await rpc(cfg, token, 'create_invite', { p_code: code })
 }

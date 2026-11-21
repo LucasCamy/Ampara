@@ -13,6 +13,8 @@ export interface Couple {
   id: 'couple'
   /** Ausente nos cofres antigos: equivale a COUPLE. */
   mode?: SpaceMode
+  /** Dono do uso individual. Ausente em Solo antigo equivale a A; em Casal fica null. */
+  soloOwnerId?: PartnerId | null
   /** Identificador do espaço na nuvem (couple_id no Supabase). Só existe após conectar. */
   spaceId?: string
   inviteCode: string
@@ -417,6 +419,8 @@ export interface DataState extends Collections {
   schemaVersion: 1
   outbox: OutboxEntry[]
   lastSyncedAt: string | null
+  /** Arquivos locais cifrados do espaço antes da conversão. Nunca entram no outbox ou em leituras ativas. */
+  coupleArchives?: { savedAt: string; ownerId: PartnerId; collections: Collections }[]
 }
 
 export const otherPartner = (id: PartnerId): PartnerId => (id === 'A' ? 'B' : 'A')

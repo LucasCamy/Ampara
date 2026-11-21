@@ -24,7 +24,7 @@ import { NotificationsSection } from './NotificationsSection'
 import { AlertsSection } from './AlertsSection'
 import { ReadingSection } from './ReadingSection'
 import { RitualsSection } from './RitualsSection'
-import { InvitePartnerSection, ModulesSection } from './SpaceSections'
+import { ConvertToSoloSection, InvitePartnerSection, ModulesSection } from './SpaceSections'
 import { AboutSection } from '../shell/UpdateBanner'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
@@ -111,23 +111,26 @@ function CoupleGroup() {
   }
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-      <section className="module p-4 sm:p-5" aria-labelledby="pareamento">
-        <SectionHeader id="pareamento" title="Espaço do casal" />
-        {partnerPending ? (
-          <p className="text-[14px] text-muted" data-testid="settings-invite">
-            {firstName(partner.displayName)} ainda não ativou o acesso. Código de convite:{' '}
-            <span className="font-data text-[18px] font-semibold text-ink">{couple.inviteCode}</span>
+      <div className="flex min-w-0 flex-col gap-6">
+        <section className="module p-4 sm:p-5" aria-labelledby="pareamento">
+          <SectionHeader id="pareamento" title="Espaço do casal" />
+          {partnerPending ? (
+            <p className="text-[14px] text-muted" data-testid="settings-invite">
+              {firstName(partner.displayName)} ainda não ativou o acesso. Código de convite:{' '}
+              <span className="font-data text-[18px] font-semibold text-ink">{couple.inviteCode}</span>
+            </p>
+          ) : (
+            <StatusBadge kind="ok">Vocês dois já têm senha própria</StatusBadge>
+          )}
+          <p className="mt-2 text-[13px] text-muted">
+            Sincronização: {adapterName()}. Para ver a visão de {firstName(partner.displayName)} neste aparelho, toque no nome no topo: o app pede a senha.
           </p>
-        ) : (
-          <StatusBadge kind="ok">Vocês dois já têm senha própria</StatusBadge>
-        )}
-        <p className="mt-2 text-[13px] text-muted">
-          Sincronização: {adapterName()}. Para ver a visão de {firstName(partner.displayName)} neste aparelho, toque no nome no topo: o app pede a senha.
-        </p>
-        <div className="mt-4">
-          <NameField key={`${viewer}-${profiles[viewer].displayName}`} id={viewer} value={profiles[viewer].displayName} label="Seu nome" />
-        </div>
-      </section>
+          <div className="mt-4">
+            <NameField key={`${viewer}-${profiles[viewer].displayName}`} id={viewer} value={profiles[viewer].displayName} label="Seu nome" />
+          </div>
+        </section>
+        <ConvertToSoloSection />
+      </div>
 
       <div className="flex flex-col gap-6">
         <section className="module p-4 sm:p-5" aria-labelledby="divisao">

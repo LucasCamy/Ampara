@@ -180,7 +180,7 @@ try {
   ok(ahead.sent === 1 && aheadPayload?.key === `bills-ahead:B:${addDays(date, 2)}`, 'conta pessoal também lembra dois dias antes')
 
   // 6) Solo: segundo lembrete gentil para a própria pessoa.
-  await db.query("update couples set mode = 'SOLO' where id = $1", [couple])
+  await db.query("update couples set mode = 'SOLO', solo_owner_id = 'B' where id = $1", [couple])
   await db.query("update medications set deleted = false, times = '[\"11:30\"]' where id = $1", [medId])
   const beforeSolo = received.length
   const solo = await tick(workerDb, opts, noon)

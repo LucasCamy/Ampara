@@ -1,8 +1,9 @@
 import { buildEmpty, buildSeed, defaultEnabledModules, normalizeState, withIdentity } from '../domain/seed'
-import type { DataState, PartnerId, Pronoun, SpaceMode, SplitMode } from '../domain/types'
+import { COLLECTIONS, type Collections, type DataState, type PartnerId, type Pronoun, type SpaceMode, type SplitMode } from '../domain/types'
 import { createStore, useStore } from '../store/createStore'
 import { dataStore, LEGACY_PLAINTEXT_KEY, transact } from '../store/data'
 import { ui, uiStore } from '../store/ui'
+import { applySpaceMode } from '../domain/space'
 import {
   AuthError,
   backupFileName,
@@ -85,20 +86,59 @@ let lastActivity = Date.now()
 /* ---------- armazenamento ---------- */
 
 function queueWrite<T>(run: () => Promise<T>): Promise<T> {
-  const pending = writeChain.then(run)
+  const pending = writeChain.then(() => navigator.locks
+    ? navigator.locks.request('ampara-vault-write', run)
+    : run())
   writeChain = pending.then(() => undefined, () => undefined)
   return pending
 }
 
 function persistSnapshot(snapshot: DataState, k: CryptoKey) {
+  const basedOnMode = vault?.spaceMode ?? 'COUPLE'
   pendingSaves++
   localSaveStore.set(() => 'saving')
   void queueWrite(async () => {
     const base = await loadVault() ?? vault
     if (!base || key !== k) return
-    const next = await writeData(base, k, snapshot)
+    let persisted: DataState
+    // Outra aba pode ter rotacionado a chave durante uma conversão para Solo.
+    try {
+      persisted = await readData(base, k)
+    } catch {
+      vault = base
+      await forgetSession()
+      if (key === k) closeSession(null)
+      return
+    }
+    const who = authStore.get().who
+    const currentCouple = persisted.couple.couple
+    if (!who || base.people[who].status !== 'active' || (currentCouple?.mode === 'SOLO' && (currentCouple.soloOwnerId ?? 'A') !== who)) {
+      vault = base
+      await forgetSession()
+      if (key === k) closeSession(null)
+      return
+    }
+    // Receber Solo em outro aparelho não pede senha: a DEK pode continuar a mesma. Uma aba antiga
+    // não pode restaurar o modo Casal nem apagar o arquivo que o pull já preservou no cofre.
+    let safe = snapshot
+    if (currentCouple && (currentCouple.mode ?? 'COUPLE') !== basedOnMode) {
+      safe = applySpaceMode(snapshot, currentCouple)
+    }
+    const archives = [...(persisted.coupleArchives ?? []), ...(safe.coupleArchives ?? [])]
+    if (archives.length) safe = { ...safe, coupleArchives: archives.filter((entry, i) => archives.findIndex((candidate) => candidate.ownerId === entry.ownerId && candidate.savedAt === entry.savedAt) === i) }
+    const next = await writeData(base, k, safe)
     if (key !== k) return
     await saveVault(next)
+    if (safe !== snapshot) {
+      applyingRemote = true
+      dataStore.set((cur) => {
+        if (cur === snapshot) return safe
+        const rebased = currentCouple && (currentCouple.mode ?? 'COUPLE') !== basedOnMode ? applySpaceMode(cur, currentCouple) : cur
+        const all = [...(safe.coupleArchives ?? []), ...(rebased.coupleArchives ?? [])]
+        return all.length ? { ...rebased, coupleArchives: all.filter((entry, i) => all.findIndex((candidate) => candidate.ownerId === entry.ownerId && candidate.savedAt === entry.savedAt) === i) } : rebased
+      })
+      applyingRemote = false
+    }
     authStore.set((s) => ({ ...s, people: headerOf(next) }))
   }).then(() => {
     saveFailed = false
@@ -118,7 +158,7 @@ export function retryLocalSave() {
 
 async function saveVault(v: Vault) {
   await writeStoredVault(v)
-  vault = v
+  vault = { ...v, spaceMode: v.spaceMode ?? vault?.spaceMode }
   broadcast('updated')
 }
 
@@ -269,8 +309,11 @@ export async function setupFromCloud(input: { who: PartnerId; password: string; 
 
 async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boolean, welcomeInvite: string | null = null) {
   const data = await readData(v, k)
+  if (v.people[who].status !== 'active' || (data.couple.couple?.mode === 'SOLO' && (data.couple.couple.soloOwnerId ?? 'A') !== who)) {
+    throw new AuthError('NOT_ACTIVATED', 'Este acesso está suspenso neste espaço.')
+  }
   key = k
-  vault = v
+  vault = { ...v, spaceMode: data.couple.couple?.mode ?? 'COUPLE' }
   applyingRemote = true
   dataStore.set(() => data)
   applyingRemote = false
@@ -298,7 +341,6 @@ function closeSession(preselect: PartnerId | null) {
   key = null
   saveFailed = false
   localSaveStore.set(() => 'saved')
-  emit()
   dataStore.set(() => buildEmpty(new Date()))
   ui.closeSheet()
   uiStore.set((s) => ({ ...s, toasts: [] }))
@@ -312,6 +354,7 @@ function closeSession(preselect: PartnerId | null) {
     remembered: false,
     people: v ? headerOf(v) : null,
   }))
+  emit()
 }
 
 /** Bloqueia este aparelho (todas as abas) e esquece a sessão lembrada */
@@ -525,14 +568,25 @@ async function refreshVault() {
   try {
     const data = await readData(v, k)
     if (key !== k) return
-    vault = v
+    const who = authStore.get().who
+    if (who && (v.people[who].status !== 'active' || (data.couple.couple?.mode === 'SOLO' && (data.couple.couple.soloOwnerId ?? 'A') !== who))) {
+      vault = v
+      await forgetSession()
+      closeSession(null)
+      return
+    }
+    vault = { ...v, spaceMode: data.couple.couple?.mode ?? 'COUPLE' }
     applyingRemote = true
     // Uma edição feita enquanto o cofre era aberto continua na fila da sessão.
     dataStore.set((cur) => cur === snapshot ? data : cur)
     applyingRemote = false
     authStore.set((s) => ({ ...s, people: headerOf(v) }))
   } catch {
-    if (key === k) closeSession(null)
+    if (key === k) {
+      vault = v
+      await forgetSession()
+      closeSession(null)
+    }
   }
 }
 
@@ -631,28 +685,37 @@ export async function reinvitePartner(password: string): Promise<string> {
   return invite
 }
 
-/** Promove o mesmo espaço, preservando coleções, preferências e o acesso da pessoa A. */
+/** Promove o mesmo espaço, preservando coleções, preferências e a identidade de quem usa Solo. */
 export async function upgradeSoloToCouple(password: string, partner: { name: string; pronoun: Pronoun }): Promise<string> {
   if (!partner.name.trim()) throw new Error('Diga o nome de quem você quer convidar.')
   const k = key
+  const who = authStore.get().who
+  const target: PartnerId = who === 'A' ? 'B' : 'A'
   const invite = await queueWrite(async () => {
     const v = await loadVault()
-    if (!k || key !== k || authStore.get().who !== 'A' || !v) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    if (!k || !who || key !== k || authStore.get().who !== who || !v) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    const persisted = await readData(v, k).catch(() => { throw new Error('O espaço mudou em outra aba. Recarregue o app antes de continuar.') })
+    if (v.rev !== vault?.rev || persisted.couple.couple?.mode !== 'SOLO') throw new Error('O espaço mudou em outra aba. Recarregue o app antes de continuar.')
     if (dataStore.get().couple.couple?.mode !== 'SOLO') throw new Error('Este espaço já é de um casal.')
-    const r = await reinvite(v, 'A', password, 'B')
+    if ((dataStore.get().couple.couple?.soloOwnerId ?? 'A') !== who) throw new AuthError('BAD_CREDENTIALS', 'Este espaço pertence à outra pessoa.')
+    const previous = dataStore.get().profiles[target]
+    if (previous?.displayName && (previous.displayName !== partner.name.trim() || previous.pronoun !== partner.pronoun)) {
+      throw new Error('Para preservar as autorias, retome este espaço com o mesmo par.')
+    }
+    const r = await reinvite(v, who, password, target)
     if (key !== k || dataStore.get().couple.couple?.mode !== 'SOLO') throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
     const now = new Date().toISOString()
     const cur = dataStore.get()
-    const couple = { ...cur.couple.couple!, mode: 'COUPLE' as const, inviteCode: r.invite, updatedAt: now }
-    const profile = { ...cur.profiles.B!, displayName: partner.name.trim(), pronoun: partner.pronoun, enabledModules: defaultEnabledModules('COUPLE'), updatedAt: now }
-    const updated = await writeData(r.vault, k, { ...cur, couple: { couple }, profiles: { ...cur.profiles, B: profile } })
+    const couple = { ...cur.couple.couple!, mode: 'COUPLE' as const, soloOwnerId: null, inviteCode: r.invite, updatedAt: now }
+    const profile = { ...cur.profiles[target]!, displayName: partner.name.trim(), pronoun: partner.pronoun, enabledModules: previous?.displayName ? previous.enabledModules : defaultEnabledModules('COUPLE'), updatedAt: now }
+    const updated = await writeData(r.vault, k, { ...cur, couple: { couple }, profiles: { ...cur.profiles, [target]: profile } })
     if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
     await saveVault(updated)
     if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
     transact((tx) => {
       const currentCouple = tx.get('couple', 'couple')!
-      const currentProfile = tx.get('profiles', 'B')!
-      tx.put('couple', { ...currentCouple, mode: 'COUPLE', inviteCode: r.invite, updatedAt: now })
+      const currentProfile = tx.get('profiles', target)!
+      tx.put('couple', { ...currentCouple, mode: 'COUPLE', soloOwnerId: null, inviteCode: r.invite, updatedAt: now })
       tx.put('profiles', { ...currentProfile, displayName: profile.displayName, pronoun: profile.pronoun, enabledModules: profile.enabledModules, updatedAt: now })
     })
     authStore.set((s) => ({ ...s, people: headerOf(vault!) }))
@@ -660,6 +723,90 @@ export async function upgradeSoloToCouple(password: string, partner: { name: str
   })
   await writeChain
   return invite
+}
+
+export interface EncryptedBackup {
+  name: string
+  content: string
+}
+
+export interface SoloConversionReceipt {
+  solo_owner_id: PartnerId
+  updated_at: string
+}
+
+/** A nuvem confirma antes de trocar o cofre; sem servidor, toda a conversão é local. */
+export async function convertCoupleToSolo(
+  password: string,
+  saveBackup: (backup: EncryptedBackup) => void | Promise<void>,
+  commitRemote?: () => Promise<SoloConversionReceipt>,
+): Promise<void> {
+  const k = key
+  const who = authStore.get().who
+  const assertSession = () => {
+    if (!k || !who || key !== k || authStore.get().who !== who) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+  }
+  await queueWrite(async () => {
+    assertSession()
+    const v = await loadVault()
+    if (!v || !k || !who) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    const persisted = await readData(v, k).catch(() => { throw new Error('O espaço mudou em outra aba. Recarregue o app antes de continuar.') })
+    if (v.rev !== vault?.rev) throw new Error('O espaço mudou em outra aba. Recarregue o app antes de continuar.')
+    if (persisted.couple.couple?.mode === 'SOLO' && (!commitRemote || (persisted.couple.couple.soloOwnerId ?? 'A') !== who)) throw new Error('Este espaço já está em Solo.')
+    const couple = dataStore.get().couple.couple
+    if (!couple || (couple.mode === 'SOLO' && (!commitRemote || (couple.soloOwnerId ?? 'A') !== who))) throw new Error('Este espaço já está em Solo.')
+    const resuming = couple.mode === 'SOLO'
+    if (couple.spaceId && !commitRemote) throw new Error('Reconecte a nuvem para mudar este espaço em todos os aparelhos.')
+    assertNotThrottled(who)
+    try {
+      await unlockVault(v, who, password)
+      clearFailures(who)
+    } catch (error) {
+      registerFailure(who)
+      throw error
+    }
+    assertSession()
+    const original = await writeData(v, k, dataStore.get())
+    const now = new Date()
+    await saveBackup({ name: `ampara-antes-do-solo-${toDateKeyLocal(now)}.ampara`, content: toBackup(original, who, now.toISOString()) })
+    assertSession()
+    // Prepara a nova chave antes de suspender o acesso remoto do par.
+    const people = { A: v.people.A, B: v.people.B }
+    const created = await createSingleVault(who, people, password, dataStore.get(), v.people[who].iterations)
+    const cloud = await openCloud(v, k, who)
+    const prepared = await sealCloud(created.vault, created.key, who, cloud)
+    assertSession()
+    const receipt = commitRemote ? await commitRemote() : { solo_owner_id: who, updated_at: now.toISOString() }
+    assertSession()
+    if (receipt.solo_owner_id !== who) throw new Error('A nuvem não confirmou a pessoa dona deste espaço.')
+    const archive = { ownerId: who, savedAt: receipt.updated_at, collections: Object.fromEntries(COLLECTIONS.map((c) => [c, dataStore.get()[c]])) as unknown as Collections }
+    const converted = (cur: DataState): DataState => {
+      const nextCouple = { ...cur.couple.couple!, mode: 'SOLO' as const, soloOwnerId: who, inviteCode: '', updatedAt: receipt.updated_at }
+      return {
+        ...cur,
+        couple: { couple: nextCouple },
+        ...(!resuming ? { coupleArchives: [...(cur.coupleArchives ?? []), archive] } : {}),
+        outbox: cur.outbox.map((entry) => entry.entityType === 'couple' && entry.operation === 'UPSERT'
+          ? { ...entry, payload: { ...(entry.payload as object), mode: 'SOLO', soloOwnerId: who, inviteCode: '', updatedAt: receipt.updated_at } }
+          : entry),
+      }
+    }
+    const updated = await writeData({ ...prepared, createdAt: v.createdAt, rev: original.rev }, created.key, converted(dataStore.get()))
+    assertSession()
+    await saveVault(updated)
+    assertSession()
+    key = created.key
+    const remembered = authStore.get().remembered
+    applyingRemote = true
+    dataStore.set((cur) => converted(cur))
+    applyingRemote = false
+    authStore.set((s) => ({ ...s, people: headerOf(updated), welcomeInvite: null }))
+    // Uma edição feita durante o commit também é cifrada com a chave nova.
+    persistSnapshot(dataStore.get(), created.key)
+    await forgetSession()
+    if (remembered && key === created.key) await rememberSession({ who, key: created.key, expiresAt: Date.now() + REMEMBER_MS })
+  })
+  await writeChain
 }
 
 /* ---------- backup cifrado ---------- */
