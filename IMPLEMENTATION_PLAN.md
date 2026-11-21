@@ -37,6 +37,16 @@
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
 
+## Correção de produção (2026-11-21): analytics inserido pelo Cloudflare
+
+- O proxy inseria `beacon.min.js` no HTML, bloqueado corretamente pela CSP `script-src 'self'` do Ampara.
+  O gateway passa a responder `Cache-Control: no-cache, no-transform`; o HTML da hospedagem estática recebe
+  a mesma proteção em `public/_headers`. Isso impede a inserção automática do beacon, sem adicionar analytics
+  ao app ou ampliar as origens autorizadas pela CSP.
+- A regressão de cabeçalhos no E2E exige que `script-src` continue permitindo somente a própria origem.
+- Validação: lint, typecheck/build e dois E2E de segurança aprovados. Nginx real em Docker passou no
+  `nginx -t`; HTML, índice e atalho responderam com `no-cache, no-transform`, e assets mantiveram cache imutável.
+
 ## Modo dual · Fase 6 (2026-11-21): validação e documentação
 
 - `npm run typecheck`, `npm run lint`, `npm test` e `npm run build` aprovados: 473 testes em 44 arquivos.

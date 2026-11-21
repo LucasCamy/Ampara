@@ -8,5 +8,12 @@
   Cross-Origin-Opener-Policy: same-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
 
+# O HTML do app mantém a CSP restrita à própria origem, sem scripts inseridos pelo proxy.
+/
+  Cache-Control: no-cache, no-transform
+
+/*.html
+  Cache-Control: no-cache, no-transform
+
 /sw.js
   Cache-Control: no-cache

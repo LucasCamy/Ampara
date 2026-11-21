@@ -152,6 +152,10 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   endereço não escapa do limite). Ensaiado: 30 endereços do mesmo /64 dividem um limite, outro /64 segue livre,
   e as formas com "::" e por extenso do mesmo bloco caem na mesma conta.
 - **HSTS** (`max-age=31536000`, sem `includeSubDomains`) no gateway; o navegador só aceita por HTTPS.
+- **HTML sem scripts inseridos pelo proxy:** `Cache-Control: no-cache, no-transform` impede a injeção automática
+  do beacon de Web Analytics do Cloudflare. A CSP continua com `script-src 'self'`, sem liberar domínios de
+  analytics ou scripts inline. O cabeçalho está no gateway de produção e em `public/_headers` para hospedagem
+  estática. Referência: [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/faq/).
 - **Backup diário** do banco (CronJob `ampara-backup`, 14 dias) e restauração ensaiada num banco novo
   (`npm run backup:check`). Procedimento em `docs/BACKUP.md`. Limitação: o volume do backup fica no mesmo nó.
 - iPhone: só com o app na Tela de Início (iOS 16.4+). Sem a nuvem conectada não há lembrete com o app fechado.
