@@ -1,5 +1,7 @@
 import { atTime, minutesOf, toDateKey, toTimeKey } from './dates'
 import { doseView, emptyLog, isScheduledOn, logId, shouldAlertPartner, type DoseView } from './medication'
+import { visibleTransactions } from './privacy'
+import { canViewTask, tasksForDay } from './tasks'
 import type { CalendarEvent, DataState, DateKey, Medication, MedicationLog, PartnerId, Task } from './types'
 
 export interface DoseItem {
@@ -97,4 +99,33 @@ export function upcomingEvents(events: CalendarEvent[], now: Date, hours = 4): C
 
 export function eventsVisibleTo(events: CalendarEvent[], viewer: PartnerId): CalendarEvent[] {
   return events.filter((e) => e.ownerId === null || e.ownerId === viewer)
+}
+
+const spokenTitle = (title: string) => title.replace(/[.!?;:]+/g, ' ').trim().split(/\s+/).slice(0, 5).join(' ')
+const counted = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
+
+/** Resumo curto para leitura em voz alta, sem relógio global nem efeitos e com a privacidade do dia. */
+export function buildDaySpeechSummary(state: DataState, viewer: PartnerId, now: Date): string {
+  const today = toDateKey(now)
+  const tasks = tasksForDay(Object.values(state.tasks).filter((task) => canViewTask(task, viewer) && (task.assignedTo === null || task.assignedTo === viewer)), today).filter((task) => task.status === 'PENDING')
+  const doses = dosesFor(state, viewer, today, now, false).filter((dose) => dose.view !== 'TAKEN' && dose.view !== 'SKIPPED')
+  const events = eventsVisibleTo(Object.values(state.events), viewer).filter((event) => event.date === today && atTime(event.date, event.end).getTime() >= now.getTime())
+  const profiles = {
+    A: state.profiles.A ?? { sharePersonalFinances: false },
+    B: state.profiles.B ?? { sharePersonalFinances: false },
+  }
+  const bills = visibleTransactions(Object.values(state.transactions), viewer, profiles).filter((tx) => tx.type === 'EXPENSE' && tx.status === 'PREDICTED_DASHED' && tx.competenceDate <= today && (tx.scope === 'COUPLE' || tx.createdBy === viewer))
+  const next = nextAction(doses, events, tasks, now)
+  let nextSentence: string
+  if (next.kind === 'dose') nextSentence = `O próximo cuidado é confirmar seu remédio das ${next.dose.log.scheduledTime}.`
+  else if (next.kind === 'event') nextSentence = `Seu próximo compromisso é ${spokenTitle(next.event.title)}, às ${next.event.start}.`
+  else if (next.kind === 'task') nextSentence = `Comece por ${spokenTitle(next.task.title)}, no seu ritmo.`
+  else if (bills.length) nextSentence = 'Quando puder, confira a próxima conta a pagar.'
+  else if (doses.length) nextSentence = `Seu próximo cuidado é o remédio das ${doses[0]!.log.scheduledTime}.`
+  else if (events.length) {
+    const event = [...events].sort((a, b) => a.start.localeCompare(b.start))[0]!
+    nextSentence = `Seu próximo compromisso é ${spokenTitle(event.title)}, às ${event.start}.`
+  } else nextSentence = 'Seu dia está sem pendências agendadas por enquanto.'
+  const billSentence = bills.length ? `Há ${counted(bills.length, 'conta', 'contas')} para conferir hoje.` : 'Nenhuma conta pendente aparece hoje.'
+  return `Vamos com calma. Hoje você tem ${counted(tasks.length, 'tarefa', 'tarefas')}, ${counted(doses.length, 'dose', 'doses')} de remédio e ${counted(events.length, 'compromisso', 'compromissos')} pela frente. ${nextSentence} ${billSentence} Não precisa resolver tudo agora. Um pequeno passo já conta.`
 }

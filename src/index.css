@@ -7,6 +7,15 @@
   --font-*: initial;
 }
 
+/* O espaçamento amplo também alcança textos com leading/tracking próprios dos componentes. */
+:root[data-reading='wide'] body,
+:root[data-reading='wide'] :where(p, h1, h2, h3, h4, h5, h6, li, label, input, textarea, button, select, summary, dt, dd),
+:root[data-reading='wide'] .tracking-tight {
+  line-height: 1.7;
+  letter-spacing: 0.03em;
+  word-spacing: 0.1em;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

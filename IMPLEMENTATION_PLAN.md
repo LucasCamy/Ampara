@@ -5,8 +5,8 @@
 | Decisão | Motivo |
 |---|---|
 | Web app React (PWA) em vez de Expo | O briefing de implementação fixa React 19 + Vite + Tailwind v4. O doc 04 recomenda Expo para alarmes nativos; isso fica como evolução (ver Pendências). |
-| `localStorage` estruturado por coleções + `sync_outbox` | Escrita síncrona < 1 ms, sem dependência; volume de um casal é pequeno. Interface `Persistence` permite trocar por IndexedDB. |
-| Os dois parceiros no mesmo aparelho, com seletor de perspectiva | Permite testar todos os fluxos bilaterais. A privacidade é aplicada por `viewer` no domínio, igual faria a RLS. |
+| IndexedDB cifrado + `sync_outbox` | `ampara-local` v1 guarda `vault.primary`; migração após commit e fallback cifrado em `ampara:vault:v1`. O store `kv` fica reservado a marcadores não sensíveis. Substitui a decisão original de localStorage. |
+| Modo Solo ou Casal no mesmo projeto | Solo entra sem convite; Casal permite duas senhas no mesmo aparelho ou contas em aparelhos distintos. Privacidade aplicada por `viewer` no domínio e RLS na nuvem. |
 | Sync por adaptador | `LoopbackAdapter` simula o servidor (confirma a fila quando online). `SupabaseAdapter` usa REST e é ativado por `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`. Schema e RLS em `supabase/schema.sql`. |
 | Nome do produto | **Ampara** (docs ainda dizem "Nós"). Deep links: `/?quick=task|expense|med|sos`. |
 | Figma | MCP sem autenticação: `DESIGN.md` + `tokens.css` + `public/styleguide.html`, conforme autorizado. |
@@ -36,6 +36,112 @@
 - Pedido de ajuda em 3 cliques aparece no Hoje do par com "Deixa comigo" e "Vamos fazer juntos".
 - `?quick=` abre a gaveta certa e limpa a URL.
 - 0 erros de console e 0 overflow horizontal nas 4 larguras e 2 temas.
+
+## Modo dual · Fase 6 (2026-11-21): validação e documentação
+
+- `npm run typecheck`, `npm run lint`, `npm test` e `npm run build` aprovados: 473 testes em 44 arquivos.
+  O build mantém o aviso de bundle principal acima de 500 kB (667 kB, 208 kB gzip); a divisão adicional
+  continua como melhoria de desempenho, sem impedir o build.
+- E2E cobre cadastro Solo sem convite, navegação e finanças pessoais, promoção para Casal preservando dados,
+  sincronização Solo entre aparelhos, fontes e leitura ampla persistidas, Travei/foco, captura livre e voz.
+  A regressão de foco consulta também a resposta da API do par; o teste de ditado simula resultado final
+  depois de Parar e resultados atrasados após editar/fechar.
+  `npm run e2e:quick`: 134 aprovados, quatro pulos previstos para casos específicos de plataforma,
+  nenhum erro de console. As seis fases do roteiro de modo dual estão concluídas.
+- `audit-responsive.mjs` aprovado em 360/390/1024/1280 px, claro e escuro. O novo
+  `audit-solo-responsive.mjs` verificou 288 telas: 360/390 px, Lexend/Atkinson, leitura ampla e ambos os temas.
+  Sem cortes, overflow, alvos pequenos ou rodapés inacessíveis; capturas e JSON em `test-results/solo-responsive`.
+- Revisão corrigiu o acesso do par ao foco individual/legado ligado a tarefa privada, incluindo RLS,
+  identidade imutável, upsert de convite, worker, descarte de cópias e fila. Tarefas automáticas de reposição
+  passam a acompanhar a privacidade do remédio. Parar o ditado preserva o resultado final; abortar o cancela.
+- Schema SQL reaplicado duas vezes diretamente no Postgres e migração aprovados; `db:check` passou em 31
+  grupos e `push:check` em 17 verificações, com payloads decifrados. `push:build` aprovado; serviço Docker
+  reconstruído e restaurado, conectado como `ampara_worker`, sem SUPERUSER/BYPASSRLS nem ciclos falhos.
+- README atualizado com Solo/Casal, IndexedDB, leitura/voz, rituais, modelos, nuvem e instalação no iPhone;
+  SECURITY documenta o isolamento do foco e a privacidade das reposições. Nenhum commit ou deploy em produção.
+- Limite de validação: Playwright e auditorias usam Edge no Windows. Não houve teste físico do Safari/PWA
+  ou entrega real de push no iPhone. O guia mantém iOS 16.4+, instalação e permissão por toque; push fechado
+  depende de nuvem/worker e conexão. Instalações de nuvem existentes devem aplicar o schema antes do cliente.
+
+## Modo dual · Fase 5 (2026-11-21): sugestões e ideias para começar
+
+- `suggestions.ts` escolhe uma regra local por prioridade: adiamentos, conta recorrente, preparo de evento,
+  kit de calma e descoberta progressiva. Aplica privacidade, evita duplicações e não sugere em sobrecarga.
+- `SuggestionCard` mostra uma dica por visita. IDs opacos e cooldown de sete dias ficam no IndexedDB `kv`;
+  o cartão espera o commit antes de sumir ou navegar, sem mostrar uma sequência de dicas após dispensar.
+  Conta fixa criada de um gasto começa no próximo mês e preserva o histórico.
+- `templates.ts`, `templateActions` e `TemplatesSheet` oferecem rotinas, kit e listas de compras. Inclusões
+  são deduplicadas e reversíveis em uma única ação; Desfazer também fica acessível dentro da gaveta.
+- Integração nas telas Cuidados, Espaço e Hoje, abertura direta das preferências de leitura e micro-passos.
+- Verificação: `npm run typecheck`, `npm run lint` e 460 testes em 44 arquivos aprovados; quatro E2E de
+  sugestões e modelos em 390 claro e 1280 escuro aprovados.
+
+## Modo dual · Fase 4 (2026-11-21): rituais, avisos e Travei
+
+- Três janelas configuráveis de rituais, com apresentação gravada no IndexedDB antes de exibir. Ignorar ou
+  recarregar não reapresenta a mesma janela no dia; a instância atual permite responder com calma.
+- Travei individual no Solo e no Casal: identificar o bloqueio, escolher um micro-passo/alívio/começo e
+  iniciar cinco minutos de foco. Alívio e remanejamento do dia têm Desfazer; micro-passos preservam a tarefa
+  enquanto ainda houver passos pendentes. Foco oferece extensão, pausa e checklist sem relógio de segundos.
+- Alertas de compromissos e rituais, reforço Solo de remédio atrasado, contas pessoais e margem de transição.
+  Worker lê apenas metadados de contas previstas, sem valores nem orçamento, sob grants por coluna e RLS
+  restritiva. O guia de instalação no iPhone tem três passos e a permissão continua partindo de um toque.
+- Verificação: typecheck/lint e 399 testes unitários aprovados; 16 E2E de rituais/Travei/compras/avisos;
+  auditoria responsiva sem problemas; schema reaplicado, db:check e push:check aprovados no Docker.
+
+## Modo dual · Fase 3 (2026-11-21): leitura e captura por voz/texto
+
+- Lexend e Atkinson Hyperlegible locais, seleção persistida e leitura ampla com prévia real em Ajustes.
+  Títulos de seção sem caixa alta e tarefas concluídas legíveis com ícone e selo Feita.
+- `quickParse` interpreta gastos em centavos, compras e tarefas com datas/esforço; `QuickCaptureSheet`
+  oferece prévia, salvar/Desfazer e edição. Voz é opcional e o campo de texto funciona com o teclado do iPhone.
+- `speech.ts`, `buildDaySpeechSummary` e `DayListenButton` permitem ouvir e parar o dia no próprio toque;
+  o bloqueio do cofre interrompe a fala. Microfone permitido só para a própria origem nos cabeçalhos.
+- Verificação: typecheck e lint aprovados; 348 testes unitários; 6 E2E de leitura/captura/TTS aprovados;
+  auditoria responsiva em 360/390/1024/1280 px sem problemas nos dois temas.
+
+## Modo dual · Fase 2 (2026-11-21): coesão Solo e módulos integrados
+
+- Navegação Solo sem perspectiva do par, aba Espaço e captura Travei; Hoje sem cartões/filtros de casal,
+  com contas pessoais previstas, atalho de Entrada e o próprio kit de calma em sobrecarga. Agenda usa o
+  mesmo atalho de Entrada e aplica privacidade de domínio às contas.
+- Captura pessoal no Solo, edição de tarefas com até três micro-passos e campos de casal ocultos.
+  Finanças tem painel pessoal único com teto mensal acessível, contas, lançamentos, categorias, regras e metas.
+- Cuidados e Espaço respeitam os módulos opcionais; estoque baixo entra na lista sem duplicar, compra de
+  remédio oferece reposição e gasto das compras pode limpar os itens em um único Desfazer.
+- Arquivos principais: `TodayScreen`, `AgendaScreen`, `Nav`, `TaskSheet`, `ExpenseSheet`, `EventSheet`,
+  `SoloFinance`, `RoutinesScreen`, telas de Espaço e stores de ações/finanças/compras. Casal preservado.
+- Verificação: typecheck e lint aprovados; 281 testes unitários; auditoria responsiva sem problemas em
+  360/390/1024/1280 px nos dois temas; E2E de cadastro Solo, compras e fluxos diários pessoais.
+
+## Modo dual · Fase 1 (2026-11-20): banco local e cadastro Solo/Casal
+
+- **Banco local:** `src/auth/storage.ts` abre `ampara-local` v1 com `vault` e `kv`. A inicialização migra o
+  cofre legado sem ler dados antes da senha; só remove localStorage após confirmar a gravação. Mantém fallback
+  cifrado, recuperação de falhas temporárias e limpeza que não ressuscita cópias antigas. Sessão, bloqueio
+  entre abas, lembrar aparelho, troca de senha e backup passam pelo armazenamento assíncrono. O desbloqueio
+  solicita `navigator.storage.persist()` quando disponível. O indicador mostra "Salvando" até o commit,
+  confirma o estado salvo após a gravação e permite tentar de novo se ambos os armazenamentos falharem.
+- **Modo dual:** `mode` ausente equivale a `COUPLE`; `normalizeState` completa módulos, orçamento e passos sem
+  apagar registros antigos. Novos espaços `SOLO` começam vazios com ciclo opcional, compras e caixinhas ativos.
+  Tarefas têm micro-passos e contador de adiamentos, com Desfazer restaurando a contagem anterior.
+- **Cadastro e Ajustes:** "Só para mim" pede apenas os dados pessoais, a senha e o ciclo opcional, entrando
+  direto. O convite com confirmação da senha promove o mesmo espaço para Casal e mantém dados e preferências.
+  Ajustes permitem escolher os módulos. O exemplo de casal não pode substituir um espaço Solo.
+- **Nuvem:** migração idempotente de `couples.mode`, `profiles.monthly_budget_cents`, `enabled_modules`,
+  `tasks.steps` e `postpone_count`, mapeamentos REST e servidor simulado. RPC antiga de criação continua
+  funcionando. Solo sincroniza entre os próprios aparelhos sem convite; a promoção publica o modo e o perfil
+  convidado antes do código, respeitando o RLS existente. Aplique `supabase/schema.sql` antes de atualizar os
+  clientes conectados à nuvem.
+- **Divergência dos docs 01 a 06:** o modelo original é exclusivo de casal e a persistência anterior era
+  localStorage; o código agora suporta Solo/Casal e usa IndexedDB cifrado. As telas diárias, leitura/voz,
+  rituais, Travei e sugestões foram concluídos nas Fases 2 a 5 deste roteiro; a validação final está na Fase 6.
+- **Verificação:** `npm run typecheck`, `npm run lint` e `npm test` aprovados (239 testes, 27 arquivos).
+  Build aprovado pela execução do Playwright; `npm run e2e:quick`: 108 aprovados e 4 pulados por desenho.
+  Após o ajuste do retorno de falha de publicação, os 6 E2E de nuvem Solo foram aprovados, incluindo
+  recuperação do convite local quando a conexão falha. O caso de recarga offline passou em 6 repetições.
+  Schema aplicado duas vezes no Postgres e `npm run db:check` aprovado. `audit-responsive.mjs` sem problemas
+  em 360/390/1024/1280 px, claro e escuro; mais 20 telas Solo auditadas em 360/390 px sem problemas.
 
 ## Iteração 23 (2026-11-08): avisos por categoria, com som, vibração e silêncio
 

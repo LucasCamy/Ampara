@@ -1,6 +1,7 @@
 import { canViewCycleLog } from './cycle'
 import { canViewRule } from './ledger'
-import type { CalendarEvent, CollectionName, CycleLog, CycleSettings, DataState, Medication, MedicationLog, PartnerId, Task, Transaction } from './types'
+import { canViewFocusSession } from './together'
+import type { CalendarEvent, CollectionName, CycleLog, CycleSettings, DataState, FocusSession, Medication, MedicationLog, PartnerId, Task, Transaction } from './types'
 
 export interface RemoteRow<T = unknown> {
   entity: T
@@ -48,7 +49,7 @@ export function applyRemote(state: DataState, collection: CollectionName, rows: 
 }
 
 /** Ids que o servidor ainda mostra para quem está usando (consulta só de ids, sem cursor) */
-export type VisibleIds = Partial<Record<'tasks' | 'events' | 'meds' | 'cycleSettings' | 'cycleLogs', ReadonlySet<string>>>
+export type VisibleIds = Partial<Record<'tasks' | 'events' | 'meds' | 'cycleSettings' | 'cycleLogs' | 'focusSessions', ReadonlySet<string>>>
 
 export interface PurgeOptions {
   /** ids visíveis no servidor agora; sem isso, só as regras locais valem */
@@ -105,6 +106,7 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
 
   const transactions = filter(state.transactions, keepTx)
   const tasks = filter(state.tasks, keepTask)
+  const focusSessions = filter(state.focusSessions, (session: FocusSession) => session.startedBy === owner || (canViewFocusSession(session, owner, tasks) && onServer('focusSessions', session)))
   const events = filter(state.events, keepEvent)
   const meds = filter(state.meds, keepMed)
   const medLogs = meds === state.meds ? state.medLogs : filter(state.medLogs, (l) => !removed.has(l.medicationId))
@@ -121,5 +123,5 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const logIds = Object.keys(state.medLogs).filter((id) => !medLogs[id])
   for (const id of logIds) removed.add(id)
   const outbox = state.outbox.filter((e) => !removed.has(e.entityId))
-  return { ...state, transactions, tasks, events, meds, medLogs, cycleLogs, cycleSettings, giftIdeas, recurrences, outbox }
+  return { ...state, transactions, tasks, focusSessions, events, meds, medLogs, cycleLogs, cycleSettings, giftIdeas, recurrences, outbox }
 }

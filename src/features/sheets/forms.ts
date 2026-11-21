@@ -5,6 +5,8 @@ import type { SheetKind } from '../../store/ui'
  * e aponta para o formulário pelo atributo `form`: rodapé sólido, sem conteúdo vazando por baixo.
  */
 export const SHEET_FORM = {
+  quickCapture: 'sheet-form-quick-capture',
+  unstuck: 'sheet-form-unstuck',
   task: 'sheet-form-task',
   expense: 'sheet-form-expense',
   newMed: 'sheet-form-new-med',
@@ -20,6 +22,8 @@ export const SHEET_FORM = {
 } as const satisfies Partial<Record<SheetKind, string>>
 
 export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: string }>> = {
+  quickCapture: { label: 'Salvar agora', testId: 'quick-save' },
+  unstuck: { label: 'Continuar', testId: 'unstuck-next' },
   task: { label: 'Salvar tarefa', testId: 'task-save' },
   expense: { label: 'Salvar gasto', testId: 'expense-save' },
   newMed: { label: 'Salvar remédio', testId: 'new-med-save' },

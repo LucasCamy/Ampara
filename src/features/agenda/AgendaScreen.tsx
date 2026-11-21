@@ -6,23 +6,27 @@ import { addDays, dayOfMonth, monthGrid, monthName, parseDateKey, relativeDayLab
 import { formatCents } from '../../domain/format'
 import { agendaMarks, marksForScope, type DayMark, type MarkKind } from '../../domain/agenda'
 import { isScheduledOn } from '../../domain/medication'
+import { visibleTransactions } from '../../domain/privacy'
 import { dayLoad, filterTasks, inboxTasks, matchesScope, tasksForDay, type DayLoad, type ScopeFilter } from '../../domain/tasks'
 import { eventsVisibleTo } from '../../domain/today'
 import type { CalendarEvent, DateKey, Medication, Transaction } from '../../domain/types'
 import { postponeTask, scheduleTaskToday, sendTaskToPartner, toggleTask } from '../../store/actions'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { ownerLabel, possessive, toneOf, usePeople } from '../../store/hooks'
-import { ui } from '../../store/ui'
+import { ownerLabel, possessive, toneOf, useIsSolo, usePeople } from '../../store/hooks'
+import { ui, useUi, type AgendaView } from '../../store/ui'
 
-type View = 'DAY' | 'WEEK' | 'MONTH' | 'INBOX'
+type View = AgendaView
 
 export function AgendaScreen() {
+  const isSolo = useIsSolo()
   const now = useNow()
   const today = toDateKey(now)
   const { viewer, partner } = usePeople()
-  const [view, setView] = useState<View>('DAY')
-  const [scope, setScope] = useState<ScopeFilter>('ALL')
+  const view = useUi((s) => s.agendaView ?? 'DAY')
+  const setView = ui.setAgendaView
+  const [scopeChoice, setScope] = useState<ScopeFilter>('ALL')
+  const scope = isSolo ? 'ALL' : scopeChoice
   const [cursor, setCursor] = useState<DateKey>(today)
   const tasksMap = useData((s) => s.tasks)
   const eventsMap = useData((s) => s.events)
@@ -37,7 +41,7 @@ export function AgendaScreen() {
     const tasks = filterTasks(Object.values(tasksMap), viewer, scope)
     const events = eventsVisibleTo(Object.values(eventsMap), viewer).filter((e) => matchesScope(e.ownerId, scope, viewer))
     // contas que vencem: as do casal e as minhas pessoais (parcelas e fixas entram aqui também)
-    const bills = Object.values(txMap).filter(
+    const bills = visibleTransactions(Object.values(txMap), viewer, profiles).filter(
       (t) =>
         t.type === 'EXPENSE' &&
         t.status === 'PREDICTED_DASHED' &&
@@ -112,7 +116,7 @@ export function AgendaScreen() {
           ]}
         />
         </div>
-        <Segmented<ScopeFilter>
+        {!isSolo ? <Segmented<ScopeFilter>
           label="Filtrar por pessoa"
           value={scope}
           onChange={setScope}
@@ -124,7 +128,7 @@ export function AgendaScreen() {
             { value: 'PARTNER', label: possessive(partner) },
             { value: 'US', label: 'Nós' },
           ]}
-        />
+        /> : null}
       </div>
 
       {view !== 'INBOX' ? (
@@ -383,8 +387,8 @@ function WeekView({ day, today, tasks, events, bills, marks }: ViewData & { day:
                       {t.status === 'DONE' ? <CircleCheck size={20} aria-hidden /> : <CircleDashed size={20} aria-hidden />}
                     </button>
                     <span className="min-w-0 flex-1 py-3 leading-snug break-words">
-                      <span className={t.status === 'DONE' ? 'text-muted line-through' : 'text-ink'}>{t.title}</span>
-                      {t.status === 'DONE' ? <span className="block text-[12px] font-semibold text-ok">Feita</span> : null}
+                      <span className={t.status === 'DONE' ? 'text-muted' : 'text-ink'}>{t.title}</span>
+                      {t.status === 'DONE' ? <StatusBadge kind="ok" className="mt-1 text-[12px]">Feita</StatusBadge> : null}
                     </span>
                   </span>
                   {t.status === 'PENDING' ? (
@@ -547,6 +551,7 @@ function MonthView({ day, today, onPick, tasks, events, bills, marks }: ViewData
 
 function InboxView({ tasks }: { tasks: ReturnType<typeof inboxTasks> }) {
   const { viewer, partner } = usePeople()
+  const isSolo = useIsSolo()
   if (tasks.length === 0) {
     return (
       <EmptyState
@@ -572,7 +577,7 @@ function InboxView({ tasks }: { tasks: ReturnType<typeof inboxTasks> }) {
           <Button size="sm" variant="quiet" className="grow basis-[130px]" onClick={() => scheduleTaskToday(t.id)}>
             Trazer para hoje
           </Button>
-          {t.assignedTo === viewer ? (
+          {!isSolo && t.assignedTo === viewer ? (
             <Button size="sm" variant="secondary" className="grow basis-[130px]" onClick={() => sendTaskToPartner(t.id)}>
               Enviar para meu amor
             </Button>

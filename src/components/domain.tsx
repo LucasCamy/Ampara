@@ -1,5 +1,5 @@
 import { firstName } from '../domain/format'
-import { Brain, Check, CircleDashed, Clock, LifeBuoy, Mail, MoveRight, Zap } from 'lucide-react'
+import { Brain, Check, CircleCheck, CircleDashed, Clock, LifeBuoy, Mail, MoveRight, Zap } from 'lucide-react'
 import { formatClock, formatDuration } from '../domain/format'
 import type { DoseView } from '../domain/medication'
 import { minutesLate } from '../domain/medication'
@@ -7,7 +7,7 @@ import type { DoseItem } from '../domain/today'
 import type { Task } from '../domain/types'
 import { postponeTask, sendTaskToPartner, snoozeDose, takeDose, toggleTask } from '../store/actions'
 import { useSecondNow } from '../store/clock'
-import { ownerLabel, toneOf, usePeople } from '../store/hooks'
+import { ownerLabel, toneOf, useIsSolo, usePeople } from '../store/hooks'
 import { ui } from '../store/ui'
 import { Button, cx, OwnerTag, StatusBadge } from './ui'
 
@@ -111,6 +111,7 @@ export function TaskRow({
   actions?: ('help' | 'postpone' | 'send')[]
 }) {
   const { viewer, partner, profiles } = usePeople()
+  const isSolo = useIsSolo()
   const done = task.status === 'DONE'
   const sentToMe = task.sentBy !== null && task.sentBy !== viewer && task.assignedTo === viewer
   const sentByMe = task.sentBy === viewer && task.assignedTo !== viewer
@@ -129,15 +130,13 @@ export function TaskRow({
         className={cx('press inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px]', done ? 'text-ok' : 'text-muted hoverable')}
       >
         {done ? (
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ok text-surface">
-            <Check size={18} strokeWidth={3} aria-hidden />
-          </span>
+          <CircleCheck size={28} strokeWidth={2.4} aria-hidden />
         ) : (
           <CircleDashed size={28} aria-hidden />
         )}
       </button>
       <div className="min-w-0 flex-1 py-1.5">
-        <p className={cx('text-[15px] leading-snug font-semibold text-ink', done && 'text-muted line-through decoration-1')}>{task.title}</p>
+        <p className={cx('text-[15px] leading-snug font-semibold', done ? 'text-muted' : 'text-ink')}>{task.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <OwnerTag tone={toneOf(task.assignedTo)}>{ownerLabel(task.assignedTo, viewer, partner)}</OwnerTag>
           <EffortTag effort={task.effort} />
@@ -152,13 +151,13 @@ export function TaskRow({
               <MoveRight size={13} aria-hidden /> Você enviou
             </span>
           ) : null}
-          {done && task.completedBy ? (
+          {done ? (
             <StatusBadge kind="ok" className="min-h-6 text-[12px]">
-              Feito por {task.completedBy === viewer ? 'você' : firstName(profiles[task.completedBy].displayName)}
+              Feita{task.completedBy ? ` por ${task.completedBy === viewer ? 'você' : firstName(profiles[task.completedBy].displayName)}` : ''}
             </StatusBadge>
           ) : null}
         </div>
-        {!done && (actions.includes('postpone') || (actions.includes('send') && task.assignedTo === viewer)) ? (
+        {!done && (actions.includes('postpone') || (!isSolo && actions.includes('send') && task.assignedTo === viewer)) ? (
           <div className="mt-2 flex gap-2">
             {actions.includes('postpone') ? (
               <button
@@ -170,7 +169,7 @@ export function TaskRow({
                 <MoveRight size={15} aria-hidden /> <span className="sm:hidden">Amanhã</span><span className="hidden sm:inline">Adiar para amanhã</span>
               </button>
             ) : null}
-            {actions.includes('send') && task.assignedTo === viewer ? (
+            {!isSolo && actions.includes('send') && task.assignedTo === viewer ? (
               <button
                 type="button"
                 onClick={() => sendTaskToPartner(task.id)}
@@ -189,7 +188,7 @@ export function TaskRow({
             <button
               type="button"
               onClick={() => ui.openSheet('sos', { taskId: task.id })}
-              aria-label={`Pedir ajuda com: ${task.title}`}
+              aria-label={`${isSolo ? 'Destravar' : 'Pedir ajuda com'}: ${task.title}`}
               className="press hoverable inline-flex h-12 w-12 items-center justify-center rounded-[12px] text-muted"
             >
               <LifeBuoy size={20} aria-hidden />

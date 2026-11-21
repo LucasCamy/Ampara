@@ -1,7 +1,7 @@
-import { buildEmpty, buildSeed, normalizeState, withIdentity } from '../domain/seed'
-import type { DataState, PartnerId, Pronoun, SplitMode } from '../domain/types'
+import { buildEmpty, buildSeed, defaultEnabledModules, normalizeState, withIdentity } from '../domain/seed'
+import type { DataState, PartnerId, Pronoun, SpaceMode, SplitMode } from '../domain/types'
 import { createStore, useStore } from '../store/createStore'
-import { dataStore, LEGACY_PLAINTEXT_KEY } from '../store/data'
+import { dataStore, LEGACY_PLAINTEXT_KEY, transact } from '../store/data'
 import { ui, uiStore } from '../store/ui'
 import {
   AuthError,
@@ -12,7 +12,6 @@ import {
   claimInvite,
   createSingleVault,
   createVault,
-  isVault,
   openCloud,
   sealCloud,
   lockoutMs,
@@ -22,6 +21,8 @@ import {
   writeData,
   type Vault,
 } from './vault'
+import { clearLocalStorage, readStoredVault as loadVault, VAULT_KEY, writeStoredVault } from './storage'
+export { VAULT_KEY } from './storage'
 
 /**
  * Sessão de acesso. Regras (ver SECURITY.md):
@@ -31,10 +32,10 @@ import {
  * - Sem "lembrar": bloqueio automático após 15 min sem interação.
  */
 
-export const VAULT_KEY = 'ampara:vault:v1'
 const ATTEMPTS_KEY = 'ampara:auth:attempts'
 const REMEMBER_MS = 14 * 24 * 3600_000
 const IDLE_MS = 15 * 60_000
+const AUTH_EVENT_KEY = 'ampara:auth:event'
 
 export interface PersonHeader {
   name: string
@@ -69,6 +70,12 @@ export const authStore = createStore<AuthState>({
 })
 export const useAuth = <S>(sel: (s: AuthState) => S) => useStore(authStore, sel)
 
+export type LocalSaveStatus = 'saved' | 'saving' | 'error'
+export const localSaveStore = createStore<LocalSaveStatus>('saved')
+export const useLocalSaveStatus = () => useStore(localSaveStore, (s) => s)
+let pendingSaves = 0
+let saveFailed = false
+
 let key: CryptoKey | null = null
 let vault: Vault | null = null
 let applyingRemote = false
@@ -77,18 +84,50 @@ let lastActivity = Date.now()
 
 /* ---------- armazenamento ---------- */
 
-function loadVault(): Vault | null {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(VAULT_KEY) ?? 'null') as unknown
-    return isVault(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+function queueWrite<T>(run: () => Promise<T>): Promise<T> {
+  const pending = writeChain.then(run)
+  writeChain = pending.then(() => undefined, () => undefined)
+  return pending
 }
 
-function saveVault(v: Vault) {
+function persistSnapshot(snapshot: DataState, k: CryptoKey) {
+  pendingSaves++
+  localSaveStore.set(() => 'saving')
+  void queueWrite(async () => {
+    const base = await loadVault() ?? vault
+    if (!base || key !== k) return
+    const next = await writeData(base, k, snapshot)
+    if (key !== k) return
+    await saveVault(next)
+    authStore.set((s) => ({ ...s, people: headerOf(next) }))
+  }).then(() => {
+    saveFailed = false
+  }).catch(() => {
+    saveFailed = true
+    ui.toast('Não foi possível salvar no aparelho. Libere espaço e tente de novo.', { tone: 'warn' })
+  }).finally(() => {
+    pendingSaves--
+    localSaveStore.set(() => pendingSaves > 0 ? 'saving' : saveFailed ? 'error' : 'saved')
+  })
+}
+
+/** Reenvia o estado atual ao cofre quando o navegador volta a ter espaço. */
+export function retryLocalSave() {
+  if (key) persistSnapshot(dataStore.get(), key)
+}
+
+async function saveVault(v: Vault) {
+  await writeStoredVault(v)
   vault = v
-  localStorage.setItem(VAULT_KEY, JSON.stringify(v))
+  broadcast('updated')
+}
+
+function removeLocal(name: string) {
+  try {
+    localStorage.removeItem(name)
+  } catch {
+    // O cofre usa IndexedDB; preferências indisponíveis não impedem o login.
+  }
 }
 
 const headerOf = (v: Vault): Record<PartnerId, PersonHeader> => ({
@@ -117,18 +156,35 @@ interface RememberedSession {
 function idb<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
   return new Promise((resolve) => {
     if (typeof indexedDB === 'undefined') return resolve(undefined)
-    const req = indexedDB.open('ampara-auth', 1)
+    let req: IDBOpenDBRequest
+    try {
+      req = indexedDB.open('ampara-auth', 1)
+    } catch {
+      resolve(undefined)
+      return
+    }
+    let blocked = false
     req.onupgradeneeded = () => req.result.createObjectStore('sessions')
     req.onerror = () => resolve(undefined)
+    req.onblocked = () => {
+      blocked = true
+      resolve(undefined)
+    }
     req.onsuccess = () => {
       const db = req.result
-      const tx = db.transaction('sessions', mode)
-      const r = fn(tx.objectStore('sessions'))
-      tx.oncomplete = () => {
-        db.close()
-        resolve(r ? (r.result as T) : undefined)
-      }
-      tx.onerror = () => {
+      if (blocked) return db.close()
+      try {
+        const tx = db.transaction('sessions', mode)
+        const r = fn(tx.objectStore('sessions'))
+        tx.oncomplete = () => {
+          db.close()
+          resolve(r ? (r.result as T) : undefined)
+        }
+        tx.onabort = tx.onerror = () => {
+          db.close()
+          resolve(undefined)
+        }
+      } catch {
         db.close()
         resolve(undefined)
       }
@@ -144,8 +200,13 @@ const loadRemembered = () => idb<RememberedSession>('readonly', (st) => st.get('
 
 const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('ampara-auth') : null
 
-function broadcast(type: 'lock' | 'wipe') {
+function broadcast(type: 'lock' | 'wipe' | 'updated') {
   channel?.postMessage({ type })
+  try {
+    localStorage.setItem(AUTH_EVENT_KEY, JSON.stringify({ type, nonce: crypto.randomUUID() }))
+  } catch {
+    // BroadcastChannel continua disponível quando o localStorage está bloqueado.
+  }
 }
 
 /* ---------- avisos de sessão (a nuvem escuta para conectar/desconectar) ---------- */
@@ -167,10 +228,13 @@ export const isSingleDevice = () => {
 
 export async function readCloudSecret(): Promise<string | null> {
   const who = authStore.get().who
-  const v = loadVault() ?? vault
-  if (!who || !v || !key) return null
+  await writeChain
+  const v = await loadVault() ?? vault
+  const k = key
+  if (!who || !v || !k) return null
   try {
-    return await openCloud(v, key, who)
+    const secret = await openCloud(v, k, who)
+    return key === k && authStore.get().who === who ? secret : null
   } catch {
     return null
   }
@@ -180,14 +244,13 @@ export async function writeCloudSecret(secret: string | null): Promise<void> {
   const who = authStore.get().who
   const k = key
   if (!who || !k) return
-  writeChain = writeChain.then(async () => {
-    const v = loadVault() ?? vault
+  await queueWrite(async () => {
+    const v = await loadVault() ?? vault
     if (!v || key !== k) return
     const next = await sealCloud(v, k, who, secret)
-    saveVault(next)
+    await saveVault({ ...next, rev: v.rev + 1 })
     authStore.set((s) => ({ ...s, people: headerOf(next) }))
   })
-  await writeChain
 }
 
 /** Aparelho novo entrando pela nuvem: cria o cofre só com esta pessoa e a mesma senha da conta */
@@ -197,8 +260,8 @@ export async function setupFromCloud(input: { who: PartnerId; password: string; 
   const people = { A: { name: A.displayName, pronoun: A.pronoun }, B: { name: B.displayName, pronoun: B.pronoun } }
   const created = await createSingleVault(input.who, people, input.password, input.data)
   const v = await sealCloud(created.vault, created.key, input.who, input.cloudSecret)
-  saveVault(v)
-  localStorage.removeItem(LEGACY_PLAINTEXT_KEY)
+  await saveVault(v)
+  removeLocal(LEGACY_PLAINTEXT_KEY)
   await openSession(input.who, created.key, v, input.remember)
 }
 
@@ -213,19 +276,33 @@ async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boo
   applyingRemote = false
   ui.setViewer(who)
   lastActivity = Date.now()
-  authStore.set((s) => ({ ...s, status: welcomeInvite ? 'welcome' : 'unlocked', welcomeInvite, who, preselect: null, people: headerOf(v), remembered: remember }))
-  if (remember) await rememberSession({ who, key: k, expiresAt: Date.now() + REMEMBER_MS })
-  else await forgetSession()
+  const remembered = remember ? !!await rememberSession({ who, key: k, expiresAt: Date.now() + REMEMBER_MS }) : false
+  if (!remember) await forgetSession()
+  if (key !== k) {
+    await forgetSession()
+    return
+  }
+  saveFailed = false
+  localSaveStore.set(() => pendingSaves > 0 ? 'saving' : 'saved')
+  authStore.set((s) => ({ ...s, status: welcomeInvite ? 'welcome' : 'unlocked', welcomeInvite, who, preselect: null, people: headerOf(v), remembered }))
+  // Pede persistência sem tornar o desbloqueio dependente dessa permissão.
+  try {
+    void navigator.storage?.persist?.().catch(() => false)
+  } catch {
+    // API ausente ou navegador privado: o cofre continua utilizável.
+  }
   emit()
 }
 
 function closeSession(preselect: PartnerId | null) {
   key = null
+  saveFailed = false
+  localSaveStore.set(() => 'saved')
   emit()
   dataStore.set(() => buildEmpty(new Date()))
   ui.closeSheet()
   uiStore.set((s) => ({ ...s, toasts: [] }))
-  const v = vault ?? loadVault()
+  const v = vault
   authStore.set((s) => ({
     ...s,
     status: v ? 'locked' : 'setup',
@@ -251,11 +328,22 @@ export const switchPerson = (target: PartnerId) => lock(target)
 /* ---------- tentativas e atraso progressivo ---------- */
 
 type Attempts = Partial<Record<PartnerId, { failures: number; until: number }>>
+let memoryAttempts: Attempts = {}
 const readAttempts = (): Attempts => {
   try {
-    return JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? '{}') as Attempts
+    const value: unknown = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? 'null')
+    return value && typeof value === 'object' ? value as Attempts : memoryAttempts
   } catch {
-    return {}
+    return memoryAttempts
+  }
+}
+
+function saveAttempts(value: Attempts) {
+  memoryAttempts = value
+  try {
+    localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(value))
+  } catch {
+    // Mantém o limite desta sessão mesmo se o localStorage estiver indisponível.
   }
 }
 
@@ -267,13 +355,13 @@ function registerFailure(who: PartnerId) {
   const a = readAttempts()
   const failures = (a[who]?.failures ?? 0) + 1
   a[who] = { failures, until: Date.now() + lockoutMs(failures) }
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(a))
+  saveAttempts(a)
 }
 
 function clearFailures(who: PartnerId) {
   const a = readAttempts()
   delete a[who]
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(a))
+  saveAttempts(a)
 }
 
 function assertNotThrottled(who: PartnerId) {
@@ -287,24 +375,41 @@ function assertNotThrottled(who: PartnerId) {
 /* ---------- API pública ---------- */
 
 export interface SetupInput {
+  mode?: SpaceMode
+  cycle?: boolean
   a: { name: string; pronoun: Pronoun; password: string }
-  b: { name: string; pronoun: Pronoun }
-  splitMode: SplitMode
-  shareA: boolean
-  demo: boolean
+  b?: { name: string; pronoun: Pronoun }
+  splitMode?: SplitMode
+  shareA?: boolean
+  demo?: boolean
   remember: boolean
 }
 
-/** Cria o espaço do casal (T01). A pessoa A entra; a B recebe um código de convite. */
+/** Cria um espaço pessoal ou do casal. Só o casal tem código de convite. */
 export async function setup(input: SetupInput): Promise<void> {
   const now = new Date()
-  const base = legacyData() ?? (input.demo ? buildSeed(now) : buildEmpty(now))
-  const draft = withIdentity(base, { a: input.a, b: input.b, inviteCode: '', splitMode: input.splitMode, shareA: input.shareA, shareB: false })
-  const created = await createVault({ a: input.a, b: input.b, data: draft })
-  const finalData = withIdentity(draft, { a: input.a, b: input.b, inviteCode: created.invite })
+  const mode = input.mode ?? 'COUPLE'
+  const partner = input.b ?? { name: '', pronoun: 'ela' as const }
+  if (mode === 'COUPLE' && !partner.name.trim()) throw new Error('Diga o nome de quem vai compartilhar este espaço.')
+  const legacy = legacyData()
+  if (legacy && mode === 'SOLO') throw new Error('Seus dados antigos são de casal. Proteja-os criando o espaço para um casal.')
+  const base = legacy ?? (mode === 'COUPLE' && input.demo ? buildSeed(now) : buildEmpty(now, mode))
+  let draft = withIdentity(base, { mode, a: input.a, b: partner, inviteCode: '', splitMode: input.splitMode, shareA: input.shareA, shareB: false })
+  if (mode === 'SOLO') {
+    draft = { ...draft, profiles: { ...draft.profiles, A: { ...draft.profiles.A!, sharePersonalFinances: false, enabledModules: { ...defaultEnabledModules('SOLO'), cycle: input.cycle ?? false } } } }
+    const people = { A: { name: input.a.name, pronoun: input.a.pronoun }, B: partner }
+    const created = await createSingleVault('A', people, input.a.password, draft)
+    await saveVault(created.vault)
+    removeLocal(LEGACY_PLAINTEXT_KEY)
+    authStore.set((s) => ({ ...s, hasLegacyData: false }))
+    await openSession('A', created.key, created.vault, input.remember)
+    return
+  }
+  const created = await createVault({ a: input.a, b: partner, data: draft })
+  const finalData = withIdentity(draft, { a: input.a, b: partner, inviteCode: created.invite })
   const v = await writeData(created.vault, created.key, finalData)
-  saveVault(v)
-  localStorage.removeItem(LEGACY_PLAINTEXT_KEY)
+  await saveVault(v)
+  removeLocal(LEGACY_PLAINTEXT_KEY)
   authStore.set((s) => ({ ...s, hasLegacyData: false }))
   await openSession('A', created.key, v, input.remember, created.invite)
 }
@@ -312,7 +417,8 @@ export async function setup(input: SetupInput): Promise<void> {
 export const enterApp = () => authStore.set((s) => ({ ...s, status: 'unlocked', welcomeInvite: null }))
 
 export async function login(who: PartnerId, password: string, remember: boolean) {
-  const v = loadVault()
+  await writeChain
+  const v = await loadVault()
   if (!v) throw new AuthError('BAD_CREDENTIALS', 'Nenhum espaço encontrado neste aparelho.')
   assertNotThrottled(who)
   try {
@@ -326,12 +432,13 @@ export async function login(who: PartnerId, password: string, remember: boolean)
 }
 
 export async function activate(who: PartnerId, code: string, password: string, remember: boolean) {
-  const v = loadVault()
+  await writeChain
+  const v = await loadVault()
   if (!v) throw new AuthError('BAD_CREDENTIALS', 'Nenhum espaço encontrado neste aparelho.')
   assertNotThrottled(who)
   try {
     const r = await claimInvite(v, who, code, password)
-    saveVault(r.vault)
+    await saveVault({ ...r.vault, rev: v.rev + 1 })
     clearFailures(who)
     await openSession(who, r.key, r.vault, remember)
   } catch (e) {
@@ -342,10 +449,14 @@ export async function activate(who: PartnerId, code: string, password: string, r
 
 export async function changeMyPassword(current: string, next: string) {
   const who = authStore.get().who
-  const v = loadVault()
-  if (!who || !v) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
-  await writeChain
-  saveVault(await rewrap(v, who, current, next))
+  await queueWrite(async () => {
+    const v = await loadVault()
+    if (!who || !v || who !== authStore.get().who || !key) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    const k = key
+    const updated = await rewrap(v, who, current, next)
+    if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    await saveVault({ ...updated, rev: v.rev + 1 })
+  })
   // sessões lembradas e outras abas precisam entrar de novo
   await forgetSession()
   broadcast('lock')
@@ -374,18 +485,55 @@ async function purgeApiCache() {
 
 export async function wipeDevice(password: string) {
   const who = authStore.get().who
-  const v = loadVault()
-  if (!who || !v) return
-  await unlockVault(v, who, password)
+  const k = key
   await writeChain
-  localStorage.removeItem(VAULT_KEY)
-  localStorage.removeItem(ATTEMPTS_KEY)
-  localStorage.removeItem('ampara:prefs')
+  const v = await loadVault()
+  if (!who || !v || !k) return
+  await unlockVault(v, who, password)
+  await queueWrite(async () => {
+    if (key !== k || authStore.get().who !== who) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    await clearLocalStorage()
+    removeLocal(ATTEMPTS_KEY)
+    removeLocal('ampara:prefs')
+    memoryAttempts = {}
+    vault = null
+    closeSession(null)
+    broadcast('wipe')
+  })
   await purgeApiCache()
   await forgetSession()
-  vault = null
-  closeSession(null)
-  broadcast('wipe')
+}
+
+/** IndexedDB não emite storage: o aviso entre abas só leva o tipo, nunca os dados. */
+async function refreshVault() {
+  const k = key
+  await writeChain
+  const v = await loadVault()
+  if (key !== k) return
+  if (!v) {
+    vault = null
+    closeSession(null)
+    return
+  }
+  if (!k) {
+    vault = v
+    authStore.set((s) => ({ ...s, status: 'locked', people: headerOf(v) }))
+    return
+  }
+  if (JSON.stringify(v) === JSON.stringify(vault)) return
+  const snapshot = dataStore.get()
+  try {
+    const data = await readData(v, k)
+    if (key !== k) return
+    vault = v
+    applyingRemote = true
+    // Uma edição feita enquanto o cofre era aberto continua na fila da sessão.
+    dataStore.set((cur) => cur === snapshot ? data : cur)
+    applyingRemote = false
+    authStore.set((s) => ({ ...s, people: headerOf(v) }))
+  } catch {
+    if (key === k) closeSession(null)
+  }
 }
 
 /* ---------- inicialização ---------- */
@@ -398,18 +546,7 @@ export async function startAuth() {
   // gravação cifrada a cada mudança enquanto a sessão está aberta (em fila, na ordem)
   dataStore.subscribe(() => {
     if (!key || applyingRemote) return
-    const k = key
-    const snapshot = dataStore.get()
-    writeChain = writeChain
-      .then(async () => {
-        const base = loadVault() ?? vault
-        if (!base || key !== k) return
-        const next = await writeData(base, k, snapshot)
-        saveVault(next)
-        const people = headerOf(next)
-        authStore.set((s) => ({ ...s, people }))
-      })
-      .catch(() => ui.toast('Não foi possível salvar no aparelho. Libere espaço e tente de novo.', { tone: 'warn' }))
+    persistSnapshot(dataStore.get(), key)
   })
 
   channel?.addEventListener('message', (e: MessageEvent<{ type: string }>) => {
@@ -417,22 +554,23 @@ export async function startAuth() {
       if (e.data.type === 'wipe') vault = null
       closeSession(null)
     }
+    if (e.data?.type === 'updated') void refreshVault()
   })
 
   // outra aba gravou: traz os dados novos em vez de sobrescrever com uma cópia velha
   window.addEventListener('storage', (e) => {
-    if (e.key !== VAULT_KEY || !key) return
-    const v = loadVault()
-    if (!v) return closeSession(null)
-    const k = key
-    void readData(v, k)
-      .then((data) => {
-        vault = v
-        applyingRemote = true
-        dataStore.set(() => data)
-        applyingRemote = false
-      })
-      .catch(() => closeSession(null))
+    if (e.key === VAULT_KEY) void refreshVault()
+    if (e.key !== AUTH_EVENT_KEY || !e.newValue) return
+    try {
+      const event = JSON.parse(e.newValue) as { type?: string }
+      if (event.type === 'wipe' || event.type === 'lock') {
+        if (event.type === 'wipe') vault = null
+        closeSession(null)
+      }
+      if (event.type === 'updated') void refreshVault()
+    } catch {
+      // Ignora eventos que não vieram de uma sessão do Ampara.
+    }
   })
 
   for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
@@ -443,7 +581,7 @@ export async function startAuth() {
     if (s.status === 'unlocked' && !s.remembered && Date.now() - lastActivity > IDLE_MS) void lock(s.who)
   }, 30_000)
 
-  const v = loadVault()
+  const v = await loadVault()
   if (!v) {
     authStore.set((s) => ({ ...s, status: 'setup', hasLegacyData: !!legacyData() }))
     return
@@ -466,16 +604,62 @@ export async function startAuth() {
 /** Gera novo convite para o par (recuperação de senha esquecida). Exige a senha de quem está usando. */
 export async function reinvitePartner(password: string): Promise<string> {
   const who = authStore.get().who
-  const v = loadVault()
-  if (!who || !v || !key) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
-  const target: PartnerId = who === 'A' ? 'B' : 'A'
+  const k = key
+  const invite = await queueWrite(async () => {
+    const v = await loadVault()
+    if (!who || !v || !k || key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    if (dataStore.get().couple.couple?.mode === 'SOLO') throw new Error('Para convidar alguém, use Convidar alguém para este espaço.')
+    const target: PartnerId = who === 'A' ? 'B' : 'A'
+    const r = await reinvite(v, who, password, target)
+    if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    const cur = dataStore.get()
+    const couple = cur.couple.couple
+    if (!couple) throw new Error('Espaço não encontrado.')
+    const nextCouple = { ...couple, inviteCode: r.invite, updatedAt: new Date().toISOString() }
+    const updated = await writeData(r.vault, k, { ...cur, couple: { couple: nextCouple } })
+    if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    await saveVault(updated)
+    if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    transact((tx) => {
+      const current = tx.get('couple', 'couple')
+      if (current) tx.put('couple', { ...current, inviteCode: r.invite, updatedAt: nextCouple.updatedAt })
+    })
+    authStore.set((s) => ({ ...s, people: headerOf(vault!) }))
+    return r.invite
+  })
   await writeChain
-  const r = await reinvite(v, who, password, target)
-  saveVault(r.vault)
-  const couple = dataStore.get().couple.couple
-  if (couple) dataStore.set((s) => ({ ...s, couple: { couple: { ...couple, inviteCode: r.invite } } }))
-  authStore.set((s) => ({ ...s, people: headerOf(r.vault) }))
-  return r.invite
+  return invite
+}
+
+/** Promove o mesmo espaço, preservando coleções, preferências e o acesso da pessoa A. */
+export async function upgradeSoloToCouple(password: string, partner: { name: string; pronoun: Pronoun }): Promise<string> {
+  if (!partner.name.trim()) throw new Error('Diga o nome de quem você quer convidar.')
+  const k = key
+  const invite = await queueWrite(async () => {
+    const v = await loadVault()
+    if (!k || key !== k || authStore.get().who !== 'A' || !v) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    if (dataStore.get().couple.couple?.mode !== 'SOLO') throw new Error('Este espaço já é de um casal.')
+    const r = await reinvite(v, 'A', password, 'B')
+    if (key !== k || dataStore.get().couple.couple?.mode !== 'SOLO') throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    const now = new Date().toISOString()
+    const cur = dataStore.get()
+    const couple = { ...cur.couple.couple!, mode: 'COUPLE' as const, inviteCode: r.invite, updatedAt: now }
+    const profile = { ...cur.profiles.B!, displayName: partner.name.trim(), pronoun: partner.pronoun, enabledModules: defaultEnabledModules('COUPLE'), updatedAt: now }
+    const updated = await writeData(r.vault, k, { ...cur, couple: { couple }, profiles: { ...cur.profiles, B: profile } })
+    if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    await saveVault(updated)
+    if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
+    transact((tx) => {
+      const currentCouple = tx.get('couple', 'couple')!
+      const currentProfile = tx.get('profiles', 'B')!
+      tx.put('couple', { ...currentCouple, mode: 'COUPLE', inviteCode: r.invite, updatedAt: now })
+      tx.put('profiles', { ...currentProfile, displayName: profile.displayName, pronoun: profile.pronoun, enabledModules: profile.enabledModules, updatedAt: now })
+    })
+    authStore.set((s) => ({ ...s, people: headerOf(vault!) }))
+    return r.invite
+  })
+  await writeChain
+  return invite
 }
 
 /* ---------- backup cifrado ---------- */
@@ -483,11 +667,12 @@ export async function reinvitePartner(password: string): Promise<string> {
 /** Exporta o cofre (já cifrado) depois de confirmar a senha de quem está usando */
 export async function exportBackup(password: string): Promise<{ name: string; content: string }> {
   const who = authStore.get().who
-  const v0 = loadVault()
+  await writeChain
+  const v0 = await loadVault()
   if (!who || !v0) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
   await unlockVault(v0, who, password)
   await writeChain // a última alteração já está no cofre
-  const v = loadVault() ?? v0
+  const v = await loadVault() ?? v0
   const now = new Date()
   return { name: backupFileName(toDateKeyLocal(now)), content: toBackup(v, who, now.toISOString()) }
 }
@@ -503,8 +688,9 @@ export async function restoreBackup(text: string, who: PartnerId, password: stri
   await unlockVault(file.vault, who, password)
   await writeChain
   await forgetSession()
-  saveVault(file.vault)
-  localStorage.removeItem(ATTEMPTS_KEY)
+  await saveVault(file.vault)
+  removeLocal(ATTEMPTS_KEY)
+  memoryAttempts = {}
   closeSession(who)
   broadcast('lock')
   authStore.set((s) => ({ ...s, status: 'locked', people: headerOf(file.vault) }))

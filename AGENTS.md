@@ -15,7 +15,7 @@ arquivo prevalecem; registre a divergência em `IMPLEMENTATION_PLAN.md`.
 - `motion/react` para gavetas e toasts, `lucide-react` para ícones
 - `@fontsource/plus-jakarta-sans` (interface e display) e `@fontsource/jetbrains-mono` (dados)
 - Autenticação local obrigatória com cofre cifrado (WebCrypto: PBKDF2 600k + AES-GCM 256), ver `SECURITY.md`
-- Persistência local cifrada em `localStorage` (`ampara:vault:v1`) + fila `sync_outbox`
+- Persistência local cifrada em IndexedDB (`ampara-local`, `vault.primary`) + fila `sync_outbox`; `localStorage` (`ampara:vault:v1`) apenas para migração e fallback cifrado
 - Vitest (domínio) e Playwright (E2E, usa o Microsoft Edge instalado via `channel: 'msedge'`)
 
 ## Comandos

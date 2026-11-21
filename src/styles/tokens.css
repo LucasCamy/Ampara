@@ -68,6 +68,15 @@
   --dur-exit: 170ms;
 }
 
+/* Fontes locais para escolher a leitura mais confortável neste aparelho. */
+:root[data-font='lexend'] {
+  --font-sans: 'Lexend', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+:root[data-font='atkinson'] {
+  --font-sans: 'Atkinson Hyperlegible', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
 /* Noite Serena · tema escuro explícito */
 :root[data-theme='dark'] {
   color-scheme: dark;

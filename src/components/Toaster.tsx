@@ -32,11 +32,11 @@ export function Toaster() {
               initial={{ transform: 'translateY(-120%)', opacity: 0 }}
               animate={{ transform: 'translateY(0%)', opacity: 1, transition: { duration: reduce ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] } }}
               exit={{ opacity: 0, transition: { duration: reduce ? 0 : 0.17 } }}
-              className="pointer-events-auto flex w-full max-w-[520px] items-center gap-3 rounded-[18px] border border-line-strong bg-surface py-2 pr-2 pl-4 text-ink shadow-float"
+              className="pointer-events-auto flex w-full max-w-[520px] flex-wrap items-center gap-3 rounded-[18px] border border-line-strong bg-surface py-2 pr-2 pl-4 text-ink shadow-float"
             >
               <Icon size={18} aria-hidden className={cx('shrink-0', t.tone === 'warn' ? 'text-warn' : t.tone === 'info' ? 'text-muted' : 'text-ok')} />
               <p className="min-w-0 flex-1 text-[14px] leading-snug font-medium"><MoneyText>{t.message}</MoneyText></p>
-              {t.undo ? (
+              {t.undo && !t.action ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -57,6 +57,14 @@ export function Toaster() {
               >
                 <X size={18} aria-hidden />
               </button>
+              {t.action ? (
+                <div className="flex w-full flex-wrap justify-end gap-2">
+                  <button type="button" className="press min-h-11 rounded-[12px] border border-line px-3 text-[14px] font-bold text-action" onClick={() => { t.action?.onClick(); ui.dismissToast(t.id) }}>
+                    {t.action.label}
+                  </button>
+                  {t.undo ? <button type="button" className="press inline-flex min-h-11 items-center gap-1.5 rounded-[12px] px-3 text-[14px] font-bold text-action" onClick={() => { t.undo?.(); ui.dismissToast(t.id) }}><Undo2 size={16} aria-hidden />Desfazer</button> : null}
+                </div>
+              ) : null}
             </motion.div>
           )
         })}

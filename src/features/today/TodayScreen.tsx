@@ -1,18 +1,19 @@
 import { firstName } from '../../domain/format'
-import { CalendarClock, ChevronDown, ChevronUp, Coffee, HandHeart, HeartHandshake, LifeBuoy, ListPlus, Package, Pill, Sparkles, Sunrise } from 'lucide-react'
+import { CalendarClock, ChevronDown, ChevronUp, Coffee, HandHeart, HeartHandshake, Inbox, LifeBuoy, ListPlus, Package, Pill, Sparkles, Sunrise } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { DoseActions, DoseStatus, doseBorder, TaskRow } from '../../components/domain'
 import { Button, cx, EmptyState, OwnerTag, SectionHeader, Segmented, StatusBadge, Title } from '../../components/ui'
 import { greeting, toDateKey } from '../../domain/dates'
 import { formatCents, plural } from '../../domain/format'
 import { stockDaysLeft } from '../../domain/medication'
+import { visibleTransactions } from '../../domain/privacy'
 import { filterTasks, leftoverTasks, tasksForDay, type ScopeFilter } from '../../domain/tasks'
 import { dosesFor, eventsVisibleTo, nextAction, partnerDelayAlerts, upcomingEvents, type DoseItem } from '../../domain/today'
 import type { HelpRequest, Transaction } from '../../domain/types'
 import { archiveTasks, bringTasksToToday, markBillPaid, resolveHelp, respondHelp, seeNudge, sendNudge } from '../../store/actions'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { possessive, usePeople } from '../../store/hooks'
+import { possessive, useIsSolo, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
 import { CycleTodayCards } from '../cycle/CycleSection'
 import { PackTodayCards } from '../routines/PackInfo'
@@ -20,6 +21,9 @@ import { SpecialDatesTodayCards } from '../us/DatesGiftsSection'
 import { ComfortList, MyMoodCard, PartnerMoodCard } from '../us/MoodSection'
 import { FocusTodayCard } from '../us/FocusSection'
 import { ENERGY } from '../shell/TopBar'
+import { DayListenButton } from './DayListenButton'
+import { RitualCard } from './RitualCard'
+import { SuggestionCard } from './SuggestionCard'
 
 const HELP_TYPE = {
   TAKE_OVER: 'Assumir por mim',
@@ -32,9 +36,11 @@ export function TodayScreen() {
   const now = useNow()
   const today = toDateKey(now)
   const { viewer, me, partner } = usePeople()
+  const isSolo = useIsSolo()
   const state = useData((s) => s)
   const [filter, setFilter] = useState<ScopeFilter>('ALL')
   const [showAll, setShowAll] = useState(false)
+  const [canWaitOpen, setCanWaitOpen] = useState(false)
 
   const d = useMemo(() => {
     const tasks = Object.values(state.tasks)
@@ -48,25 +54,28 @@ export function TodayScreen() {
       todayTasks,
       leftovers: leftoverTasks(visible.filter((t) => t.assignedTo === viewer || t.assignedTo === null), today),
       upcoming: upcomingEvents(events, now),
-      alerts: partnerDelayAlerts(state, viewer, now),
-      helpIn: Object.values(state.helpRequests).filter((h) => h.requesterId !== viewer && h.status === 'OPEN'),
-      helpAnswered: Object.values(state.helpRequests).filter((h) => h.requesterId === viewer && h.status === 'ACCEPTED'),
-      helpWaiting: Object.values(state.helpRequests).filter((h) => h.requesterId === viewer && h.status === 'OPEN'),
-      nudges: Object.values(state.nudges).filter((n) => n.to === viewer && !n.seenAt),
+      alerts: isSolo ? [] : partnerDelayAlerts(state, viewer, now),
+      helpIn: Object.values(state.helpRequests).filter((h) => !isSolo && h.requesterId !== viewer && h.status === 'OPEN'),
+      helpAnswered: Object.values(state.helpRequests).filter((h) => !isSolo && h.requesterId === viewer && h.status === 'ACCEPTED'),
+      helpWaiting: Object.values(state.helpRequests).filter((h) => !isSolo && h.requesterId === viewer && h.status === 'OPEN'),
+      nudges: Object.values(state.nudges).filter((n) => !isSolo && n.to === viewer && !n.seenAt),
       nudgedLogs: new Map(Object.values(state.nudges).filter((n) => n.from === viewer).map((n) => [n.medicationLogId, n.createdAt])),
-      bills: Object.values(state.transactions).filter((t) => t.scope === 'COUPLE' && t.status === 'PREDICTED_DASHED' && t.competenceDate <= today),
+      inboxCount: visible.filter((t) => t.status === 'PENDING' && !t.dueDate).length,
+      bills: visibleTransactions(Object.values(state.transactions), viewer, { A: state.profiles.A!, B: state.profiles.B! }).filter((t) => t.type === 'EXPENSE' && (t.scope === 'COUPLE' || t.createdBy === viewer) && t.status === 'PREDICTED_DASHED' && t.competenceDate <= today),
     }
-  }, [state, viewer, today, now])
+  }, [state, viewer, today, now, isSolo])
 
   const overload = me.energy === 'OVERLOAD'
-  const filtered = filterTasks(d.todayTasks, viewer, filter)
+  const filtered = filterTasks(d.todayTasks, viewer, isSolo ? 'ALL' : filter)
+  const bills = d.bills.filter((bill) => isSolo || filter === 'ALL' || (filter === 'US' ? bill.scope === 'COUPLE' : filter === 'MINE' && bill.scope === 'PERSONAL'))
   const focus = showAll ? filtered : filtered.slice(0, 3)
   const hiddenCount = filtered.length - focus.length
 
   const header = (
     <div className="mb-5 flex flex-col gap-2">
       <Title size="xl" anchor={`${greeting(now)}, ${firstName(me.displayName)}.`} rest={overload ? 'Só uma coisa por vez.' : 'Uma coisa de cada vez.'} />
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted">
+      <div className="self-start"><DayListenButton state={state} viewer={viewer} now={now} /></div>
+      {!isSolo ? <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted">
         <span className="inline-flex items-center gap-1.5">
           {(() => {
             const E = ENERGY[partner.energy]
@@ -74,20 +83,21 @@ export function TodayScreen() {
           })()}
           {firstName(partner.displayName)} está com {ENERGY[partner.energy].partner} hoje
         </span>
-      </p>
-      {partner.energy === 'OVERLOAD' ? (
+      </p> : null}
+      {!isSolo && partner.energy === 'OVERLOAD' ? (
         <p data-testid="partner-calm" className="inline-flex items-center gap-2 self-start rounded-[14px] bg-subtle px-3 py-2 text-[14px] font-semibold text-ink">
           <HeartHandshake size={16} aria-hidden className="text-couple" />
           {firstName(partner.displayName)} ativou o Modo Calmo hoje. Pegue leve nos pedidos.
         </p>
       ) : null}
+      {d.inboxCount > 0 ? <Button variant="ghost" size="sm" icon={Inbox} className="self-start" data-testid="today-inbox" onClick={() => ui.openInbox()}><span className="font-data">{d.inboxCount}</span> na Caixa de Entrada</Button> : null}
     </div>
   )
 
   const now_ = <NowCard next={d.next} overload={overload} />
   const helpButton = (
-    <Button variant="secondary" size="lg" icon={LifeBuoy} onClick={() => ui.openSheet('sos')} className="w-full border-err text-err" data-testid="overload-help">
-      Pedir ajuda para {firstName(partner.displayName)}
+    <Button block variant="secondary" size="lg" icon={LifeBuoy} onClick={() => ui.openSheet('sos')} className="w-full border-err text-err" data-testid="overload-help">
+      {isSolo ? 'Travei. Vamos por um passo pequeno' : `Pedir ajuda para ${firstName(partner.displayName)}`}
     </Button>
   )
 
@@ -152,8 +162,8 @@ export function TodayScreen() {
         </section>
       ))}
 
-      <PartnerMoodCard />
-      <CycleTodayCards />
+      {!isSolo ? <PartnerMoodCard /> : null}
+      {me.enabledModules?.cycle !== false ? <CycleTodayCards /> : null}
       <SpecialDatesTodayCards />
       <MyMoodCard />
       <PackTodayCards />
@@ -199,7 +209,7 @@ export function TodayScreen() {
       <section aria-labelledby="foco-title">
         <SectionHeader id="foco-title" title="Foco do dia" rest="até 3 prioridades" />
         {/* filtro abaixo do título, na largura toda como na Agenda (ao lado do título ele não podia esticar) */}
-        <div className="mb-3">
+        {!isSolo ? <div className="mb-3">
           <Segmented<ScopeFilter>
             label="Filtrar tarefas por pessoa"
             value={filter}
@@ -216,8 +226,8 @@ export function TodayScreen() {
               { value: 'US', label: 'Nós', testId: 'filter-US' },
             ]}
           />
-        </div>
-        {focus.length === 0 && d.bills.length === 0 ? (
+        </div> : null}
+        {focus.length === 0 && bills.length === 0 ? (
           <EmptyState
             icon={Sparkles}
             title="Nada urgente para agora."
@@ -233,7 +243,7 @@ export function TodayScreen() {
             {focus.map((t) => (
               <TaskRow key={t.id} task={t} />
             ))}
-            {filter !== 'PARTNER' && filter !== 'MINE' ? d.bills.map((b) => <BillRow key={b.id} bill={b} />) : null}
+            {bills.map((b) => <BillRow key={b.id} bill={b} />)}
           </ul>
         )}
         {hiddenCount > 0 ? (
@@ -258,7 +268,8 @@ export function TodayScreen() {
         <div className="flex flex-col gap-4">
           {now_}
           {helpButton}
-          <details className="card group p-0" data-testid="can-wait">
+          {isSolo ? <ComfortList owner={viewer} title="O que me acalma" /> : null}
+          <details className="card group p-0" data-testid="can-wait" onToggle={(event) => setCanWaitOpen(event.currentTarget.open)}>
             <summary className="press flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-4 text-[15px] font-semibold text-ink">
               <span className="flex items-center gap-2">
                 <Coffee size={18} aria-hidden className="text-muted" /> Pode esperar
@@ -268,6 +279,7 @@ export function TodayScreen() {
             <div className="flex flex-col gap-4 border-t border-line p-4">
               {/* modo sobrecarga: uma coisa por vez; o urgente do par vem primeiro aqui dentro */}
               {urgent}
+              {canWaitOpen ? <RitualCard /> : null}
               {focusSection}
               {soft}
               {nextHours}
@@ -284,9 +296,11 @@ export function TodayScreen() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
         <div className="flex flex-col gap-4 lg:sticky lg:top-8">
           {now_}
+          <RitualCard />
+          <SuggestionCard />
           <div className="hidden lg:block">
             <Button variant="secondary" icon={LifeBuoy} onClick={() => ui.openSheet('sos')} className="w-full border-err text-err">
-              Pedir ajuda para {firstName(partner.displayName)}
+              {isSolo ? 'Travei' : `Pedir ajuda para ${firstName(partner.displayName)}`}
             </Button>
           </div>
         </div>
@@ -310,7 +324,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
     return (
       <section className={cx('module p-4 sm:p-6', doseBorder(view))} aria-labelledby="agora-title" data-testid="now-card">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-          <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
+          <p className="text-[12px] font-bold text-muted">Agora · próxima ação</p>
           <DoseStatus dose={next.dose} now={now} />
         </div>
         <div className="mt-2.5 flex items-start gap-3">
@@ -342,7 +356,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
     const { event, minutesUntil } = next
     return (
       <section className="module ledger-dashed p-4 sm:p-6" data-testid="now-card">
-        <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
+        <p className="text-[12px] font-bold text-muted">Agora · próxima ação</p>
         <div className="mt-3 flex items-start gap-3">
           <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-subtle text-ink">
             <CalendarClock size={22} aria-hidden />
@@ -363,7 +377,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
   if (next.kind === 'task') {
     return (
       <section className="module p-4 sm:p-6" data-testid="now-card">
-        <p className="mb-3 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
+        <p className="mb-3 text-[12px] font-bold text-muted">Agora · próxima ação</p>
         <ul>
           <TaskRow task={next.task} />
         </ul>
@@ -372,7 +386,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
   }
   return (
     <section className="module p-4 sm:p-6" data-testid="now-card">
-      <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Agora · próxima ação</p>
+      <p className="text-[12px] font-bold text-muted">Agora · próxima ação</p>
       <p className="mt-3 flex items-center gap-2 text-[18px] font-bold text-ink">
         <Sparkles size={20} aria-hidden className="text-action" /> Nada urgente para agora.
       </p>
@@ -404,15 +418,16 @@ function HelpInCard({ req, partnerName }: { req: HelpRequest; partnerName: strin
 
 function BillRow({ bill }: { bill: Transaction }) {
   const { viewer } = usePeople()
+  const today = toDateKey(useNow())
   return (
     <li className="flex items-center gap-3 rounded-[18px] bg-surface p-3 ledger-dashed">
       <Package size={20} aria-hidden className="shrink-0 text-warn" />
       <div className="min-w-0 flex-1">
         <p className="text-[15px] font-semibold text-ink">Pagar {bill.description.toLowerCase()}</p>
         <p className="text-[13px] text-muted">
-          Previsto <span className="font-data whitespace-nowrap">{formatCents(bill.amountCents)}</span> · conta do casal, vence hoje
+          Previsto <span className="font-data whitespace-nowrap">{formatCents(bill.amountCents)}</span> · {bill.scope === 'PERSONAL' ? 'sua conta' : 'conta do casal'}, {bill.competenceDate < today ? <>venceu em <span className="font-data">{bill.competenceDate.split('-').reverse().join('/')}</span></> : 'vence hoje'}
         </p>
-        <OwnerTag tone="us">Nós</OwnerTag>
+        <OwnerTag tone={bill.scope === 'PERSONAL' ? (viewer === 'A' ? 'a' : 'b') : 'us'}>{bill.scope === 'PERSONAL' ? 'Meu' : 'Nós'}</OwnerTag>
       </div>
       <Button size="sm" variant="quiet" onClick={() => markBillPaid(bill.id, viewer)}>
         Paguei

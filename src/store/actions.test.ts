@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildEmpty } from '../domain/seed'
+import { canViewTask } from '../domain/tasks'
 
 // ui.ts toca no document (tema); aqui basta quem está usando e o Toast
 const toast = vi.fn()
@@ -9,7 +10,7 @@ vi.mock('./ui', async () => {
 })
 
 const { dataStore } = await import('./data')
-const { addEvent, addMedication, addRoutine } = await import('./actions')
+const { addEvent, addExpense, addMedication, addRoutine, addTask, postponeTask, saveTask, sendTaskToPartner, setEnabledModule, saveMedication, setPartnerSupport, takeDose } = await import('./actions')
 
 const lastToast = () => toast.mock.calls.at(-1) as [string, { undo?: () => void }]
 
@@ -19,6 +20,60 @@ beforeEach(() => {
 })
 
 describe('actions de cadastro', () => {
+  it('captura até três micro-passos não vazios e mantém seus ids na fila de sincronização', () => {
+    const taskId = addTask({
+      title: 'Separar documentos', dest: 'ME', when: 'INBOX', effort: 'FOCUS',
+      steps: [
+        { id: 'vazio', text: '  ', done: false },
+        { id: 'abrir', text: ' Abrir a pasta ', done: false },
+        { id: 'separar', text: 'Pegar um documento', done: false },
+        { id: 'foto', text: 'Tirar uma foto', done: false },
+        { id: 'extra', text: 'Guardar tudo', done: false },
+      ],
+    })!
+    expect(dataStore.get().tasks[taskId]!.steps).toEqual([
+      { id: 'abrir', text: 'Abrir a pasta', done: false },
+      { id: 'separar', text: 'Pegar um documento', done: false },
+      { id: 'foto', text: 'Tirar uma foto', done: false },
+    ])
+    expect(dataStore.get().outbox.find((entry) => entry.entityId === taskId)?.payload).toMatchObject({ steps: dataStore.get().tasks[taskId]!.steps })
+    lastToast()[1].undo!()
+    expect(dataStore.get().tasks[taskId]).toBeUndefined()
+  })
+
+  it('conta adiamentos, envia o contador no outbox e Desfazer restaura o contador anterior', () => {
+    addTask({ title: 'Separar documentos', dest: 'ME', when: 'TODAY', effort: 'QUICK_5M' })
+    const task = Object.values(dataStore.get().tasks)[0]!
+    expect(task).toMatchObject({ steps: [], postponeCount: 0 })
+    postponeTask(task.id)
+    postponeTask(task.id)
+    postponeTask(task.id)
+    expect(dataStore.get().tasks[task.id]!.postponeCount).toBe(3)
+    expect(dataStore.get().outbox.find((e) => e.entityId === task.id)?.payload).toMatchObject({ postponeCount: 3 })
+    lastToast()[1].undo!()
+    expect(dataStore.get().tasks[task.id]!.postponeCount).toBe(2)
+  })
+
+  it('adiar uma tarefa antiga começa a contagem em um sem perder seus micro-passos', () => {
+    addTask({ title: 'Ligar na clínica', dest: 'ME', when: 'INBOX', effort: 'QUICK_5M' })
+    const task = Object.values(dataStore.get().tasks)[0]!
+    dataStore.set((s) => ({ ...s, tasks: { [task.id]: { ...task, postponeCount: undefined, steps: [{ id: 'primeiro', text: 'Achar o telefone', done: false }] } } }))
+    postponeTask(task.id)
+    expect(dataStore.get().tasks[task.id]).toMatchObject({ postponeCount: 1, steps: [{ id: 'primeiro', text: 'Achar o telefone', done: false }] })
+    lastToast()[1].undo!()
+    expect(dataStore.get().tasks[task.id]!.postponeCount).toBeUndefined()
+  })
+
+  it('muda somente o módulo do viewer atual e permite Desfazer', () => {
+    const original = dataStore.get().profiles.B!
+    setEnabledModule('cycle', false)
+    expect(dataStore.get().profiles.B!.enabledModules).toEqual({ cycle: false, shopping: true, goals: true })
+    expect(dataStore.get().profiles.A!.enabledModules!.cycle).toBe(true)
+    expect(dataStore.get().outbox.some((e) => e.entityType === 'profiles' && e.entityId === 'B')).toBe(true)
+    lastToast()[1].undo!()
+    expect(dataStore.get().profiles.B).toEqual(original)
+  })
+
   it('addMedication grava no nome do viewer da sessão, enfileira no outbox e permite desfazer', () => {
     const id = addMedication({ name: 'Venvanse 30mg', dosage: '1 cápsula', times: ['08:00'], stock: '30', shareWithPartner: true })
     expect(id).toBeTruthy()
@@ -62,8 +117,115 @@ describe('actions de cadastro', () => {
   })
 })
 
+describe('privacidade de tarefas automáticas de estoque', () => {
+  const input = { name: 'Cuidado reservado', dosage: '1 unidade', times: ['08:00'], stock: '6', shareWithPartner: false }
+
+  it.each(['SOLO', 'COUPLE'] as const)('estoque baixo de remédio privado não expõe o nome ao par em %s', (mode) => {
+    dataStore.set(() => buildEmpty(new Date('2026-11-06T12:00:00Z'), mode))
+    const id = addMedication(input)!
+    takeDose(id, '2026-11-06', '08:00')
+    const task = Object.values(dataStore.get().tasks).find((item) => item.sourceMedicationId === id)!
+    expect(task).toMatchObject({ assignedTo: 'B', visibleToPartner: false })
+    expect(canViewTask(task, 'A')).toBe(false)
+    expect(dataStore.get().outbox.find((entry) => entry.entityId === task.id)?.payload).toMatchObject({ visibleToPartner: false })
+  })
+
+  it.each(['rede', 'edicao'] as const)('desligar compartilhamento por %s recolhe reposição automática no mesmo Desfazer', (entry) => {
+    const id = addMedication({ ...input, shareWithPartner: true })!
+    takeDose(id, '2026-11-06', '08:00')
+    const original = Object.values(dataStore.get().tasks).find((item) => item.sourceMedicationId === id)!
+    expect(canViewTask(original, 'A')).toBe(true)
+    if (entry === 'rede') setPartnerSupport(id, false)
+    else saveMedication(input, id)
+    expect(dataStore.get().meds[id]!.notifyPartnerOnDelay).toBe(false)
+    expect(canViewTask(dataStore.get().tasks[original.id]!, 'A')).toBe(false)
+    lastToast()[1].undo!()
+    expect(dataStore.get().meds[id]!.notifyPartnerOnDelay).toBe(true)
+    expect(dataStore.get().tasks[original.id]).toEqual(original)
+  })
+
+  it('rotina Solo gera reposição pessoal mesmo usando o modelo sem dono das rotinas', () => {
+    dataStore.set(() => buildEmpty(new Date('2026-11-06T12:00:00Z'), 'SOLO'))
+    const id = addRoutine({ title: 'Meu material', times: ['09:00'], weekdays: [], instruction: '', responsible: 'ME', stock: '4', stockUnit: 'unidades' })!
+    takeDose(id, '2026-11-06', '09:00')
+    const task = Object.values(dataStore.get().tasks).find((item) => item.sourceMedicationId === id)!
+    expect(task).toMatchObject({ assignedTo: 'B', visibleToPartner: false })
+    expect(canViewTask(task, 'A')).toBe(false)
+  })
+
+  it('preserva uma reposição que a pessoa decidiu enviar ao par', () => {
+    const id = addMedication({ ...input, shareWithPartner: true })!
+    takeDose(id, '2026-11-06', '08:00')
+    const task = Object.values(dataStore.get().tasks).find((item) => item.sourceMedicationId === id)!
+    sendTaskToPartner(task.id)
+    const sent = dataStore.get().tasks[task.id]!
+    setPartnerSupport(id, false)
+    expect(dataStore.get().tasks[task.id]).toEqual(sent)
+    expect(canViewTask(sent, 'A')).toBe(true)
+  })
+})
+
+describe('captura no modo Solo', () => {
+  beforeEach(() => dataStore.set(() => buildEmpty(new Date('2026-11-06T12:00:00Z'), 'SOLO')))
+
+  it('tarefa fica com o viewer e não pode ser enviada a um perfil ausente', () => {
+    const id = addTask({ title: 'Respirar um pouco', dest: 'PARTNER', when: 'TODAY', effort: 'QUICK_5M' })!
+    expect(dataStore.get().tasks[id]).toMatchObject({ assignedTo: 'B', createdBy: 'B', sentBy: null, visibleToPartner: false })
+    const previous = dataStore.get()
+    sendTaskToPartner(id)
+    expect(dataStore.get()).toBe(previous)
+    expect(lastToast()[0]).not.toContain('Enviada')
+  })
+
+  it('gasto do Solo é pessoal, pago pelo viewer e sem presente oculto', () => {
+    addExpense({ amountCents: 4500, description: 'Farmácia', category: 'HEALTH', scope: 'COUPLE', paidBy: 'A', splitRule: '50_50', isSecretGift: true, status: 'CONFIRMED_SOLID' })
+    const expense = Object.values(dataStore.get().transactions)[0]!
+    expect(expense).toMatchObject({ scope: 'PERSONAL', createdBy: 'B', paidBy: 'B', isSecretGift: false, splitRule: null, partnerAShareCents: 0, partnerBShareCents: 4500 })
+  })
+
+  it('compromissos e cuidados usam o viewer mesmo se uma captura antiga pedir casal ou par', () => {
+    const eventId = addEvent({ title: 'Consulta', date: '2026-11-20', start: '09:00', end: '10:00', owner: 'US', type: 'HEALTH' })!
+    const medicationId = addMedication({ name: 'Remédio diário', dosage: '1 comprimido', times: ['08:00'], stock: '30', shareWithPartner: true })!
+    const routineId = addRoutine({ title: 'Beber água', times: ['09:00'], weekdays: [], instruction: '', responsible: 'PARTNER', stock: '', stockUnit: '' })!
+    expect(dataStore.get().events[eventId]).toMatchObject({ ownerId: 'B', kind: 'HEALTH' })
+    expect(dataStore.get().meds[medicationId]).toMatchObject({ ownerId: 'B', notifyPartnerOnDelay: false })
+    expect(dataStore.get().meds[routineId]).toMatchObject({ ownerId: null, assignee: 'B', notifyPartnerOnDelay: false })
+  })
+})
+
 describe('editar e excluir', () => {
   const medInput = { name: 'Venvanse 30mg', dosage: '1 cápsula', times: ['08:00'], stock: '30', shareWithPartner: false }
+
+  it('editar tarefa preserva conclusão, adiamentos, origem e passos concluídos depois de abrir a gaveta', () => {
+    const id = addTask({ title: 'Organizar a mesa', dest: 'ME', when: 'INBOX', effort: 'QUICK_5M', steps: [{ id: 'uma-coisa', text: 'Pegar uma folha', done: false }] })!
+    const staleSteps = dataStore.get().tasks[id]!.steps!
+    dataStore.set((state) => ({ ...state, tasks: { ...state.tasks, [id]: {
+      ...state.tasks[id]!,
+      createdBy: 'A', sourceMedicationId: 'lembrete', status: 'DONE', completedAt: '2026-11-06T10:05:00Z', completedBy: 'B',
+      postponeCount: 4, dueTime: '10:00', steps: [{ ...staleSteps[0]!, done: true }],
+    } } }))
+    const previous = dataStore.get().tasks[id]!
+    expect(saveTask({ title: 'Organizar só um canto', dest: 'ME', when: 'TODAY', dueDate: '2026-12-02', effort: 'FOCUS', steps: staleSteps }, id)).toBe(id)
+    expect(dataStore.get().tasks[id]).toMatchObject({
+      title: 'Organizar só um canto', createdBy: 'A', createdAt: previous.createdAt, sourceMedicationId: 'lembrete', status: 'DONE',
+      completedAt: '2026-11-06T10:05:00Z', completedBy: 'B', postponeCount: 4, dueDate: '2026-12-02', dueTime: '10:00',
+      steps: [{ id: 'uma-coisa', text: 'Pegar uma folha', done: true }],
+    })
+    lastToast()[1].undo!()
+    expect(dataStore.get().tasks[id]).toEqual(previous)
+  })
+
+  it('não edita tarefa pessoal privada do par nem cria tarefa com data inválida', () => {
+    const id = addTask({ title: 'Anotação reservada', dest: 'ME', when: 'TODAY', effort: 'QUICK_5M' })!
+    dataStore.set((state) => ({ ...state, tasks: { ...state.tasks, [id]: { ...state.tasks[id]!, assignedTo: 'A', visibleToPartner: false, sentBy: null } } }))
+    const before = dataStore.get()
+    toast.mockClear()
+    const input = { title: 'Trocado', dest: 'ME', when: 'TODAY', effort: 'QUICK_5M' } as const
+    expect(saveTask(input, id)).toBeNull()
+    expect(addTask({ ...input, dueDate: '2026-02-31' })).toBeNull()
+    expect(dataStore.get()).toBe(before)
+    expect(toast).not.toHaveBeenCalled()
+  })
 
   it('saveMedication com id edita o mesmo registro, enfileira e desfaz para a versão anterior', async () => {
     const { saveMedication } = await import('./actions')

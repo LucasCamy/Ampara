@@ -7,9 +7,12 @@ export type DateKey = string
 export type TimeKey = string
 
 export type SplitMode = '50_50' | 'PROPORTIONAL'
+export type SpaceMode = 'SOLO' | 'COUPLE'
 
 export interface Couple {
   id: 'couple'
+  /** Ausente nos cofres antigos: equivale a COUPLE. */
+  mode?: SpaceMode
   /** Identificador do espaço na nuvem (couple_id no Supabase). Só existe após conectar. */
   spaceId?: string
   inviteCode: string
@@ -20,6 +23,12 @@ export interface Couple {
   updatedAt?: string
 }
 
+export interface EnabledModules {
+  cycle: boolean
+  shopping: boolean
+  goals: boolean
+}
+
 export interface Profile {
   id: PartnerId
   displayName: string
@@ -27,6 +36,8 @@ export interface Profile {
   energy: EnergyLevel
   energyUpdatedAt: string | null
   sharePersonalFinances: boolean
+  monthlyBudgetCents?: number | null
+  enabledModules?: EnabledModules
   updatedAt: string
 }
 
@@ -52,6 +63,8 @@ export interface Task {
   completedBy: PartnerId | null
   /** Tarefa sugerida automaticamente (estoque baixo) */
   sourceMedicationId: string | null
+  steps?: { id: string; text: string; done: boolean }[]
+  postponeCount?: number
   createdAt: string
   updatedAt: string
 }

@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/session'
 import { Actions, Button, cx, FieldError, SectionHeader, Segmented, StatusBadge } from '../../components/ui'
 import { formatClock } from '../../domain/format'
 import { useData } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
 import { connect, disconnect, useCloud } from '../../sync/cloud'
 import { syncNow } from '../../sync/engine'
@@ -57,6 +57,7 @@ const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
 /** Ajustes > Nuvem: conecta a conta da pessoa para sincronizar entre os celulares do casal */
 export function CloudSection() {
+  const isSolo = useIsSolo()
   const { viewer, partner, profiles } = usePeople()
   const cloud = useCloud((s) => s)
   const spaceId = useData((s) => s.couple.couple?.spaceId)
@@ -74,7 +75,7 @@ export function CloudSection() {
         <SectionHeader id="nuvem" title="Nuvem" rest="· entre aparelhos" />
         <p className="flex items-start gap-2 text-[14px] text-muted">
           <CloudOff size={17} aria-hidden className="mt-0.5 shrink-0" />
-          Esta instalação não tem servidor configurado. Os dados ficam só neste aparelho, cifrados. Para usar um celular cada, configure o
+          Esta instalação não tem servidor configurado. Os dados ficam só neste aparelho, cifrados. Para sincronizar entre aparelhos, configure o
           Supabase (veja o README).
         </p>
       </section>
@@ -100,7 +101,7 @@ export function CloudSection() {
 
   return (
     <section className="module p-4 sm:p-5" aria-labelledby="nuvem" data-testid="cloud-section">
-      <SectionHeader id="nuvem" title="Nuvem" rest="· um celular para cada" />
+      <SectionHeader id="nuvem" title="Nuvem" rest={isSolo ? '· seus aparelhos' : '· um celular para cada'} />
       {connected ? (
         <div className="flex flex-col gap-3">
           <StatusBadge kind={cloud.status === 'offline' ? 'pending' : 'ok'} className="self-start">
@@ -114,9 +115,9 @@ export function CloudSection() {
             ) : (
               'Sincronizando...'
             )}{' '}
-            O servidor só entrega os gastos pessoais de {firstName(partner.displayName)} se {partner.pronoun} liberar, e nunca os presentes.
+            {isSolo ? 'Sua conta mantém seus aparelhos sincronizados.' : `O servidor só entrega os gastos pessoais de ${firstName(partner.displayName)} se ${partner.pronoun} liberar, e nunca os presentes.`}
           </p>
-          {viewer === 'A' && !partnerAbsent && inviteCode ? (
+          {!isSolo && viewer === 'A' && !partnerAbsent && inviteCode ? (
             <p className="rounded-[14px] bg-subtle p-3 text-[14px] text-ink">
               Para {firstName(partner.displayName)} usar o próprio celular: abrir o Ampara, tocar em <strong>Entrar pela nuvem</strong> e usar o convite{' '}
               <span className="font-data font-semibold">{inviteCode}</span>.
@@ -137,7 +138,7 @@ export function CloudSection() {
         <form onSubmit={submit} noValidate className="flex flex-col gap-3" data-testid="cloud-form">
           <p className="flex items-start gap-2 text-[14px] text-muted">
             <Cloud size={17} aria-hidden className="mt-0.5 shrink-0 text-action" />
-            Crie sua conta para usar o Ampara no seu celular e {firstName(partner.displayName)} no {partner.pronoun === 'ela' ? 'dela' : 'dele'}, sempre em dia.
+            {isSolo ? 'Crie sua conta para sincronizar o Ampara entre seus aparelhos. A nuvem é opcional.' : `Crie sua conta para usar o Ampara no seu celular e ${firstName(partner.displayName)} no ${partner.pronoun === 'ela' ? 'dela' : 'dele'}, sempre em dia.`}
           </p>
           <Segmented<'signup' | 'signin'>
             label="Tipo de acesso"

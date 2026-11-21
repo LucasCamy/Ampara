@@ -1,7 +1,8 @@
-import { CalendarDays, CircleCheck, Heart, HeartPulse, LifeBuoy, ListPlus, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
+import { CalendarDays, CircleCheck, Heart, HeartPulse, LifeBuoy, ListPlus, Mic, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/ui'
 import { ui, useUi, type SheetKind, type Tab } from '../../store/ui'
 import { BatterySelector, LockButton, PerspectiveSwitch, SyncPill, ThemeToggle } from './TopBar'
+import { useIsSolo } from '../../store/hooks'
 
 export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'hoje', label: 'Hoje', icon: Sun },
@@ -19,6 +20,7 @@ export const QUICK: { kind: SheetKind; label: string; short: string; icon: Lucid
 ]
 
 export function BottomNav() {
+  const isSolo = useIsSolo()
   const tab = useUi((s) => s.tab)
   return (
     <nav aria-label="Navegação principal" className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface lg:hidden">
@@ -35,7 +37,7 @@ export function BottomNav() {
                 className={cx('press flex min-h-[60px] w-full flex-col items-center justify-center gap-0.5 text-[12px] font-semibold', active ? 'text-action' : 'text-muted')}
               >
                 <t.icon size={22} aria-hidden strokeWidth={active ? 2.4 : 2} />
-                {t.label}
+                {isSolo && t.id === 'nos' ? 'Espaço' : t.label}
               </button>
             </li>
           )
@@ -47,6 +49,7 @@ export function BottomNav() {
 
 /** Dock flutuante ARQ-E: captura em 1 toque, acima da Bottom Nav no mobile */
 export function Dock() {
+  const isSolo = useIsSolo()
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(68px+env(safe-area-inset-bottom))] z-30 px-3 lg:hidden">
       <div
@@ -59,7 +62,7 @@ export function Dock() {
             key={q.kind}
             type="button"
             onClick={() => ui.openSheet(q.kind)}
-            aria-label={q.label}
+            aria-label={isSolo && q.kind === 'sos' ? 'Travei' : q.label}
             data-testid={`dock-${q.kind}`}
             className={cx(
               'press flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-[18px] text-[12px] font-bold',
@@ -67,7 +70,7 @@ export function Dock() {
             )}
           >
             <q.icon size={20} aria-hidden />
-            {q.short}
+            {isSolo && q.kind === 'sos' ? 'Travei' : q.short}
           </button>
         ))}
       </div>
@@ -77,6 +80,7 @@ export function Dock() {
 
 /** Sidebar do desktop: recompõe navegação + captura rápida + contexto do casal */
 export function Sidebar() {
+  const isSolo = useIsSolo()
   const tab = useUi((s) => s.tab)
   return (
     <aside className="sticky top-0 hidden h-dvh w-[288px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-surface px-4 py-5 lg:flex">
@@ -86,10 +90,10 @@ export function Sidebar() {
         </span>
         <ThemeToggle />
       </div>
-      <div>
+      {!isSolo ? <div>
         <p className="mb-1.5 px-1 text-[12px] font-semibold text-muted">Visão de quem está usando</p>
         <PerspectiveSwitch compact />
-      </div>
+      </div> : null}
       <div>
         <p className="mb-1.5 px-1 text-[12px] font-semibold text-muted">Minha bateria mental</p>
         <BatterySelector compactLabels fill />
@@ -111,7 +115,7 @@ export function Sidebar() {
                   )}
                 >
                   <t.icon size={20} aria-hidden className={active ? 'text-action' : ''} />
-                  {t.label}
+                  {isSolo && t.id === 'nos' ? 'Espaço' : t.label}
                 </button>
               </li>
             )
@@ -120,6 +124,7 @@ export function Sidebar() {
       </nav>
       <div>
         <p className="mb-2 px-1 text-[12px] font-semibold text-muted">Captura rápida</p>
+        <button type="button" onClick={() => ui.openSheet('quickCapture')} data-testid="quick-capture" className="press hoverable mb-2 flex min-h-12 w-full items-center gap-2 rounded-[14px] border border-line px-3 text-[14px] font-semibold text-ink"><Mic size={18} aria-hidden />Captura livre</button>
         <div className="grid grid-cols-2 gap-2">
           {QUICK.map((q) => (
             <button
@@ -133,7 +138,7 @@ export function Sidebar() {
               )}
             >
               <q.icon size={18} aria-hidden />
-              {q.short}
+              {isSolo && q.kind === 'sos' ? 'Travei' : q.short}
             </button>
           ))}
         </div>

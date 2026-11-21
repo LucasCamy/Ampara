@@ -1,7 +1,7 @@
 import { firstName } from '../../domain/format'
-import { AlarmClock, ArrowLeft, Brain, CalendarDays, HandHeart, HeartHandshake, Sun, Zap, type LucideIcon } from 'lucide-react'
+import { AlarmClock, ArrowLeft, Brain, CalendarDays, HandHeart, HeartHandshake, Sun, Timer, Zap, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { cx } from '../../components/ui'
+import { Button, cx } from '../../components/ui'
 import { toDateKey } from '../../domain/dates'
 import { filterTasks, tasksForDay } from '../../domain/tasks'
 import type { HelpType, Urgency } from '../../domain/types'
@@ -9,6 +9,7 @@ import { requestHelp } from '../../store/actions'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
 import { usePeople } from '../../store/hooks'
+import { ui } from '../../store/ui'
 
 const GENERAL = '__general__'
 
@@ -51,6 +52,9 @@ export function SosSheet({ params, onDone }: { params: Record<string, string>; o
 
   return (
     <div className="pt-1 pb-3">
+      <Button variant="quiet" icon={Timer} className="mb-4 w-full" onClick={() => ui.openSheet('unstuck', params)} data-testid="sos-self">
+        Me destravar sozinho
+      </Button>
       <div className="mb-4 flex items-center gap-2">
         {step > 1 ? (
           <button

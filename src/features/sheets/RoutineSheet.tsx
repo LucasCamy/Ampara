@@ -5,7 +5,7 @@ import { ChoiceChips, cx, TextField } from '../../components/ui'
 import { hasErrors, routineToInput, validateRoutine, weekdaysPreset, type RoutineInput, type RoutineResponsible } from '../../domain/catalog'
 import { deleteMedication, saveRoutine } from '../../store/actions'
 import { dataStore } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { DeleteButton, TimesField } from './fields'
 import { SHEET_FORM } from './forms'
 
@@ -23,6 +23,7 @@ const WEEK = [
 
 /** Nova rotina da casa, ou edição quando recebe `id` (qualquer um dos dois edita) */
 export function RoutineSheet({ id, onDone }: { id?: string; onDone: () => void }) {
+  const isSolo = useIsSolo()
   const { partner, viewer } = usePeople()
   const [form, setForm] = useState<RoutineInput>(() => {
     const prev = id ? dataStore.get().meds[id] : undefined
@@ -53,7 +54,7 @@ export function RoutineSheet({ id, onDone }: { id?: string; onDone: () => void }
     const noDays = preset === 'CUSTOM' && form.weekdays.length === 0
     setDaysError(noDays ? 'Escolha pelo menos um dia.' : null)
     if (hasErrors(next) || noDays) return
-    if (saveRoutine(form, id)) onDone()
+    if (saveRoutine({ ...form, responsible: isSolo ? 'ME' : form.responsible }, id)) onDone()
   }
 
   return (
@@ -109,7 +110,7 @@ export function RoutineSheet({ id, onDone }: { id?: string; onDone: () => void }
         testId="routine-instruction"
       />
 
-      <ChoiceChips<RoutineResponsible>
+      {!isSolo ? <ChoiceChips<RoutineResponsible>
         label="Responsável"
         value={form.responsible}
         onChange={set('responsible')}
@@ -118,7 +119,7 @@ export function RoutineSheet({ id, onDone }: { id?: string; onDone: () => void }
           { value: 'ME', label: 'Meu', icon: User },
           { value: 'PARTNER', label: `De ${firstName(partner.displayName)}`, icon: UserRound },
         ]}
-      />
+      /> : null}
 
       <div className="grid grid-cols-1 gap-5 min-[400px]:grid-cols-2">
         <TextField
@@ -134,7 +135,7 @@ export function RoutineSheet({ id, onDone }: { id?: string; onDone: () => void }
         />
         <TextField label="Unidade" value={form.stockUnit} onChange={set('stockUnit')} placeholder="unidades" maxLength={20} testId="routine-unit" />
       </div>
-      <p className="-mt-3 text-[13px] text-muted">Qualquer um de vocês confirma a rotina. O responsável é só um combinado.</p>
+      {!isSolo ? <p className="-mt-3 text-[13px] text-muted">Qualquer um de vocês confirma a rotina. O responsável é só um combinado.</p> : null}
       {id ? <DeleteButton label="Excluir rotina" testId="routine-delete" onClick={() => deleteMedication(id) && onDone()} /> : null}
     </form>
   )

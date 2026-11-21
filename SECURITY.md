@@ -32,6 +32,16 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 5. **Tentativas:** 5 livres, depois atraso de 30 s dobrando até 15 min, por pessoa.
 6. **Recuperação:** sem servidor não existe "esqueci a senha" por e-mail. Quem está com acesso confirma a própria
    senha (step-up) e gera **novo convite** para o par; a senha antiga do par deixa de funcionar.
+7. **Armazenamento:** `ampara-local` v1 (IndexedDB) guarda o mesmo cofre cifrado em `vault.primary`. A chave de
+   dados continua não extraível e separada dele, em memória ou na sessão lembrada de `ampara-auth`. Ao iniciar,
+   o cofre legado de `ampara:vault:v1` é migrado sem decifrar; a origem só é removida após o commit. Sem IndexedDB,
+   o fallback no localStorage contém apenas o cofre cifrado. Falhas temporárias não fazem uma cópia antiga do
+   IDB sobrescrever o fallback mais novo. O store `kv` guarda somente marcadores não sensíveis do aparelho.
+   Apagar os dados limpa ambos os stores e o fallback; uma limpeza pendente impede reaparecerem após uma falha.
+8. **Modo Solo:** usa a mesma cifra e política de senha do Casal, com A ativo e B ausente. Não gera convite no
+   cadastro. A promoção para Casal exige a senha de A, cria o slot B por convite e preserva os registros, o
+   orçamento e as preferências de A. Cofres antigos sem `mode` continuam sendo Casal. Após desbloquear, o app
+   pede armazenamento persistente ao navegador quando disponível; a negativa não impede o acesso.
 
 ## Nuvem (um celular para cada)
 
@@ -58,7 +68,8 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
    (2026-11-07): com "for all" o par conseguia ligar `share_personal_finances` no perfil do outro (o que libera
    `tx_read`) e apagar o espaço, levando os dados dos dois no cascade. Agora cada pessoa só altera o próprio perfil
    (o do par só antes de ele(a) entrar na nuvem, para a primeira subida; o app reenvia o perfil do par com
-   `ignore-duplicates`), ninguém apaga perfil nem espaço pela API e a divisão do casal continua editável pelos dois.
+   `ignore-duplicates`; ao publicar um convite, o perfil ainda sem conta associada pode ser atualizado explicitamente),
+   ninguém apaga perfil nem espaço pela API e a divisão do casal continua editável pelos dois.
    `help_requests` e `nudges` seguiram o mesmo caminho: só quem pede ou manda cria (ninguém forja um pedido de
    ajuda em nome do par), os dois atualizam (aceitar, resolver, marcar como visto) e ninguém apaga.
 8. **Dados de saúde e surpresas:** ciclo menstrual (`cycle_settings`/`cycle_logs`) só a dona grava; o par lê a janela
@@ -66,6 +77,13 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
    banco, durações mascaradas pelo app). Ideias de presente (`gift_ideas`) só quem anotou lê ou grava. Nos dois casos a
    tela também filtra por regra de domínio (`src/domain/cycle.ts`, `src/domain/specialDates.ts`), o que vale no aparelho
    compartilhado.
+9. **Foco individual:** `joined_by = started_by` identifica uma sessão só da pessoa que começou. O domínio,
+   a RLS e o worker excluem essa sessão para o par; focos antigos ligados a tarefas privadas também ficam
+   protegidos. Identidade e autoria são imutáveis no banco, e o upsert de entrada só aceita um convite visível
+   já existente. O pull consulta os ids ainda autorizados e remove sessões e fila que perderam acesso.
+10. **Reposição de estoque:** a tarefa automática de um remédio privado nasce privada; desligar a rede de apoio
+    ou editar o remédio sem compartilhamento recolhe a visibilidade das reposições automáticas ligadas a ele
+    no mesmo Desfazer. Tarefas enviadas explicitamente ao par preservam a decisão de compartilhar.
 
 ## Backup cifrado
 
@@ -84,8 +102,8 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 | Session fixation and invalidation | confirmado | `lock()`, `changeMyPassword()` e `wipeDevice()` apagam a sessão lembrada e avisam outras abas (`src/auth/session.ts`); E2E "bloquear em uma aba bloqueia as outras" |
 | Password reset and broader recovery | confirmado | `reinvite()` exige senha de quem gera e invalida o acesso antigo (`src/auth/vault.ts`, teste "recuperação de acesso pelo par") |
 | Step-up binding and bypass | confirmado | Apagar dados, trocar senha e gerar convite pedem a senha de novo; trocar de perspectiva pede a senha da outra pessoa |
-| Browser-storage disclosure and stale authorization | confirmado | Nada em texto claro no `localStorage` (E2E verifica que não aparecem "Venvanse", "Supermercado" nem a senha); a chave antiga em texto claro é migrada e apagada |
-| Cross-context storage and broadcast confusion | confirmado | `storage` recarrega dados novos; `rev` incrementa a cada gravação; bloqueio chega a todas as abas |
+| Browser-storage disclosure and stale authorization | confirmado | Cofre cifrado no IndexedDB; fallback cifrado no localStorage. Testes verificam migração após commit, falhas e ausência de dados/senhas em claro. A chave antiga em texto claro é migrada e apagada |
+| Cross-context storage and broadcast confusion | confirmado | BroadcastChannel e sinal não sensível via `storage` avisam sobre dados novos no IDB; `rev` incrementa a cada gravação; bloqueio chega a todas as abas |
 | Service-worker cache and identity confusion | confirmado | `public/sw.js` guarda só o app do mesmo domínio e deixa passar direto `/rest/`, `/auth/` e qualquer pedido com `Authorization`. Até 2026-11-07 a API atrás do gateway (mesma origem) caía no cache: dados do casal em texto claro no Cache Storage e pull travado. O cache subiu para `ampara-v5` (o antigo é apagado) e "Apagar dados" remove respostas da API que tenham sobrado. `e2e/sw-api.spec.ts` chama a API da mesma origem com o service worker no controle e confere que nada é reaproveitado nem guardado (falha com o `sw.js` antigo) |
 | DOM-based XSS (fonte `location`) | confirmado | `?quick=` aceita só `task/expense/med/sos`; `title`/`amount` entram como valor de input React (escapado) e a URL é limpa |
 | Client-side navigation confusion | confirmado | Navegação só para URLs montadas com `location.origin` |
@@ -96,7 +114,7 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 | Account linking and identity collision | confirmado | Conta que já pertence a outra pessoa ou espaço é recusada e deslogada (`connect()`); convite é de uso único e amarrado ao parceiro certo |
 | Stale authorization and derived copy use | confirmado | `purgeUnauthorized` com a lista de ids visíveis no servidor (lançamentos, tarefas, compromissos, remédios e doses); tokens saem da memória ao bloquear |
 | API-key exposure and unsafe transport | confirmado | Só a chave anônima pública vai ao cliente; o adaptador recusa gravar sem token de usuário |
-| Export and backup scope expansion / Import and restore | confirmado | Não há exportação; "Restaurar exemplo" e "Apagar dados" só existem dentro da sessão, o último com senha |
+| Export and backup scope expansion / Import and restore | confirmado | Backup `.ampara` cifrado e sem refresh token; exportação e substituição do cofre exigem senha. "Restaurar exemplo" e "Apagar dados" só existem dentro da sessão, o último com senha |
 
 ## Lembretes (Web Push)
 
@@ -108,9 +126,15 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   https e prende a inscrição à pessoa logada. Chave privada VAPID e o registro de envios (`push_config`, `push_sent`)
   ficam sem política: o app não lê. O worker gera as chaves na primeira vez.
 - O worker usa o papel próprio `ampara_worker`: lê remédios, doses, pedidos de ajuda e nomes de exibição (políticas
-  `to ampara_worker`, sem BYPASSRLS) e cuida só das tabelas de push. Não lê lançamentos, ciclo, presentes nem
-  check-in, e não altera nada do casal (`validate.sql`, caso 6i). No k8s a migração roda num initContainer com a
+  `to ampara_worker`, sem BYPASSRLS) e cuida das tabelas de push. Para lembretes do modo dual também lê modo do
+  espaço, horários dos compromissos e metadados das contas previstas dos espaços com inscrição ativa. Grants
+  por coluna excluem valores, orçamento, divisão e pagamento; políticas restritivas limitam a leitura mesmo
+  quando uma política PUBLIC antiga seria permissiva. Não lê gastos realizados, ciclo, `gift_ideas` nem
+  check-in, e não altera dados do espaço (`validate.sql`, caso 6i). No k8s a migração roda num initContainer com a
   senha de administrador; o container do worker só recebe `WORKER_DB_PASSWORD`. `push:check` roda com esse papel.
+- Contas pessoais avisam só quem as registrou. Compromissos pessoais só avisam a pessoa dona; os do casal
+  avisam os dois. Nomes de contas/compromissos continuam ocultos na tela bloqueada por padrão. O modo Solo
+  recebe um segundo lembrete gentil de dose atrasada sem snooze ativo; os rituais respeitam horários e silêncio.
 - As senhas do banco não podem ter caracteres especiais de URL (`@ / : ?`); use hex (`openssl rand -hex 24`).
 
 ## Produção (cluster)

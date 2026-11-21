@@ -13,6 +13,7 @@ import {
 } from './alerts'
 import { emptyLog, logId, snoozeWater } from './medication'
 import { buildEmpty } from './seed'
+import { defaultRitualSchedules } from './rituals'
 import type { DataState, HelpRequest, Medication } from './types'
 
 const at = (hhmm: string) => new Date(`2026-11-05T${hhmm}:00`)
@@ -65,12 +66,19 @@ describe('preferências', () => {
   it('o servidor recebe só categorias desligadas e silêncio, e decide igual', () => {
     const p = prefs({ enabled: { ...DEFAULT_PREFS.enabled, home: false }, quiet: { on: true, start: '22:00', end: '07:00', helpBreaks: false } })
     const s = fromServerPrefs(JSON.parse(JSON.stringify(toServerPrefs(p))))
-    expect(s).toEqual({ off: ['home'], quiet: { start: '22:00', end: '07:00', helpBreaks: false } })
+    expect(s).toEqual({ off: ['home'], quiet: { start: '22:00', end: '07:00', helpBreaks: false }, rituals: defaultRitualSchedules() })
     expect(serverAllows(s, 'home', 12 * 60)).toBe(false)
     expect(serverAllows(s, 'med', 23 * 60)).toBe(false)
     expect(serverAllows(s, 'help', 23 * 60)).toBe(false)
     expect(serverAllows(s, 'med', 12 * 60)).toBe(true)
-    expect(fromServerPrefs({ off: ['med', 'hack'], quiet: { start: 'x' } })).toEqual({ off: ['med'], quiet: null })
+    expect(fromServerPrefs({ off: ['med', 'hack'], quiet: { start: 'x' } })).toEqual({ off: ['med'], quiet: null, rituals: defaultRitualSchedules() })
+  })
+
+  it('categorias novas e horários inválidos recebem fallback sem perder escolhas válidas', () => {
+    const p = normalizePrefs({ enabled: { med: false, event: false }, rituals: { morning: { time: '25:00' }, afternoon: { enabled: true, time: '15:45' } } })
+    expect(p.enabled).toMatchObject({ med: false, event: false, ritual: true })
+    expect(p.rituals).toMatchObject({ morning: { enabled: true, time: '08:30' }, afternoon: { enabled: true, time: '15:45' } })
+    expect(fromServerPrefs(toServerPrefs(p)).rituals).toEqual(p.rituals)
   })
 })
 
@@ -111,7 +119,51 @@ describe('avisos do relógio', () => {
       t1: { id: 't1', scope: 'COUPLE', type: 'EXPENSE', status: 'PREDICTED_DASHED', description: 'Luz', competenceDate: '2026-11-05' } as DataState['transactions'][string],
     }
     expect(clockAlerts(s, 'A', at('07:30'), 'Julia')).toEqual([])
-    expect(clockAlerts(s, 'A', at('09:00'), 'Julia')[0]).toMatchObject({ key: 'bills:2026-11-05', category: 'home', title: 'Luz vence hoje' })
+    expect(clockAlerts(s, 'A', at('09:00'), 'Julia')[0]).toMatchObject({ key: 'bills:A:2026-11-05', category: 'home', title: 'Luz vence hoje' })
+  })
+
+  it('Solo recebe segundo lembrete gentil só depois do limite e sem soneca ativa', () => {
+    const s = withMeds(med())
+    s.couple.couple!.mode = 'SOLO'
+    expect(clockAlerts(s, 'A', at('08:29'), '').filter((a) => a.key.startsWith('self-late:'))).toEqual([])
+    expect(clockAlerts(s, 'A', at('08:31'), '')).toEqual([expect.objectContaining({ key: `self-late:${logId('venv', '2026-11-05', '08:00')}`, title: 'Um passo de cada vez', category: 'med' })])
+    const log = { ...emptyLog(med(), '2026-11-05', '08:00', ''), status: 'SNOOZED_WATER' as const, snoozeUntil: at('08:40').toISOString(), snoozeCount: 1 }
+    s.medLogs = { [log.id]: log }
+    expect(clockAlerts(s, 'A', at('08:31'), '')).toEqual([])
+    s.medLogs[log.id] = { ...log, status: 'TAKEN' }
+    expect(clockAlerts(s, 'A', at('08:41'), '')).toEqual([])
+  })
+
+  it('conta pessoal do par não vira cobrança para mim, mesmo se a visão dele está aberta', () => {
+    const s = withMeds()
+    s.profiles.B!.sharePersonalFinances = true
+    s.transactions = Object.fromEntries([
+      { id: 'mine', createdBy: 'A', description: 'Minha conta' },
+      { id: 'partner', createdBy: 'B', description: 'Conta do par' },
+    ].map((tx) => [tx.id, { ...tx, scope: 'PERSONAL', type: 'EXPENSE', status: 'PREDICTED_DASHED', competenceDate: '2026-11-05', isSecretGift: false } as DataState['transactions'][string]]))
+    expect(clockAlerts(s, 'A', at('09:00'), 'Julia')).toEqual([expect.objectContaining({ title: 'Minha conta vence hoje', ref: '2026-11-05' })])
+    s.transactions.mine!.status = 'CONFIRMED_SOLID'
+    expect(clockAlerts(s, 'A', at('09:00'), 'Julia')).toEqual([])
+  })
+
+  it('compromisso próprio tem margem de 30 e 10 min, sem mostrar o do par', () => {
+    const s = withMeds()
+    s.events = { e: { id: 'e', title: 'Consulta', date: '2026-11-05', start: '09:00', end: '10:00', ownerId: 'A', kind: 'HEALTH', updatedAt: '' } }
+    expect(clockAlerts(s, 'A', at('08:29'), '')).toEqual([])
+    expect(clockAlerts(s, 'A', at('08:30'), '')[0]).toMatchObject({ category: 'event', key: 'event:e@2026-11-05T09:00#30' })
+    expect(clockAlerts(s, 'A', at('08:40'), '')).toEqual([])
+    expect(clockAlerts(s, 'A', at('08:50'), '')[0]).toMatchObject({ key: 'event:e@2026-11-05T09:00#10' })
+    expect(clockAlerts(s, 'B', at('08:50'), '')).toEqual([])
+  })
+
+  it('margem de transição atravessa a meia-noite e rituais seguem o horário personalizado', () => {
+    const s = withMeds()
+    s.events = { e: { id: 'e', title: 'Viagem', date: '2026-11-06', start: '00:10', end: '01:00', ownerId: null, kind: 'COUPLE', updatedAt: '' } }
+    expect(clockAlerts(s, 'A', at('23:40'), '')[0]?.category).toBe('event')
+    const schedules = defaultRitualSchedules()
+    schedules.afternoon = { enabled: true, time: '15:10' }
+    expect(clockAlerts(s, 'A', at('15:10'), '', schedules)[0]).toMatchObject({ category: 'ritual', key: 'ritual:local:A:2026-11-05:afternoon', ref: 'afternoon' })
+    expect(clockAlerts(s, 'A', at('14:30'), '', schedules)).toEqual([])
   })
 })
 
@@ -173,5 +225,15 @@ describe('o que chega do par', () => {
     expect(out.map((a) => a.label)).toEqual(['Tarefa enviada para você', 'Check-in do seu par'])
     const withNote = { ...next, moodCheckins: { 'B@2026-11-05': { ...next.moodCheckins['B@2026-11-05']!, note: 'Dia puxado', updatedAt: at('10:07').toISOString() } } }
     expect(incomingAlerts(next, withNote, 'A', at('10:08'), 'Julia')[0]).toMatchObject({ label: 'Recado do seu par', body: 'Dia puxado' })
+  })
+
+  it('foco antigo ligado a tarefa privada do par não vaza título em um aviso', () => {
+    const previous = withMeds()
+    const next: DataState = {
+      ...previous,
+      tasks: { private: { id: 'private', assignedTo: 'B', status: 'PENDING', visibleToPartner: false, sentBy: null } as DataState['tasks'][string] },
+      focusSessions: { legacy: { id: 'legacy', startedBy: 'B', title: 'Título privado', taskId: 'private', durationMin: 25, startedAt: at('10:05').toISOString(), endsAt: '', joinedBy: null, status: 'RUNNING', updatedAt: '' } },
+    }
+    expect(incomingAlerts(previous, next, 'A', at('10:06'), 'Julia')).toEqual([])
   })
 })

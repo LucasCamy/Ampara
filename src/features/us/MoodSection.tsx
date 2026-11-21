@@ -1,5 +1,5 @@
 import { firstName } from '../../domain/format'
-import { BatteryLow, CloudLightning, DoorOpen, HeartHandshake, Plus, Smile, X, type LucideIcon } from 'lucide-react'
+import { BatteryLow, CloudLightning, DoorOpen, HeartHandshake, Lightbulb, Plus, Smile, X, type LucideIcon } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { Button, cx, FieldError, SectionHeader } from '../../components/ui'
 import { toDateKey } from '../../domain/dates'
@@ -7,8 +7,9 @@ import { checkinOf, comfortOf, MOOD_LABEL, MOOD_PARTNER_HINT, MOODS, needsComfor
 import type { Mood, PartnerId } from '../../domain/types'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { addComfort, removeComfort, setMood, setMoodNote } from '../../store/moodActions'
+import { ui } from '../../store/ui'
 
 export const MOOD_ICON: Record<Mood, LucideIcon> = {
   GOOD: Smile,
@@ -70,12 +71,13 @@ export function ComfortList({ owner, title }: { owner: PartnerId; title: string 
 
 /** Hoje: como o par está (e o que acalma, nos dias difíceis) */
 export function PartnerMoodCard() {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const { partnerId, partner } = usePeople()
   const all = useData((s) => s.moodCheckins)
   const theirs = checkinOf(all, partnerId, today)
   const pname = firstName(partner.displayName)
-  return theirs ? (
+  return !isSolo && theirs ? (
         <section className={cx('module p-4 sm:p-5', needsComfort(theirs.mood) ? 'ledger-solid' : 'ledger-dashed')} data-testid="partner-mood" aria-label={`Check-in de ${pname}`}>
           <p className="flex items-center gap-2 text-[13px] font-bold text-couple">
             {(() => {
@@ -94,6 +96,7 @@ export function PartnerMoodCard() {
 
 /** Hoje: meu check-in em 1 toque (o par vê) */
 export function MyMoodCard() {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const { viewer, partner } = usePeople()
   const all = useData((s) => s.moodCheckins)
@@ -104,7 +107,7 @@ export function MyMoodCard() {
     <>
       {!mine || editing ? (
         <section className="card ledger-dashed p-4" data-testid="my-mood" aria-label="Seu check-in de hoje">
-          <p className="mb-3 text-[15px] font-semibold text-ink">Como você está hoje? {firstName(partner.displayName)} vê.</p>
+          <p className="mb-3 text-[15px] font-semibold text-ink">Como você está hoje?{!isSolo ? ` ${firstName(partner.displayName)} vê.` : ''}</p>
           <MoodPicker value={mine?.mood} />
           {mine ? (
             <Button size="sm" variant="quiet" className="mt-3 w-full sm:w-auto" onClick={() => setEditing(false)}>
@@ -140,7 +143,7 @@ export function MyMoodCard() {
                   className="min-h-11 w-full min-w-0 flex-1 rounded-[14px] border border-line-strong bg-bg px-3 text-[16px] text-ink placeholder:text-muted"
                 />
                 <Button size="sm" variant="quiet" type="submit" disabled={!note.trim()} data-testid="mood-note-save">
-                  Enviar
+                  {isSolo ? 'Guardar' : 'Enviar'}
                 </Button>
               </>
             ) : null}
@@ -156,6 +159,7 @@ export function MyMoodCard() {
 
 /** Aba Nós: a minha lista (edito) e a do par (só leio) */
 export function ComfortSection() {
+  const isSolo = useIsSolo()
   const { viewer, partnerId, partner } = usePeople()
   const all = useData((s) => s.comfortItems)
   const mine = useMemo(() => comfortOf(Object.values(all), viewer), [all, viewer])
@@ -171,10 +175,10 @@ export function ComfortSection() {
 
   return (
     <section aria-labelledby="acalma-title" data-testid="comfort-section">
-      <SectionHeader id="acalma-title" title="O que me acalma" rest={`· ${firstName(partner.displayName)} vê nos dias difíceis`} />
+      <SectionHeader id="acalma-title" title="O que me acalma" rest={isSolo ? '· seu kit para dias difíceis' : `· ${firstName(partner.displayName)} vê nos dias difíceis`} action={<Button size="sm" variant="ghost" icon={Lightbulb} onClick={() => ui.openSheet('templates', { group: 'comfort' })} data-testid="ideas-comfort">Ideias prontas</Button>} />
       <div className="card p-4">
         <p className="text-[14px] text-muted">
-          Escreva com calma, num dia bom. Aparece para {firstName(partner.displayName)} quando você pede ajuda ou marca “Preciso de colo” ou “No limite”.
+          {isSolo ? 'Escreva com calma, num dia bom. Sua lista fica por perto quando você estiver sem energia ou no limite.' : `Escreva com calma, num dia bom. Aparece para ${firstName(partner.displayName)} quando você pede ajuda ou marca “Preciso de colo” ou “No limite”.`}
         </p>
         {mine.length ? (
           <ul className="mt-2 divide-y divide-line" data-testid="my-comfort">
@@ -206,7 +210,7 @@ export function ComfortSection() {
                 setError(undefined)
               }}
               maxLength={120}
-              placeholder="Ex.: um abraço sem perguntas"
+              placeholder={isSolo ? 'Ex.: chá e alguns minutos de silêncio' : 'Ex.: um abraço sem perguntas'}
               autoComplete="off"
               aria-invalid={error ? true : undefined}
               aria-describedby={error ? 'comfort-err' : undefined}
@@ -218,7 +222,7 @@ export function ComfortSection() {
           {error ? <FieldError id="comfort-err">{error}</FieldError> : null}
         </form>
       </div>
-      <ComfortList owner={partnerId} title={`O que acalma ${firstName(partner.displayName)}`} />
+      {!isSolo ? <ComfortList owner={partnerId} title={`O que acalma ${firstName(partner.displayName)}`} /> : null}
     </section>
   )
 }

@@ -3,6 +3,7 @@ import {
   buildMedication,
   buildRoutine,
   hasErrors,
+  isDateKey,
   validateEvent,
   validateMedication,
   validateRoutine,
@@ -10,17 +11,20 @@ import {
   type MedicationInput,
   type RoutineInput,
 } from '../domain/catalog'
-import { addDays, toDateKey } from '../domain/dates'
+import { addDays, parseDateKey, toDateKey } from '../domain/dates'
 import { buildSettlement, computeCoupleBalance, computeShares, nonPayerShare } from '../domain/finance'
 import { firstName, formatCents } from '../domain/format'
 import { dayInMonth, payTx } from '../domain/ledger'
 import { confirmTaken, emptyLog, logId, skipDose, snoozeWater } from '../domain/medication'
-import { uuid } from '../domain/seed'
+import { defaultEnabledModules, uuid } from '../domain/seed'
+import { canViewTask } from '../domain/tasks'
 import type {
   EnergyLevel,
+  EnabledModules,
   HelpRequest,
   HelpResponse,
   HelpType,
+  Medication,
   MedicationLog,
   PartnerId,
   SkipReason,
@@ -61,6 +65,18 @@ export function setSharePersonal(value: boolean) {
   ui.toast(value ? 'Seu par pode ver seus gastos pessoais (sem presentes)' : 'Sua visão pessoal está fechada para o par', { undo })
 }
 
+export function setEnabledModule(module: keyof EnabledModules, enabled: boolean) {
+  const who = viewer()
+  const state = dataStore.get()
+  const profile = state.profiles[who]
+  if (!profile) return
+  const enabledModules = { ...defaultEnabledModules(state.couple.couple?.mode ?? 'COUPLE'), ...profile.enabledModules }
+  if (enabledModules[module] === enabled) return
+  const undo = transact((tx) => tx.put('profiles', { ...profile, enabledModules: { ...enabledModules, [module]: enabled }, updatedAt: nowIso() }))
+  const label = { cycle: 'Ciclo', shopping: 'Compras', goals: 'Caixinhas' }[module]
+  ui.toast(`${label}: ${enabled ? 'ativado' : 'desativado'}`, { undo })
+}
+
 export function renameProfile(id: PartnerId, displayName: string) {
   const prev = dataStore.get().profiles[id]
   const name = displayName.trim()
@@ -79,31 +95,64 @@ export function setSplit(splitMode: SplitMode, ratioABps: number) {
 export type TaskDest = 'ME' | 'US' | 'PARTNER'
 export type TaskWhen = 'TODAY' | 'TOMORROW' | 'INBOX'
 
-export function addTask(input: { title: string; dest: TaskDest; when: TaskWhen; effort: TaskEffort; private?: boolean }) {
+export interface TaskInput {
+  title: string
+  dest: TaskDest
+  when: TaskWhen
+  effort: TaskEffort
+  private?: boolean
+  steps?: Task['steps']
+  /** Usada ao editar uma tarefa com data própria ou por uma captura com data explícita. */
+  dueDate?: Task['dueDate']
+}
+
+/** Salva sem apagar o histórico nem os micro-passos concluídos em outro lugar enquanto a gaveta estava aberta. */
+export function saveTask(input: TaskInput, id?: string): string | null {
   const who = viewer()
+  const state = dataStore.get()
+  const prev = id ? state.tasks[id] : undefined
+  if (!input.title.trim() || (input.dueDate != null && (!isDateKey(input.dueDate) || toDateKey(parseDateKey(input.dueDate)) !== input.dueDate)) || (id && (!prev || !canViewTask(prev, who)))) return null
+  const solo = state.couple.couple?.mode === 'SOLO'
+  const dest = solo ? 'ME' : input.dest
+  const assignedTo = dest === 'US' ? null : dest === 'ME' ? who : otherPartner(who)
+  const stepIds = new Set<string>()
+  const steps = (input.steps ?? prev?.steps ?? [])
+    .filter((step) => step.text.trim())
+    .slice(0, 3)
+    .map((step) => {
+      const stepId = step.id && !stepIds.has(step.id) ? step.id : uuid()
+      stepIds.add(stepId)
+      const current = prev?.steps?.find((item) => item.id === stepId)
+      return { id: stepId, text: step.text.trim().slice(0, 120), done: current?.done ?? step.done }
+    })
   const t = today()
   const task: Task = {
-    id: uuid(),
-    createdBy: who,
-    assignedTo: input.dest === 'US' ? null : input.dest === 'ME' ? who : otherPartner(who),
-    title: input.title.trim(),
+    id: prev?.id ?? uuid(),
+    createdBy: prev?.createdBy ?? who,
+    assignedTo,
+    title: input.title.trim().slice(0, 120),
     effort: input.effort,
-    status: 'PENDING',
-    dueDate: input.when === 'TODAY' ? t : input.when === 'TOMORROW' ? addDays(t, 1) : null,
-    dueTime: null,
-    visibleToPartner: input.dest === 'ME' ? !input.private : true,
-    sentBy: input.dest === 'PARTNER' ? who : null,
-    completedAt: null,
-    completedBy: null,
-    sourceMedicationId: null,
-    createdAt: nowIso(),
+    status: prev?.status ?? 'PENDING',
+    dueDate: input.dueDate !== undefined ? input.dueDate : input.when === 'TODAY' ? t : input.when === 'TOMORROW' ? addDays(t, 1) : null,
+    dueTime: prev?.dueTime ?? null,
+    visibleToPartner: solo ? false : dest === 'ME' ? !input.private : true,
+    sentBy: prev && prev.assignedTo === assignedTo ? prev.sentBy : dest === 'PARTNER' ? who : null,
+    completedAt: prev?.completedAt ?? null,
+    completedBy: prev?.completedBy ?? null,
+    sourceMedicationId: prev?.sourceMedicationId ?? null,
+    steps,
+    postponeCount: prev?.postponeCount ?? 0,
+    createdAt: prev?.createdAt ?? nowIso(),
     updatedAt: nowIso(),
   }
   const undo = transact((tx) => tx.put('tasks', task))
-  const where = input.when === 'TODAY' ? 'hoje' : input.when === 'TOMORROW' ? 'amanhã' : 'a Caixa de Entrada'
-  const msg = input.dest === 'PARTNER' ? `Enviada para ${nameOf(otherPartner(who))} com carinho` : `Tarefa salva para ${where}`
+  const where = task.dueDate === null ? 'a Caixa de Entrada' : task.dueDate === t ? 'hoje' : task.dueDate === addDays(t, 1) ? 'amanhã' : dayMonth(task.dueDate)
+  const msg = prev ? `Tarefa atualizada: ${task.title}` : dest === 'PARTNER' ? `Enviada para ${nameOf(otherPartner(who))} com carinho` : `Tarefa salva para ${where}`
   ui.toast(msg, { undo })
+  return task.id
 }
+
+export const addTask = (input: TaskInput) => saveTask(input)
 
 export function toggleTask(id: string) {
   const who = viewer()
@@ -126,7 +175,7 @@ export function postponeTask(id: string) {
   const task = dataStore.get().tasks[id]
   if (!task) return
   const base = task.dueDate && task.dueDate >= today() ? task.dueDate : today()
-  const undo = transact((tx) => tx.put('tasks', { ...task, dueDate: addDays(base, 1), updatedAt: nowIso() }))
+  const undo = transact((tx) => tx.put('tasks', { ...task, dueDate: addDays(base, 1), postponeCount: (task.postponeCount ?? 0) + 1, updatedAt: nowIso() }))
   ui.toast(`Adiada para amanhã: ${task.title}`, { undo })
 }
 
@@ -138,6 +187,7 @@ export function scheduleTaskToday(id: string) {
 }
 
 export function sendTaskToPartner(id: string) {
+  if (dataStore.get().couple.couple?.mode === 'SOLO') return
   const who = viewer()
   const task = dataStore.get().tasks[id]
   if (!task) return
@@ -186,7 +236,8 @@ export function addExpense(input: ExpenseInput) {
   const state = dataStore.get()
   const couple = state.couple.couple
   if (!couple) return
-  const isCouple = input.scope === 'COUPLE'
+  const solo = couple.mode === 'SOLO'
+  const isCouple = !solo && input.scope === 'COUPLE'
   const paidBy = isCouple ? input.paidBy : who
   const shares = isCouple
     ? computeShares(input.amountCents, input.splitRule, paidBy, couple.ratioABps)
@@ -197,8 +248,8 @@ export function addExpense(input: ExpenseInput) {
     id: uuid(),
     createdBy: who,
     paidBy,
-    scope: input.scope,
-    isSecretGift: !isCouple && input.isSecretGift,
+    scope: solo ? 'PERSONAL' : input.scope,
+    isSecretGift: !solo && !isCouple && input.isSecretGift,
     type: 'EXPENSE',
     status: input.status,
     amountCents: input.amountCents,
@@ -277,17 +328,19 @@ export function takeDose(medId: string, date: string, time: string) {
         tx.put('tasks', {
           id: uuid(),
           createdBy: who,
-          assignedTo: med.ownerId,
+          assignedTo: med.ownerId ?? (tx.state().couple.couple?.mode === 'SOLO' ? who : null),
           title: routine ? `Repor ${med.name}` : `Comprar ${med.name} / pedir receita`,
           effort: 'QUICK_5M',
           status: 'PENDING',
           dueDate: today(),
           dueTime: null,
-          visibleToPartner: true,
+          visibleToPartner: tx.state().couple.couple?.mode !== 'SOLO' && (med.ownerId === null || med.notifyPartnerOnDelay),
           sentBy: null,
           completedAt: null,
           completedBy: null,
           sourceMedicationId: med.id,
+          steps: [],
+          postponeCount: 0,
           createdAt: nowIso(),
           updatedAt: nowIso(),
         })
@@ -325,11 +378,25 @@ export function skipDoseAction(medId: string, date: string, time: string, reason
   ui.toast('Dose pulada e registrada', { undo, tone: 'info' })
 }
 
+/** Tarefas automáticas de reposição acompanham a privacidade do remédio, sem recolher envios explícitos. */
+function hidePrivateRestockTasks(tx: Tx, med: Medication) {
+  if (med.ownerId === null || med.notifyPartnerOnDelay) return
+  for (const task of Object.values(tx.state().tasks)) {
+    if (task.sourceMedicationId === med.id && task.assignedTo === med.ownerId && task.sentBy === null && task.visibleToPartner) {
+      tx.put('tasks', { ...task, visibleToPartner: false, updatedAt: med.updatedAt })
+    }
+  }
+}
+
 export function setPartnerSupport(medId: string, value: boolean) {
   const med = dataStore.get().meds[medId]
-  if (!med) return
-  const undo = transact((tx) => tx.put('meds', { ...med, notifyPartnerOnDelay: value, updatedAt: nowIso() }))
-  ui.toast(value ? `Rede de apoio ligada para ${med.name}` : `Rede de apoio desligada para ${med.name}`, { undo })
+  if (!med || med.ownerId !== viewer()) return
+  const updated = { ...med, notifyPartnerOnDelay: dataStore.get().couple.couple?.mode === 'SOLO' ? false : value, updatedAt: nowIso() }
+  const undo = transact((tx) => {
+    tx.put('meds', updated)
+    hidePrivateRestockTasks(tx, updated)
+  })
+  ui.toast(updated.notifyPartnerOnDelay ? `Rede de apoio ligada para ${med.name}` : `Rede de apoio desligada para ${med.name}`, { undo })
 }
 
 export function restock(medId: string, amount: number) {
@@ -365,31 +432,37 @@ const editableEvent = (id: string) => {
  * Devolve o id, ou null se a entrada for inválida ou o remédio não puder ser editado por esta pessoa.
  */
 export function saveMedication(input: MedicationInput, id?: string): string | null {
-  if (hasErrors(validateMedication(input, today()))) return null
+  const draft = dataStore.get().couple.couple?.mode === 'SOLO' ? { ...input, shareWithPartner: false } : input
+  if (hasErrors(validateMedication(draft, today()))) return null
   const prev = id ? ownMed(id) : undefined
   if (id && !prev) return null
-  const med = buildMedication(input, viewer(), uuid(), nowIso(), prev ?? undefined)
-  const undo = transact((tx) => tx.put('meds', med))
+  const med = buildMedication(draft, viewer(), uuid(), nowIso(), prev ?? undefined)
+  const undo = transact((tx) => {
+    tx.put('meds', med)
+    hidePrivateRestockTasks(tx, med)
+  })
   const support = med.notifyPartnerOnDelay ? ' · com rede de apoio' : ''
   ui.toast(prev ? `Remédio atualizado · ${med.name}` : `Remédio salvo · ${med.name} às ${listTimes(med.times)}${support}`, { undo })
   return med.id
 }
 
 export function saveRoutine(input: RoutineInput, id?: string): string | null {
-  if (hasErrors(validateRoutine(input))) return null
+  const draft: RoutineInput = dataStore.get().couple.couple?.mode === 'SOLO' ? { ...input, responsible: 'ME' } : input
+  if (hasErrors(validateRoutine(draft))) return null
   const prev = id ? routineOf(id) : undefined
   if (id && !prev) return null
-  const routine = buildRoutine(input, viewer(), uuid(), nowIso(), prev ?? undefined)
+  const routine = buildRoutine(draft, viewer(), uuid(), nowIso(), prev ?? undefined)
   const undo = transact((tx) => tx.put('meds', routine))
   ui.toast(prev ? `Rotina atualizada · ${routine.name}` : `Rotina salva · ${routine.name} às ${listTimes(routine.times)}`, { undo })
   return routine.id
 }
 
 export function saveEvent(input: EventInput, id?: string): string | null {
-  if (hasErrors(validateEvent(input))) return null
+  const draft: EventInput = dataStore.get().couple.couple?.mode === 'SOLO' ? { ...input, owner: 'ME' } : input
+  if (hasErrors(validateEvent(draft))) return null
   const prev = id ? editableEvent(id) : undefined
   if (id && !prev) return null
-  const ev = buildEvent(input, viewer(), uuid(), nowIso(), prev ?? undefined)
+  const ev = buildEvent(draft, viewer(), uuid(), nowIso(), prev ?? undefined)
   const undo = transact((tx) => tx.put('events', ev))
   ui.toast(`${prev ? 'Compromisso atualizado' : 'Compromisso salvo'} · ${dayMonth(ev.date)} das ${ev.start} às ${ev.end}`, { undo })
   return ev.id

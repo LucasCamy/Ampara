@@ -2,6 +2,9 @@ import { atTime, minutesOf, toDateKey } from './dates'
 import { MOOD_LABEL } from './mood'
 import { doseView, minutesLate } from './medication'
 import { dosesFor, partnerDelayAlerts } from './today'
+import { canReceiveBillReminder, visibleTransactions } from './privacy'
+import { canViewFocusSession } from './together'
+import { normalizeRitualSchedules, defaultRitualSchedules, ritualAlertKey, RITUAL_LABELS, RITUAL_WINDOWS, type RitualSchedules } from './rituals'
 import type { DataState, PartnerId, TimeKey } from './types'
 
 /**
@@ -10,11 +13,11 @@ import type { DataState, PartnerId, TimeKey } from './types'
  * fica na tela até a pessoa responder. O servidor de lembretes (server/push/plan.ts) usa as mesmas regras.
  */
 
-export type AlertCategory = 'med' | 'help' | 'support' | 'partner' | 'home'
+export type AlertCategory = 'med' | 'help' | 'support' | 'partner' | 'home' | 'event' | 'ritual'
 /** "water" é o "pegou a água?" do remédio: mesma categoria, som próprio (curto) */
 export type AlertSound = AlertCategory | 'water'
 
-export const ALERT_CATEGORIES: AlertCategory[] = ['med', 'help', 'support', 'partner', 'home']
+export const ALERT_CATEGORIES: AlertCategory[] = ['med', 'help', 'support', 'partner', 'home', 'event', 'ritual']
 
 export interface CategoryMeta {
   label: string
@@ -31,7 +34,9 @@ export const CATEGORY: Record<AlertCategory, CategoryMeta> = {
   help: { label: 'Pedido de ajuda', description: 'Quando seu par pede ajuda. O aviso mais insistente.', sticky: true, vibrate: [400, 150, 400, 150, 400] },
   support: { label: 'Rede de apoio', description: 'Quando o remédio do seu par passa do limite.', sticky: false, vibrate: [150] },
   partner: { label: 'Do seu par', description: 'Lembrete carinhoso, foco junto, tarefa enviada e check-in.', sticky: false, vibrate: [60, 60, 60] },
-  home: { label: 'Casa e contas', description: 'Rotina da casa na hora e conta do casal que vence hoje.', sticky: false, vibrate: [] },
+  home: { label: 'Casa e contas', description: 'Rotinas na hora e suas contas que estão para vencer.', sticky: false, vibrate: [] },
+  event: { label: 'Compromissos', description: 'Margem para se preparar: avisos 30 e 10 min antes.', sticky: false, vibrate: [100, 70, 100] },
+  ritual: { label: 'Check-ins do dia', description: 'Manhã, tarde opcional e fechamento leve nos seus horários.', sticky: false, vibrate: [80] },
 }
 
 export const SOUND_VIBRATE: Record<AlertSound, number[]> = {
@@ -57,14 +62,16 @@ export interface AlertPrefs {
   volume: AlertVolume
   vibrate: boolean
   quiet: QuietHours
+  rituals: RitualSchedules
 }
 
 export const DEFAULT_PREFS: AlertPrefs = {
-  enabled: { med: true, help: true, support: true, partner: true, home: true },
+  enabled: { med: true, help: true, support: true, partner: true, home: true, event: true, ritual: true },
   sound: true,
   volume: 'MEDIUM',
   vibrate: true,
   quiet: { on: false, start: '22:00', end: '07:00', helpBreaks: true },
+  rituals: defaultRitualSchedules(),
 }
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -87,6 +94,7 @@ export function normalizePrefs(raw: unknown): AlertPrefs {
       end: time(q.end, DEFAULT_PREFS.quiet.end),
       helpBreaks: bool(q.helpBreaks, true),
     },
+    rituals: normalizeRitualSchedules(r.rituals),
   }
 }
 
@@ -120,12 +128,14 @@ export function decide(prefs: AlertPrefs, category: AlertCategory, minutesNow: n
 export interface ServerPrefs {
   off: AlertCategory[]
   quiet: { start: TimeKey; end: TimeKey; helpBreaks: boolean } | null
+  rituals?: RitualSchedules
 }
 
 export function toServerPrefs(p: AlertPrefs): ServerPrefs {
   return {
     off: ALERT_CATEGORIES.filter((c) => !p.enabled[c]),
     quiet: p.quiet.on ? { start: p.quiet.start, end: p.quiet.end, helpBreaks: p.quiet.helpBreaks } : null,
+    rituals: p.rituals,
   }
 }
 
@@ -137,7 +147,7 @@ export function fromServerPrefs(raw: unknown): ServerPrefs {
     q && typeof q.start === 'string' && TIME.test(q.start) && typeof q.end === 'string' && TIME.test(q.end)
       ? { start: q.start, end: q.end, helpBreaks: q.helpBreaks !== false }
       : null
-  return { off, quiet }
+  return { off, quiet, rituals: normalizeRitualSchedules(r.rituals) }
 }
 
 /** Mesmo "decide", do lado do servidor (sem som: lá só importa mandar ou não) */
@@ -182,7 +192,12 @@ const recent = (iso: string, now: Date) => {
  * contas do casal que vencem hoje. Devolve tudo o que está "na janela" agora; quem chama guarda as chaves
  * já avisadas.
  */
-export function clockAlerts(state: DataState, viewer: PartnerId, now: Date, partnerName: string): AlertCandidate[] {
+export function billsDueOn(state: DataState, viewer: PartnerId, date: string) {
+  return visibleTransactions(Object.values(state.transactions), viewer, state.profiles as Parameters<typeof visibleTransactions>[2])
+    .filter((t) => canReceiveBillReminder(t, viewer) && t.status === 'PREDICTED_DASHED' && t.type === 'EXPENSE' && t.competenceDate === date)
+}
+
+export function clockAlerts(state: DataState, viewer: PartnerId, now: Date, partnerName: string, rituals?: RitualSchedules): AlertCandidate[] {
   const out: AlertCandidate[] = []
   const today = toDateKey(now)
 
@@ -192,6 +207,12 @@ export function clockAlerts(state: DataState, viewer: PartnerId, now: Date, part
     const routine = med.kind === 'ROUTINE' || med.ownerId === null
     const late = minutesLate(log, now)
     const scheduledPassed = now.getTime() >= atTime(log.scheduledDate, log.scheduledTime).getTime()
+    const activeSnooze = log.status === 'SNOOZED_WATER' && !!log.snoozeUntil && new Date(log.snoozeUntil) > now
+    const selfLate = state.couple.couple?.mode === 'SOLO' && !routine && med.ownerId === viewer && !activeSnooze && late >= med.delayMinutesThreshold && late <= med.delayMinutesThreshold + 60
+    if (selfLate) {
+      out.push({ key: `self-late:${log.id}`, category: 'med', sound: 'med', label: `Remédio · ${log.scheduledTime}`, title: 'Um passo de cada vez', body: `${med.name} ainda está sem confirmação. Se já tomou, registre quando puder.`, actions: ['take', 'water'], ref: log.id })
+      continue
+    }
     if (log.status === 'SNOOZED_WATER' && log.snoozeUntil) {
       const over = age(log.snoozeUntil, now)
       if (!routine && over >= 0 && over <= CLOCK_WINDOW_MIN) {
@@ -234,7 +255,7 @@ export function clockAlerts(state: DataState, viewer: PartnerId, now: Date, part
     )
   }
 
-  for (const a of partnerDelayAlerts(state, viewer, now)) {
+  for (const a of state.couple.couple?.mode === 'SOLO' ? [] : partnerDelayAlerts(state, viewer, now)) {
     if (doseView(a.log, now) === 'SNOOZED_WATER') continue
     const late = minutesLate(a.log, now)
     if (late > a.med.delayMinutesThreshold + 60) continue
@@ -250,17 +271,36 @@ export function clockAlerts(state: DataState, viewer: PartnerId, now: Date, part
     })
   }
 
-  const bills = Object.values(state.transactions).filter((t) => t.scope === 'COUPLE' && t.status === 'PREDICTED_DASHED' && t.type === 'EXPENSE' && t.competenceDate === today)
+  const bills = billsDueOn(state, viewer, today)
   if (bills.length && now.getHours() >= 8) {
     out.push({
-      key: `bills:${today}`,
+      key: `bills:${viewer}:${today}`,
       category: 'home',
       sound: 'home',
       label: 'Contas · vence hoje',
-      title: bills.length === 1 ? `${bills[0]!.description} vence hoje` : `${bills.length} contas do casal vencem hoje`,
+      title: bills.length === 1 ? `${bills[0]!.description} vence hoje` : `${bills.length} contas suas vencem hoje`,
       body: 'Dê baixa quando pagar.',
       actions: ['open-finance'],
+      ref: today,
     })
+  }
+  for (const event of Object.values(state.events)) {
+    if (event.ownerId !== null && event.ownerId !== viewer) continue
+    const until = (atTime(event.date, event.start).getTime() - now.getTime()) / 60_000
+    for (const lead of [30, 10]) {
+      const elapsed = lead - until
+      if (elapsed < 0 || elapsed >= CLOCK_WINDOW_MIN || until <= 0) continue
+      out.push({ key: `event:${event.id}@${event.date}T${event.start}#${lead}`, category: 'event', sound: 'event', label: `Compromisso · ${event.start}`, title: event.title, body: lead === 30 ? 'Seu compromisso está chegando. Separe um pouco de tempo para a transição.' : 'Faltam poucos minutos. Você pode começar a se preparar para sair.', actions: ['open-today'], ref: event.id })
+    }
+  }
+  if (rituals) {
+    const minutes = now.getHours() * 60 + now.getMinutes()
+    for (const window of RITUAL_WINDOWS) {
+      const schedule = rituals[window]
+      const elapsed = minutes - minutesOf(schedule.time)
+      if (!schedule.enabled || elapsed < 0 || elapsed >= CLOCK_WINDOW_MIN) continue
+      out.push({ key: ritualAlertKey(state.couple.couple?.spaceId, viewer, today, window), category: 'ritual', sound: 'ritual', label: `Check-in · ${schedule.time}`, title: RITUAL_LABELS[window], body: 'Um momento curto para perceber seu ritmo, sem cobrança.', actions: ['open-today'], ref: window })
+    }
   }
   return out
 }
@@ -271,6 +311,7 @@ export function clockAlerts(state: DataState, viewer: PartnerId, now: Date, part
  */
 export function incomingAlerts(prev: DataState, next: DataState, viewer: PartnerId, now: Date, partnerName: string): AlertCandidate[] {
   const out: AlertCandidate[] = []
+  if (next.couple.couple?.mode === 'SOLO') return out
 
   for (const h of Object.values(next.helpRequests)) {
     const before = prev.helpRequests[h.id]
@@ -307,7 +348,7 @@ export function incomingAlerts(prev: DataState, next: DataState, viewer: Partner
   }
 
   for (const f of Object.values(next.focusSessions)) {
-    if (f.startedBy === viewer || f.status !== 'RUNNING' || f.joinedBy || prev.focusSessions[f.id] || !recent(f.startedAt, now)) continue
+    if (f.startedBy === viewer || f.status !== 'RUNNING' || f.joinedBy || prev.focusSessions[f.id] || !recent(f.startedAt, now) || !canViewFocusSession(f, viewer, next.tasks)) continue
     out.push({
       key: `focus:${f.id}`,
       category: 'partner',

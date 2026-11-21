@@ -1,8 +1,10 @@
 import { firstName } from '../../domain/format'
-import { ArrowRightLeft, ChevronLeft, ChevronRight, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Layers, Lock, MoreHorizontal, ReceiptText, Repeat, User, Users } from 'lucide-react'
+import { ArrowRightLeft, ChevronLeft, ChevronRight, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Lock, ReceiptText, User, Users } from 'lucide-react'
 import { GoalsSection } from './GoalsSection'
 import { RulesSection } from './RulesSection'
 import { SpendingSummary } from './SpendingSummary'
+import { SoloFinance } from './SoloFinance'
+import { DueBadge, SeriesTag, TxHeader } from './TransactionParts'
 import { useMemo, useState } from 'react'
 import { CATEGORIES } from '../../components/categories'
 import { Button, cx, EmptyState, MoneyText, OwnerTag, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
@@ -10,13 +12,13 @@ import { dayOfMonth, monthName, parseDateKey, toDateKey } from '../../domain/dat
 import { computeCoupleBalance, coupleShareTotal, describeBalance, settlementPlan, shareOf, splitRuleLabel } from '../../domain/finance'
 import { formatCents } from '../../domain/format'
 import { personalTabView, visibleTransactions } from '../../domain/privacy'
-import type { PartnerId, Transaction } from '../../domain/types'
+import type { PartnerId } from '../../domain/types'
 import { setSharePersonal, settleMonth } from '../../store/actions'
 import { quickPay } from '../../store/financeActions'
-import { daysOverdue, isOverdue, monthTitle, shiftMonth, txBadge } from '../../domain/ledger'
+import { isOverdue, monthTitle, shiftMonth } from '../../domain/ledger'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { possessive, toneOf, useCouple, usePeople } from '../../store/hooks'
+import { possessive, toneOf, useCouple, useIsSolo, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
 
 type FinTab = 'US' | 'MINE' | 'PARTNER'
@@ -26,6 +28,7 @@ export function FinanceScreen() {
   const today = toDateKey(now)
   const current = today.slice(0, 7)
   const { partner } = usePeople()
+  const isSolo = useIsSolo()
   const [tab, setTab] = useState<FinTab>('US')
   const [month, setMonth] = useState(current)
   const label = month === current ? monthName(today) : monthTitle(month, current)
@@ -59,7 +62,7 @@ export function FinanceScreen() {
           </div>
         ) : null}
       </div>
-      <div className="mb-5">
+      {!isSolo ? <div className="mb-5">
         <Segmented<FinTab>
           label="Escopo financeiro"
           value={tab}
@@ -71,10 +74,14 @@ export function FinanceScreen() {
             { value: 'PARTNER', label: possessive(partner), icon: User, testId: 'fin-PARTNER' },
           ]}
         />
-      </div>
-      {tab === 'US' ? <CoupleTab month={month} monthLabel={label} isCurrent={month === current} today={today} /> : null}
-      {tab === 'MINE' ? <PersonalTab month={month} owner="me" today={today} /> : null}
-      {tab === 'PARTNER' ? <PersonalTab month={month} owner="partner" today={today} /> : null}
+      </div> : null}
+      {isSolo ? <SoloFinance month={month} today={today} /> : (
+        <>
+          {tab === 'US' ? <CoupleTab month={month} monthLabel={label} isCurrent={month === current} today={today} /> : null}
+          {tab === 'MINE' ? <PersonalTab month={month} owner="me" today={today} /> : null}
+          {tab === 'PARTNER' ? <PersonalTab month={month} owner="partner" today={today} /> : null}
+        </>
+      )}
     </div>
   )
 }
@@ -84,7 +91,7 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
   const couple = useCouple()
   const txMap = useData((s) => s.transactions)
   const d = useMemo(() => {
-    const all = Object.values(txMap)
+    const all = visibleTransactions(Object.values(txMap), viewer, profiles)
     const couples = all.filter((t) => t.scope === 'COUPLE' && t.competenceDate.slice(0, 7) === month)
     const balance = computeCoupleBalance(all, month)
     return {
@@ -94,8 +101,8 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
       settlements: couples.filter((t) => t.type === 'SETTLEMENT'),
       myShare: coupleShareTotal(all, viewer, month),
     }
-  }, [txMap, month, viewer])
-  const coupleTx = useMemo(() => Object.values(txMap).filter((t) => t.scope === 'COUPLE'), [txMap])
+  }, [txMap, month, viewer, profiles])
+  const coupleTx = useMemo(() => visibleTransactions(Object.values(txMap), viewer, profiles).filter((t) => t.scope === 'COUPLE'), [txMap, viewer, profiles])
   const plan = settlementPlan(d.balance.netCents)
   const sentence = describeBalance(d.balance.netCents, viewer, profiles, monthLabel)
   const lastDay = new Date(parseDateKey(`${month}-01`).getFullYear(), parseDateKey(`${month}-01`).getMonth() + 1, 0).getDate()
@@ -104,7 +111,7 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
       <div className="flex flex-col gap-6">
       <section className={cx('module p-4 sm:p-6', plan ? '' : 'ledger-ok')} aria-labelledby="encontro" data-testid="balance-card">
-        <p id="encontro" className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">
+        <p id="encontro" className="text-[12px] font-bold text-muted">
           Encontro de contas · {monthLabel}
         </p>
         <p className="mt-3 text-[22px] leading-snug font-bold text-ink" data-testid="balance-sentence">
@@ -229,62 +236,6 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
   )
 }
 
-function TxHeader({ tx, masked, readOnly }: { tx: Transaction; masked?: boolean; readOnly?: boolean }) {
-  const C = CATEGORIES[tx.category]
-  return (
-    <div className="-mt-1 -mr-1 flex items-start justify-between gap-2">
-      <p className="flex min-w-0 items-center gap-2 pt-1 text-[15px] font-semibold text-ink">
-        <C.icon size={18} aria-hidden className="shrink-0 text-muted" />
-        <span className="truncate">{masked ? 'Item reservado' : tx.description}</span>
-      </p>
-      <span className="flex shrink-0 items-center">
-        <span className="font-data pt-1 text-[15px] font-semibold whitespace-nowrap text-ink">{formatCents(tx.amountCents)}</span>
-        {!readOnly && !masked && tx.type === 'EXPENSE' ? (
-          <button
-            type="button"
-            onClick={() => ui.openSheet('tx', { id: tx.id })}
-            aria-label={`Detalhes de ${tx.description}`}
-            data-testid="tx-open"
-            className="press hoverable inline-flex h-11 w-11 items-center justify-center rounded-full text-muted"
-          >
-            <MoreHorizontal size={18} aria-hidden />
-          </button>
-        ) : null}
-      </span>
-    </div>
-  )
-}
-
-const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`
-
-/** Vencimento: tracejado "vence dd/mm" ou vermelho "vencida há N dias" */
-function DueBadge({ tx, today }: { tx: Transaction; today: string }) {
-  if (isOverdue(tx, today)) {
-    const n = daysOverdue(tx, today)
-    return <StatusBadge kind="late">Vencida há {n} {n === 1 ? 'dia' : 'dias'} ({ddmm(tx.competenceDate)})</StatusBadge>
-  }
-  return <StatusBadge kind="pending">{tx.competenceDate === today ? 'Vence hoje' : `Vence ${ddmm(tx.competenceDate)}`}</StatusBadge>
-}
-
-/** "Parcela 3/10" ou "Fixa mensal" (texto + ícone, nunca só cor) */
-function SeriesTag({ tx }: { tx: Transaction }) {
-  const label = txBadge(tx)
-  if (!label && !tx.paidAt) return null
-  const Icon = tx.recurrenceId ? Repeat : Layers
-  return (
-    <span className="mt-1 inline-flex flex-wrap items-center gap-x-3 text-[12px] font-semibold text-couple">
-      {label ? (
-        <span className="inline-flex items-center gap-1" data-testid="series-tag">
-          <Icon size={13} aria-hidden /> {label}
-        </span>
-      ) : null}
-      {tx.status === 'CONFIRMED_SOLID' && tx.paidAt && tx.paidAt !== tx.competenceDate ? (
-        <span className="font-medium text-muted">pago em {ddmm(tx.paidAt)}</span>
-      ) : null}
-    </span>
-  )
-}
-
 const monthsFrom = (a: string, b: string) => {
   const [ya, ma] = a.split('-').map(Number)
   const [yb, mb] = b.split('-').map(Number)
@@ -345,7 +296,7 @@ function PersonalTab({ month, owner, today }: { month: string; owner: 'me' | 'pa
           </StatusBadge>
         )}
         <section className="module p-4 sm:p-5" data-testid="personal-total">
-          <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">
+          <p className="text-[12px] font-bold text-muted">
             {view.status === 'own' ? 'Meus gastos pessoais' : `Gastos pessoais de ${view.ownerName}`}
           </p>
           <p className="font-data mt-2 text-[28px] font-semibold whitespace-nowrap text-ink">{formatCents(view.totalCents)}</p>

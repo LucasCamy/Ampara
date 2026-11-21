@@ -23,7 +23,7 @@ import { createStore, useStore } from '../../store/createStore'
 import { endPeriodToday, updateCycleSettings } from '../../store/cycleActions'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { ui } from '../../store/ui'
 
 const PHASE_ICON: Record<CyclePhase, LucideIcon> = {
@@ -48,6 +48,7 @@ const inDays = (n: number) => (n === 0 ? 'hoje' : n === 1 ? 'amanhã' : `em ${n}
 
 /** Ciclo da pessoa logada + o que o par compartilhou. Mora na aba Cuidados. */
 export function CycleSection() {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const { viewer, partnerId, partner } = usePeople()
   const allLogs = useData((s) => s.cycleLogs)
@@ -81,7 +82,7 @@ export function CycleSection() {
         }
       />
       <div className="flex flex-col gap-3">
-        {d.partnerView.status !== 'hidden' ? <PartnerCycleCard view={d.partnerView} partner={partner} today={today} /> : null}
+        {!isSolo && d.partnerView.status !== 'hidden' ? <PartnerCycleCard view={d.partnerView} partner={partner} today={today} /> : null}
         {!d.started ? (
           <div className="card ledger-dashed p-4" data-testid="cycle-intro">
             <p className="flex items-center gap-2 text-[15px] font-bold text-ink">
@@ -217,9 +218,10 @@ const SHARE_TEXT: Record<CycleShare, (p: string) => string> = {
 }
 
 function ShareCard({ share, suggestCalm, partnerName }: { share: CycleShare; suggestCalm: boolean; partnerName: string }) {
+  const isSolo = useIsSolo()
   return (
     <div className="card p-4" data-testid="cycle-share">
-      <p className="mb-2 flex items-center gap-2 text-[15px] font-bold text-ink">
+      {!isSolo ? <><p className="mb-2 flex items-center gap-2 text-[15px] font-bold text-ink">
         <Lock size={16} aria-hidden className="text-muted" /> Quem vê
       </p>
       <Segmented<CycleShare>
@@ -236,8 +238,8 @@ function ShareCard({ share, suggestCalm, partnerName }: { share: CycleShare; sug
       />
       <p className="mt-2 text-[13px] text-muted" data-testid="cycle-share-text">
         {SHARE_TEXT[share](partnerName)}
-      </p>
-      <div className="mt-3 border-t border-line pt-3">
+      </p></> : null}
+      <div className={isSolo ? undefined : 'mt-3 border-t border-line pt-3'}>
         <Switch
           checked={suggestCalm}
           onChange={(v) => updateCycleSettings({ suggestCalm: v })}
@@ -291,6 +293,7 @@ function PartnerCycleCard({ view, partner, today }: { view: Exclude<PartnerCycle
 const dismissed = createStore<Record<string, true>>({})
 
 export function CycleTodayCards() {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const { viewer, partnerId, me, partner } = usePeople()
   const allLogs = useData((s) => s.cycleLogs)
@@ -330,7 +333,7 @@ export function CycleTodayCards() {
           </div>
         </section>
       ) : null}
-      {warn && d.partnerView.status !== 'hidden' ? <PartnerWarn view={d.partnerView} partner={partner} pid={partnerId} today={today} /> : null}
+      {!isSolo && warn && d.partnerView.status !== 'hidden' ? <PartnerWarn view={d.partnerView} partner={partner} pid={partnerId} today={today} /> : null}
     </>
   )
 }

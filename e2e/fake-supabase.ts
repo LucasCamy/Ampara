@@ -43,6 +43,27 @@ export class FakeSupabase {
     return this.tables.get(name)!
   }
 
+  /** Espelho exclusivo de worker_read e grants por coluna; nunca usado pela API autenticada do app. */
+  workerRows(table: 'couples' | 'events' | 'transactions' | 'profiles' | 'focus_sessions', columns: string[]): Row[] {
+    const allowed: Record<typeof table, string[]> = {
+      couples: ['id', 'mode'],
+      profiles: ['couple_id', 'id', 'display_name'],
+      events: ['id', 'couple_id', 'title', 'date', 'start', 'owner_id', 'deleted'],
+      transactions: ['id', 'couple_id', 'created_by', 'scope', 'status', 'type', 'competence_date', 'description', 'deleted'],
+      focus_sessions: ['id', 'couple_id', 'started_by', 'title', 'task_id', 'duration_min', 'started_at', 'ends_at', 'joined_by', 'status', 'updated_at', 'deleted', 'synced_at'],
+    }
+    if (columns.some((column) => !allowed[table].includes(column))) throw new Error('worker column not allowed')
+    const subscriptions = [...this.pushSubs.values()]
+    return [...this.table(table).values()].filter((row) => {
+      if (table === 'couples') return subscriptions.some((sub) => sub.couple_id === row.id)
+      if (table === 'profiles') return true
+      if (table === 'focus_sessions') return row.joined_by !== row.started_by && this.focusTaskShared(row)
+      if (row.deleted === true) return false
+      if (table === 'transactions' && (row.status !== 'PREDICTED_DASHED' || row.type !== 'EXPENSE')) return false
+      return subscriptions.some((sub) => sub.couple_id === row.couple_id && (table === 'events' ? row.owner_id == null || sub.partner_id === row.owner_id : row.scope === 'COUPLE' || sub.partner_id === row.created_by))
+    }).map((row) => Object.fromEntries(columns.map((column) => [column, row[column]])))
+  }
+
   private stamp() {
     this.seq += 1
     return new Date(Date.UTC(2026, 10, 6, 0, 0, 0, this.seq)).toISOString()
@@ -70,6 +91,12 @@ export class FakeSupabase {
   }
 
   /** Espelho das políticas *_read do schema */
+  private focusTaskShared(row: Row): boolean {
+    if (row.task_id == null) return true
+    const task = this.table('tasks').get(String(row.task_id))
+    return !!task && task.couple_id === row.couple_id && task.deleted !== true && (task.assigned_to == null || task.visible_to_partner === true || (task.sent_by != null && task.sent_by !== task.assigned_to))
+  }
+
   private canRead(table: string, row: Row, m: Member): boolean {
     if (table === 'couples') return row.id === m.couple_id
     if (row.couple_id !== m.couple_id) return false
@@ -83,6 +110,7 @@ export class FakeSupabase {
     if (table === 'tasks') return row.assigned_to == null || row.assigned_to === m.partner_id || row.sent_by === m.partner_id || row.visible_to_partner === true
     if (table === 'medications') return row.owner_id == null || row.owner_id === m.partner_id || row.notify_partner_on_delay === true
     if (table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
+    if (table === 'focus_sessions') return row.started_by === m.partner_id || (row.joined_by !== row.started_by && this.focusTaskShared(row))
     // cycle_settings_read / cycle_logs_read
     if (table === 'cycle_settings') return true
     // gift_ideas_read: presente é surpresa, só quem anotou
@@ -108,6 +136,7 @@ export class FakeSupabase {
     if (table === 'transactions' || table === 'recurrences') return row.scope === 'COUPLE' || row.created_by === m.partner_id
     if (table === 'medications' || table === 'events') return row.owner_id == null || row.owner_id === m.partner_id
     if (table === 'medication_logs' || table === 'tasks') return this.canRead(table, row, m)
+    if (table === 'focus_sessions') return this.canRead(table, row, m)
     if (table === 'cycle_settings') return row.id === m.partner_id
     if (table === 'cycle_logs') return row.owner_id === m.partner_id
     if (table === 'gift_ideas' || table === 'mood_checkins' || table === 'comfort_items') return row.owner_id === m.partner_id
@@ -187,14 +216,18 @@ export class FakeSupabase {
       if (name === 'my_membership') return json(200, me ? [{ couple_id: me.couple_id, partner_id: me.partner_id }] : [])
       if (name === 'create_couple') {
         if (me) return json(400, { message: 'already paired' })
+        const mode = body.p_mode ?? 'COUPLE'
+        if (mode !== 'SOLO' && mode !== 'COUPLE') return json(400, { code: '23514', message: 'invalid space mode' })
         const id = String(body.p_couple_id)
-        this.table('couples').set(id, { id, split_mode: body.p_split_mode, ratio_a_bps: body.p_ratio_a_bps, synced_at: this.stamp() })
+        this.table('couples').set(id, { id, mode, split_mode: body.p_split_mode, ratio_a_bps: body.p_ratio_a_bps, synced_at: this.stamp() })
         this.members.push({ couple_id: id, user_id: uid, partner_id: 'A' })
         return json(200, id)
       }
       if (name === 'create_invite') {
         if (!me) return json(400, { message: 'not paired' })
+        if (this.table('couples').get(me.couple_id)?.mode !== 'COUPLE') return json(400, { message: 'invite requires couple mode' })
         const partner = me.partner_id === 'A' ? 'B' : 'A'
+        if (this.members.some((m) => m.couple_id === me.couple_id && m.partner_id === partner)) return json(400, { message: 'partner already joined' })
         this.invites = this.invites.filter((i) => i.couple_id !== me.couple_id)
         this.invites.push({ hash: norm(String(body.p_code)), couple_id: me.couple_id, partner_id: partner, used: false })
         return json(200, null)
@@ -226,13 +259,25 @@ export class FakeSupabase {
       return json(200, rows)
     }
     if (req.method() === 'POST') {
+      const defaults: Row = tableName === 'couples'
+        ? { mode: 'COUPLE' }
+        : tableName === 'profiles'
+          ? { monthly_budget_cents: null, enabled_modules: null }
+          : tableName === 'tasks'
+            ? { steps: [], postpone_count: 0 }
+            : {}
+      if (tableName === 'couples' && body.mode != null && body.mode !== 'SOLO' && body.mode !== 'COUPLE') {
+        return json(400, { code: '23514', message: 'invalid space mode' })
+      }
       const key = keyOf(body)
       const existing = t.get(key)
       // upsert: a linha nova passa no with check; a que já existe precisa passar no using do update
       // help_insert / nudges_insert: quem pede ou manda cria; linha existente vira update (os dois atualizam)
       const author = tableName === 'help_requests' ? body.requester_id : tableName === 'nudges' ? body.from : undefined
       const insertOk =
-        tableName === 'tasks' || tableName === 'profiles'
+        tableName === 'focus_sessions'
+          ? body.couple_id === me.couple_id && (body.started_by === me.partner_id || (!!existing && existing.joined_by !== existing.started_by && this.focusTaskShared(existing)))
+          : tableName === 'tasks' || tableName === 'profiles'
           ? body.couple_id === me.couple_id
           : author !== undefined
             ? body.couple_id === me.couple_id && (author === me.partner_id || !!existing)
@@ -242,21 +287,31 @@ export class FakeSupabase {
       if (!insertOk || (existing && !this.canWrite(tableName, existing, me))) {
         return json(403, { code: '42501', message: 'new row violates row-level security policy' })
       }
+      if (tableName === 'focus_sessions' && existing && (body.started_by !== existing.started_by || body.couple_id !== existing.couple_id)) return json(403, { code: '42501', message: 'focus identity cannot change' })
+      if (tableName === 'focus_sessions' && existing && !this.canWrite(tableName, { ...existing, ...body }, me)) return json(403, { code: '42501', message: 'new row violates row-level security policy' })
       // espelho de keep_newest(): versão mais velha não sobrescreve a mais nova (a linha volta com synced_at novo)
       if (existing && (tableName === 'transactions' || tableName === 'recurrences') && String(body.updated_at) < String(existing.updated_at)) {
         t.set(key, { ...existing, synced_at: this.stamp() })
         return json(201, null)
       }
-      t.set(key, { ...(existing ?? {}), ...body, synced_at: this.stamp() })
+      t.set(key, { ...defaults, ...(existing ?? {}), ...body, synced_at: this.stamp() })
       return json(201, null)
     }
     if (req.method() === 'PATCH') {
+      if (tableName === 'couples' && body.mode != null && body.mode !== 'SOLO' && body.mode !== 'COUPLE') {
+        return json(400, { code: '23514', message: 'invalid space mode' })
+      }
       const id = url.searchParams.get('id')?.replace(/^eq\./, '') ?? ''
       const couple = url.searchParams.get('couple_id')?.replace(/^eq\./, '') ?? me.couple_id
       const key = composite ? `${couple}|${id}` : id
       const row = t.get(key)
       // update sem permissão no using: 0 linhas, sem erro (como no PostgREST)
       if (!row || !this.canWrite(tableName, row, me)) return json(204, null)
+      if (tableName === 'focus_sessions') {
+        const next = { ...row, ...body }
+        if (next.id !== row.id || next.couple_id !== row.couple_id || next.started_by !== row.started_by) return json(403, { code: '42501', message: 'focus identity cannot change' })
+        if (!this.canWrite(tableName, next, me)) return json(403, { code: '42501', message: 'new row violates row-level security policy' })
+      }
       t.set(key, { ...row, ...body, synced_at: this.stamp() })
       return json(204, null)
     }

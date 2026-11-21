@@ -18,10 +18,12 @@ import type {
   CalendarEvent,
   DataState,
   DateKey,
+  EnabledModules,
   HelpRequest,
   Medication,
   PartnerId,
   SplitRule,
+  SpaceMode,
   Task,
   Transaction,
   TxCategory,
@@ -33,6 +35,8 @@ export function uuid(): string {
 }
 
 const byId = <T extends { id: string }>(xs: T[]): Record<string, T> => Object.fromEntries(xs.map((x) => [x.id, x]))
+
+export const defaultEnabledModules = (mode: SpaceMode): EnabledModules => ({ cycle: mode === 'COUPLE', shopping: true, goals: true })
 
 /** Dia do mês corrente, limitado ao mês */
 function dayInMonth(today: DateKey, offset: number): DateKey {
@@ -63,6 +67,8 @@ export function buildSeed(now: Date): DataState {
     completedAt: null,
     completedBy: null,
     sourceMedicationId: null,
+    steps: [],
+    postponeCount: 0,
     createdAt: iso,
     updatedAt: iso,
     ...p,
@@ -278,11 +284,11 @@ export function buildSeed(now: Date): DataState {
   return {
     schemaVersion: 1,
     couple: {
-      couple: { id: 'couple', inviteCode: '482 913', pairedAt: iso, splitMode: '50_50', ratioABps },
+      couple: { id: 'couple', mode: 'COUPLE', inviteCode: '482 913', pairedAt: iso, splitMode: '50_50', ratioABps },
     },
     profiles: {
-      A: { id: 'A', displayName: 'Lucas', pronoun: 'ele', energy: 'MEDIUM', energyUpdatedAt: iso, sharePersonalFinances: true, updatedAt: iso },
-      B: { id: 'B', displayName: 'Namorada', pronoun: 'ela', energy: 'FULL', energyUpdatedAt: iso, sharePersonalFinances: false, updatedAt: iso },
+      A: { id: 'A', displayName: 'Lucas', pronoun: 'ele', energy: 'MEDIUM', energyUpdatedAt: iso, sharePersonalFinances: true, monthlyBudgetCents: null, enabledModules: defaultEnabledModules('COUPLE'), updatedAt: iso },
+      B: { id: 'B', displayName: 'Namorada', pronoun: 'ela', energy: 'FULL', energyUpdatedAt: iso, sharePersonalFinances: false, monthlyBudgetCents: null, enabledModules: defaultEnabledModules('COUPLE'), updatedAt: iso },
     },
     tasks: byId(tasks),
     events: byId(events),
@@ -312,8 +318,34 @@ export function buildSeed(now: Date): DataState {
  */
 export function normalizeState(state: DataState): DataState {
   const missing = COLLECTIONS.filter((c) => !state[c] || typeof state[c] !== 'object')
-  if (!missing.length) return state
-  return { ...state, ...Object.fromEntries(missing.map((c) => [c, {}])) }
+  let next: DataState = missing.length ? { ...state, ...Object.fromEntries(missing.map((c) => [c, {}])) } : state
+  const couple = next.couple.couple
+  const mode: SpaceMode = couple?.mode === 'SOLO' ? 'SOLO' : 'COUPLE'
+  if (couple && couple.mode !== mode) next = { ...next, couple: { ...next.couple, couple: { ...couple, mode } } }
+  const defaults = defaultEnabledModules(mode)
+  let profiles = next.profiles
+  for (const p of Object.values(next.profiles)) {
+    const budget = typeof p.monthlyBudgetCents === 'number' && Number.isSafeInteger(p.monthlyBudgetCents) && p.monthlyBudgetCents >= 0 ? p.monthlyBudgetCents : null
+    const modules: EnabledModules = {
+      cycle: typeof p.enabledModules?.cycle === 'boolean' ? p.enabledModules.cycle : defaults.cycle,
+      shopping: typeof p.enabledModules?.shopping === 'boolean' ? p.enabledModules.shopping : defaults.shopping,
+      goals: typeof p.enabledModules?.goals === 'boolean' ? p.enabledModules.goals : defaults.goals,
+    }
+    if (p.monthlyBudgetCents !== budget || p.enabledModules?.cycle !== modules.cycle || p.enabledModules.shopping !== modules.shopping || p.enabledModules.goals !== modules.goals) {
+      if (profiles === next.profiles) profiles = { ...profiles }
+      profiles[p.id] = { ...p, monthlyBudgetCents: budget, enabledModules: modules }
+    }
+  }
+  let tasks = next.tasks
+  for (const task of Object.values(next.tasks)) {
+    const steps = Array.isArray(task.steps) ? task.steps : []
+    const postponeCount = typeof task.postponeCount === 'number' && Number.isSafeInteger(task.postponeCount) && task.postponeCount >= 0 ? task.postponeCount : 0
+    if (task.steps !== steps || task.postponeCount !== postponeCount) {
+      if (tasks === next.tasks) tasks = { ...tasks }
+      tasks[task.id] = { ...task, steps, postponeCount }
+    }
+  }
+  return profiles === next.profiles && tasks === next.tasks ? next : { ...next, profiles, tasks }
 }
 
 export interface CoupleIdentity {
@@ -323,6 +355,7 @@ export interface CoupleIdentity {
   splitMode?: Couple['splitMode']
   shareA?: boolean
   shareB?: boolean
+  mode?: SpaceMode
 }
 
 /** Aplica nomes, pronomes, convite e preferências iniciais a um estado (exemplo ou vazio) */
@@ -331,7 +364,7 @@ export function withIdentity(state: DataState, id: CoupleIdentity): DataState {
   return {
     ...state,
     couple: couple
-      ? { couple: { ...couple, inviteCode: id.inviteCode, splitMode: id.splitMode ?? couple.splitMode } }
+      ? { couple: { ...couple, mode: id.mode ?? couple.mode ?? 'COUPLE', inviteCode: id.inviteCode, splitMode: id.splitMode ?? couple.splitMode } }
       : state.couple,
     profiles: {
       A: { ...state.profiles.A!, displayName: id.a.name, pronoun: id.a.pronoun, sharePersonalFinances: id.shareA ?? state.profiles.A!.sharePersonalFinances },
@@ -341,10 +374,15 @@ export function withIdentity(state: DataState, id: CoupleIdentity): DataState {
 }
 
 /** Estado sem lançamentos: casal recém-criado que não quer dados de exemplo */
-export function buildEmpty(now: Date): DataState {
+export function buildEmpty(now: Date, mode: SpaceMode = 'COUPLE'): DataState {
   const seed = buildSeed(now)
   return {
     ...seed,
+    couple: { couple: { ...seed.couple.couple!, mode } },
+    profiles: {
+      A: { ...seed.profiles.A!, enabledModules: defaultEnabledModules(mode) },
+      B: { ...seed.profiles.B!, enabledModules: defaultEnabledModules(mode) },
+    },
     tasks: {},
     events: {},
     meds: {},

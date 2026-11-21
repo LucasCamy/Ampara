@@ -11,4 +11,4 @@ export const CATEGORIES: Record<TxCategory, { label: string; icon: LucideIcon }>
   OTHER: { label: 'Outros', icon: Package },
 }
 
-export const CATEGORY_ORDER: TxCategory[] = ['MARKET', 'FOOD', 'HOME', 'HEALTH', 'TRANSPORT', 'LEISURE']
+export const CATEGORY_ORDER: TxCategory[] = ['MARKET', 'FOOD', 'HOME', 'HEALTH', 'TRANSPORT', 'LEISURE', 'OTHER']

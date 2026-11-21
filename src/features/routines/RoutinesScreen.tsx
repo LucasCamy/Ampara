@@ -1,17 +1,19 @@
 import { firstName } from '../../domain/format'
-import { HandHeart, Package, Pill, Plus, Repeat } from 'lucide-react'
+import { HandHeart, Lightbulb, Package, Pill, Plus, Repeat, ShoppingCart } from 'lucide-react'
 import { useMemo } from 'react'
 import { DoseActions, DoseStatus, doseBorder } from '../../components/domain'
 import { Button, cx, EditButton, EmptyState, OwnerTag, SectionHeader, StatusBadge, Switch, Title } from '../../components/ui'
 import { toDateKey } from '../../domain/dates'
 import { formatClock } from '../../domain/format'
 import { isLowStock, stockDaysLeft, stockLevel, stockRunsOutOn } from '../../domain/medication'
+import { findMedicationItem } from '../../domain/shopping'
 import { dosesFor, partnerSupportedDoses, type DoseItem } from '../../domain/today'
 import type { Medication } from '../../domain/types'
 import { restock, sendNudge, setPartnerSupport } from '../../store/actions'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { toneOf, usePeople } from '../../store/hooks'
+import { toneOf, useIsSolo, usePeople } from '../../store/hooks'
+import { addMedicationToShopping } from '../../store/shoppingActions'
 import { ui } from '../../store/ui'
 import { CycleSection } from '../cycle/CycleSection'
 import { PACK_LATE_HINT, PackLine } from './PackInfo'
@@ -19,9 +21,11 @@ import { PACK_LATE_HINT, PackLine } from './PackInfo'
 const WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export function RoutinesScreen() {
+  const isSolo = useIsSolo()
   const now = useNow()
   const today = toDateKey(now)
-  const { viewer, partner, profiles } = usePeople()
+  const { viewer, me, partner, profiles } = usePeople()
+  const showCycle = me.enabledModules?.cycle ?? !isSolo
   const state = useData((s) => s)
 
   const d = useMemo(() => {
@@ -47,7 +51,7 @@ export function RoutinesScreen() {
   return (
     <div>
       <div className="mb-5">
-        <Title anchor="Cuidados," rest="remédios, rotinas e ciclo sem cegueira de alarme." />
+        <Title anchor="Cuidados," rest={showCycle ? 'remédios, rotinas e ciclo sem cegueira de alarme.' : 'remédios e rotinas no seu ritmo.'} />
         <p className="mt-2 max-w-[60ch] text-[14px] text-muted">
           Confirme em dois estágios: <strong className="text-ink">Já engoli</strong> registra o horário exato.{' '}
           <strong className="text-ink">Pegando água</strong> segura a lembrança por 5 minutos.
@@ -87,7 +91,7 @@ export function RoutinesScreen() {
 
           {d.myMeds.length ? (
             <>
-              <h3 className="mt-6 mb-2 text-[15px] font-bold text-ink">Estoque e rede de apoio</h3>
+              <h3 className="mt-6 mb-2 text-[15px] font-bold text-ink">{isSolo ? 'Estoque dos seus remédios' : 'Estoque e rede de apoio'}</h3>
               <ul className="flex flex-col gap-3">
                 {d.myMeds.map((m) => (
                   <MedSettings key={m.id} med={m} partnerName={firstName(partner.displayName)} />
@@ -101,19 +105,20 @@ export function RoutinesScreen() {
           <section aria-labelledby="rotinas-casa">
             <SectionHeader
               id="rotinas-casa"
-              title="Rotinas da casa"
-              rest="· qualquer um confirma"
+              title={isSolo ? 'Minhas rotinas' : 'Rotinas da casa'}
+              rest={isSolo ? '· uma coisa por vez' : '· qualquer um confirma'}
               action={
-                <Button size="sm" variant="quiet" icon={Plus} onClick={() => ui.openSheet('routine')} data-testid="add-routine">
-                  Nova rotina
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="quiet" icon={Plus} className="grow basis-[140px]" onClick={() => ui.openSheet('routine')} data-testid="add-routine">Nova rotina</Button>
+                  <Button size="sm" variant="ghost" icon={Lightbulb} className="grow basis-[140px]" onClick={() => ui.openSheet('templates', { group: 'routines' })} data-testid="ideas-routines">Ideias prontas</Button>
+                </div>
               }
             />
             {d.routines.length === 0 ? (
               <EmptyState
                 icon={Repeat}
-                title="Nenhuma rotina da casa."
-                text="Tirar o lixo, remédio do gato, regar as plantas: qualquer um confirma e o outro vê."
+                title={isSolo ? 'Nenhuma rotina ainda.' : 'Nenhuma rotina da casa.'}
+                text={isSolo ? 'Beber água, tirar o lixo, regar as plantas. Comece por uma pequena rotina.' : 'Tirar o lixo, remédio do gato, regar as plantas: qualquer um confirma e o outro vê.'}
                 action={
                   <Button variant="quiet" icon={Plus} onClick={() => ui.openSheet('routine')}>
                     Criar rotina
@@ -135,7 +140,7 @@ export function RoutinesScreen() {
                           <p className="min-w-0 pt-2 text-[16px] font-bold break-words text-ink">{m.name}</p>
                           <EditButton label={`Editar rotina ${m.name}`} onClick={() => ui.openSheet('routine', { id: m.id })} testId="routine-edit" />
                         </div>
-                        {m.assignee ? (
+                        {!isSolo && m.assignee ? (
                           <OwnerTag tone={toneOf(m.assignee)}>
                             Responsável: {m.assignee === viewer ? 'você' : firstName(profiles[m.assignee]?.displayName)}
                           </OwnerTag>
@@ -169,7 +174,7 @@ export function RoutinesScreen() {
             </ul>
           </section>
 
-          <section aria-labelledby="rede-apoio">
+          {!isSolo ? <section aria-labelledby="rede-apoio">
             <SectionHeader id="rede-apoio" title={`Rede de apoio de ${firstName(partner.displayName)}`} rest="· só o que foi compartilhado" />
             {d.partnerDoses.length === 0 ? (
               <p className="rounded-[18px] border border-dashed border-line-strong p-4 text-[14px] text-muted">
@@ -198,9 +203,9 @@ export function RoutinesScreen() {
                 ))}
               </ul>
             )}
-          </section>
+          </section> : null}
 
-          <CycleSection />
+          {showCycle ? <CycleSection /> : null}
         </div>
       </div>
     </div>
@@ -238,12 +243,16 @@ const STOCK_FILL = { ok: 'bg-ok', warn: 'bg-warn', low: 'bg-err' } as const
 
 /** Estoque: quantidade, até quando dura e barra de nível. Um bloco de texto só (não quebra palavra a palavra). */
 function StockMeter({ med, compact }: { med: Medication; compact?: boolean }) {
+  const { viewer, me } = usePeople()
+  const shopping = useData((s) => s.shoppingItems)
   const today = toDateKey(useNow())
   const low = isLowStock(med)
   const days = stockDaysLeft(med)
   const until = stockRunsOutOn(med, today)
   const level = stockLevel(med)
   const unit = med.stockUnit || (med.kind === 'ROUTINE' ? 'unidades' : 'comprimidos')
+  const canShop = me.enabledModules?.shopping !== false && (med.ownerId === viewer || med.ownerId === null)
+  const listed = findMedicationItem(Object.values(shopping), med.id)
   return (
     <div className={compact ? 'mt-3' : 'mt-2'} data-testid="stock-line">
       {low ? (
@@ -278,11 +287,23 @@ function StockMeter({ med, compact }: { med: Medication; compact?: boolean }) {
           <div className={cx('h-full rounded-full', STOCK_FILL[level.level])} style={{ width: `${Math.max(4, level.ratio * 100)}%` }} />
         </div>
       ) : null}
+      {low && canShop ? (
+        <div className="mt-3">
+          {listed ? (
+            <StatusBadge kind="pending">Reposição na lista de compras</StatusBadge>
+          ) : (
+            <Button size="sm" variant="quiet" icon={ShoppingCart} className="w-full sm:w-auto" onClick={() => addMedicationToShopping(med.id)} aria-label={`Pôr ${med.name} na lista de compras`} data-testid="stock-shop">
+              Pôr na lista de compras
+            </Button>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
 
 function MedSettings({ med, partnerName }: { med: Medication; partnerName: string }) {
+  const isSolo = useIsSolo()
   return (
     <li className="card p-4" data-testid="med-settings" data-med={med.name}>
       <div className="flex items-center justify-between gap-2">
@@ -313,7 +334,7 @@ function MedSettings({ med, partnerName }: { med: Medication; partnerName: strin
       </p>
       <PackLine med={med} />
       {med.stockCount !== null ? <StockMeter med={med} /> : <p className="mt-1 text-[13px] text-muted">Sem controle de estoque.</p>}
-      <div className="mt-3 border-t border-line pt-3">
+      {!isSolo ? <div className="mt-3 border-t border-line pt-3">
         <Switch
           checked={med.notifyPartnerOnDelay}
           onChange={(v) => setPartnerSupport(med.id, v)}
@@ -321,7 +342,7 @@ function MedSettings({ med, partnerName }: { med: Medication; partnerName: strin
           label="Rede de apoio do par (+30 min)"
           description={`Se eu atrasar mais de ${med.delayMinutesThreshold} min, ${partnerName} recebe um aviso gentil.`}
         />
-      </div>
+      </div> : null}
     </li>
   )
 }

@@ -24,3 +24,5 @@ export function ownerLabel(owner: PartnerId | null, viewer: PartnerId, partner: 
 }
 
 export const useCouple = () => useData((s) => s.couple.couple)!
+export const useSpaceMode = () => useData((s) => s.couple.couple?.mode ?? 'COUPLE')
+export const useIsSolo = () => useSpaceMode() === 'SOLO'

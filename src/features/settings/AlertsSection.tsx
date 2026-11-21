@@ -4,6 +4,7 @@ import { PickerInput } from '../../components/pickers'
 import { cx, SectionHeader, Segmented, StatusBadge, Switch } from '../../components/ui'
 import { previewAlert, setAlertPrefs, useAlertPrefs } from '../../store/alerts'
 import { useNow } from '../../store/clock'
+import { useIsSolo } from '../../store/hooks'
 import { syncPushPrefs } from '../../sync/push'
 import { ALERT_SAMPLE, CATEGORY_UI, WATER_SAMPLE } from '../alerts/AlertCards'
 
@@ -13,6 +14,7 @@ import { ALERT_SAMPLE, CATEGORY_UI, WATER_SAMPLE } from '../alerts/AlertCards'
  * tela bloqueada: vão junto com a inscrição de push.
  */
 export function AlertsSection() {
+  const isSolo = useIsSolo()
   const prefs = useAlertPrefs((p) => p)
   const now = useNow()
   const quietNow = inQuietHours(prefs.quiet, now.getHours() * 60 + now.getMinutes())
@@ -29,7 +31,7 @@ export function AlertsSection() {
       <p className="text-[14px] text-muted">Cada tipo de aviso tem cor, som e vibração próprios. Toque em Ouvir para conhecer.</p>
 
       <ul className="mt-4 flex flex-col divide-y divide-line">
-        {ALERT_CATEGORIES.map((c) => {
+        {ALERT_CATEGORIES.filter((c) => !isSolo || !['help', 'support', 'partner'].includes(c)).map((c) => {
           const ui = CATEGORY_UI[c]
           const Icon = ui.icon
           return (

@@ -2,7 +2,7 @@ import { firstName } from '../../domain/format'
 import { HeartPulse, ListPlus, Lock, Sun, Users, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../../components/ui'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { uiStore } from '../../store/ui'
 
 /**
@@ -40,10 +40,18 @@ const STEPS: Step[] = [
 ]
 
 export function TourSheet({ onDone }: { onDone: () => void }) {
+  const isSolo = useIsSolo()
   const { partner } = usePeople()
   const [i, setI] = useState(0)
-  const step = STEPS[i]!
-  const last = i === STEPS.length - 1
+  const steps = isSolo ? [
+    STEPS[0]!,
+    { ...STEPS[1]!, text: () => 'Lembrou de algo? Capture uma tarefa ou um gasto. Se travar, o botão Travei ajuda a escolher um começo pequeno.' },
+    { ...STEPS[2]!, text: () => 'Seus remédios têm confirmação em dois passos. Minhas rotinas ajudam a lembrar das pequenas coisas do dia.' },
+    { ...STEPS[3]!, title: 'Espaço', text: () => 'Sua lista de compras, datas especiais e o kit O que me acalma ficam juntos. Você escolhe os módulos nos Ajustes.' },
+    { ...STEPS[4]!, text: () => 'Tudo fica cifrado neste aparelho. A nuvem é opcional para sincronizar com seus outros aparelhos. Seu espaço pode virar Casal quando você quiser.' },
+  ] : STEPS
+  const step = steps[i]!
+  const last = i === steps.length - 1
   const finish = () => {
     markTourSeen(uiStore.get().viewer)
     onDone()
@@ -57,13 +65,13 @@ export function TourSheet({ onDone }: { onDone: () => void }) {
       </span>
       <div aria-live="polite">
         <p className="text-[13px] font-semibold text-muted">
-          <span className="font-data">{i + 1}</span> de <span className="font-data">{STEPS.length}</span>
+          <span className="font-data">{i + 1}</span> de <span className="font-data">{steps.length}</span>
         </p>
         <h3 className="mt-1 text-[19px] font-bold text-ink">{step.title}</h3>
         <p className="mt-1 text-[15px] text-muted">{step.text(pname)}</p>
       </div>
       <div className="flex items-center gap-1.5" aria-hidden>
-        {STEPS.map((_, k) => (
+        {steps.map((_, k) => (
           <span key={k} className={k === i ? 'h-1.5 w-5 rounded-full bg-action' : 'h-1.5 w-1.5 rounded-full bg-line-strong'} />
         ))}
       </div>

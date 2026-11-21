@@ -1,4 +1,4 @@
-import { BellOff, Droplet, HandHeart, HeartHandshake, House, Pill, SquareX, X, type LucideIcon } from 'lucide-react'
+import { BellOff, CalendarDays, Droplet, HandHeart, HeartHandshake, House, Pill, SquareX, Sun, X, type LucideIcon } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import type { AlertActionId, AlertCandidate, AlertCategory } from '../../domain/alerts'
 import { CATEGORY } from '../../domain/alerts'
@@ -17,6 +17,8 @@ export const CATEGORY_UI: Record<AlertCategory, { icon: LucideIcon; tone: string
   support: { icon: SquareX, tone: 'text-err', card: 'border-dashed border-err bg-surface' },
   partner: { icon: HandHeart, tone: 'text-couple', card: 'border-solid border-couple bg-surface' },
   home: { icon: House, tone: 'text-muted', card: 'border-solid border-line-strong bg-surface' },
+  event: { icon: CalendarDays, tone: 'text-warn', card: 'border-dashed border-warn bg-surface' },
+  ritual: { icon: Sun, tone: 'text-action', card: 'border-solid border-line-strong bg-surface' },
 }
 
 const ACTION_LABEL: Record<AlertActionId, string> = {
@@ -39,6 +41,8 @@ export const ALERT_SAMPLE: Record<AlertCategory, AlertCandidate> = {
   support: { key: 's-support', category: 'support', sound: 'support', label: 'Rede de apoio · exemplo', title: 'Remédio do par pendente', body: 'Um lembrete gentil ajuda.', actions: [] },
   partner: { key: 's-partner', category: 'partner', sound: 'partner', label: 'Do seu par · exemplo', title: 'Lembrete carinhoso', body: 'Recado, foco junto ou tarefa enviada.', actions: [] },
   home: { key: 's-home', category: 'home', sound: 'home', label: 'Casa e contas · exemplo', title: 'Conta vence hoje', body: 'Rotina da casa ou conta do casal.', actions: [] },
+  event: { key: 's-event', category: 'event', sound: 'event', label: 'Compromisso · exemplo', title: 'Seu compromisso está chegando', body: 'Uma margem para trocar de atividade com calma.', actions: [] },
+  ritual: { key: 's-ritual', category: 'ritual', sound: 'ritual', label: 'Check-in · exemplo', title: 'Um momento para você', body: 'Perceba seu ritmo sem cobrança.', actions: [] },
 }
 
 export const WATER_SAMPLE: AlertCandidate = { key: 's-water', category: 'med', sound: 'water', label: 'Remédio · exemplo', title: 'Pegou a água?', body: 'O aviso de 5 min depois.', actions: [] }
@@ -97,7 +101,7 @@ export function AlertCard({ alert }: { alert: ShownAlert }) {
                 dismissAlert(alert.id)
               }}
               className={cx(
-                'press inline-flex min-h-11 grow basis-[120px] items-center justify-center rounded-[14px] px-3.5 text-[14px] font-bold',
+                'press inline-flex min-h-12 grow basis-[120px] items-center justify-center rounded-[14px] px-3.5 text-[14px] font-bold',
                 i === 0 ? 'btn-primary' : cx('border border-line-strong bg-surface text-ink hoverable', id === 'water' && 'border-dashed'),
               )}
             >

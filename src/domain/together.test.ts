@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { activeFocus, applyDeposit, focusView, goalView } from './together'
+import { activeFocus, applyDeposit, buildFocusSession, canViewFocusSession, FOCUS_DURATIONS, focusView, goalView } from './together'
+import { buildSeed } from './seed'
 import type { FocusSession, SavingsGoal } from './types'
 
 const session = (p: Partial<FocusSession> = {}): FocusSession => ({
@@ -17,6 +18,32 @@ const session = (p: Partial<FocusSession> = {}): FocusSession => ({
 })
 
 describe('body doubling', () => {
+  it('foco individual e foco conjunto antigo ligado a tarefa privada só aparecem para o autor', () => {
+    const seed = buildSeed(new Date('2026-11-21T10:00:00'))
+    const privateTask = Object.values(seed.tasks).find((task) => task.assignedTo === 'A' && !task.visibleToPartner)!
+    const oldShared = session({ taskId: privateTask.id })
+    expect(canViewFocusSession(oldShared, 'A', seed.tasks)).toBe(true)
+    expect(canViewFocusSession(oldShared, 'B', seed.tasks)).toBe(false)
+    expect(canViewFocusSession(session({ joinedBy: 'A' }), 'B', seed.tasks)).toBe(false)
+    expect(canViewFocusSession(session(), 'B', seed.tasks)).toBe(true)
+    expect(canViewFocusSession(oldShared, 'B', { ...seed.tasks, [privateTask.id]: { ...privateTask, visibleToPartner: true } })).toBe(true)
+    expect(canViewFocusSession(oldShared, 'B', {})).toBe(false)
+  })
+  it('inclui um começo de cinco minutos e monta seu prazo sem depender de servidor', () => {
+    expect(FOCUS_DURATIONS).toEqual([5, 15, 25, 45])
+    const focus = buildFocusSession({ id: 'pequeno', title: ' Abrir a pasta ', minutes: 5, startedBy: 'B', taskId: 'documentos' }, new Date('2026-11-21T14:00:00Z'))
+    expect(focus).toMatchObject({ id: 'pequeno', title: 'Abrir a pasta', durationMin: 5, taskId: 'documentos', startedBy: 'B', joinedBy: null, status: 'RUNNING', endsAt: '2026-11-21T14:05:00.000Z' })
+    expect(focusView(focus!, new Date('2026-11-21T14:04:01Z'))).toMatchObject({ state: 'running', minutesLeft: 1 })
+  })
+
+  it('não monta foco vazio, com duração inválida nem data inválida', () => {
+    const input = { id: 'foco', title: 'Um começo', minutes: 5, startedBy: 'A' } as const
+    expect(buildFocusSession({ ...input, title: ' ' }, new Date())).toBeNull()
+    expect(buildFocusSession({ ...input, minutes: Number.NaN }, new Date())).toBeNull()
+    expect(buildFocusSession({ ...input, minutes: 0 }, new Date())).toBeNull()
+    expect(buildFocusSession(input, new Date('inválida'))).toBeNull()
+  })
+
   it('minutos que faltam (arredonda para cima), acabou e fechada', () => {
     expect(focusView(session(), new Date('2026-11-06T13:06:30.000Z'))).toMatchObject({ state: 'running', minutesLeft: 19 })
     expect(focusView(session(), new Date('2026-11-06T13:25:00.000Z'))).toEqual({ state: 'finished' })

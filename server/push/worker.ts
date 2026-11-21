@@ -2,7 +2,7 @@ import pg from 'pg'
 import webpush from 'web-push'
 import type { DoseStatus, Medication, PartnerId } from '../../src/domain/types'
 import { fromServerPrefs } from '../../src/domain/alerts'
-import { planNotifications, type DoseLog, type OpenFocus, type OpenHelp, type OpenNudge, type PlanInput, type PushMessage, type PushSub } from './plan'
+import { planNotifications, type DueBill, type UpcomingEvent, type DoseLog, type OpenFocus, type OpenHelp, type OpenNudge, type PlanInput, type PushMessage, type PushSub } from './plan'
 
 /**
  * Worker de lembretes (Web Push). A cada ciclo: lê o necessário no Postgres, decide com planNotifications
@@ -64,6 +64,9 @@ export async function loadInput(db: pg.Pool): Promise<PlanInput & { keys: Map<st
     )
   ).rows
   const profiles = (await db.query<Row>('select couple_id, id, display_name from profiles where couple_id = any($1)', [couples])).rows
+  const spaces = (await db.query<Row>('select id, mode from couples where id = any($1)', [couples])).rows
+  const events = (await db.query<Row>("select id, couple_id, title, to_char(date, 'YYYY-MM-DD') as date, start, owner_id from events where deleted = false and couple_id = any($1) and date between current_date - 1 and current_date + 2", [couples])).rows
+  const bills = (await db.query<Row>("select id, couple_id, created_by, scope, to_char(competence_date, 'YYYY-MM-DD') as competence_date, description from transactions where deleted = false and status = 'PREDICTED_DASHED' and type = 'EXPENSE' and couple_id = any($1) and competence_date between current_date - 1 and current_date + 3", [couples])).rows
 
   const names: PlanInput['names'] = {}
   for (const p of profiles) (names[String(p.couple_id)] ??= {})[asPartner(p.id)] = String(p.display_name)
@@ -124,6 +127,9 @@ export async function loadInput(db: pg.Pool): Promise<PlanInput & { keys: Map<st
         startedAt: iso(f.started_at) ?? '',
       }),
     ),
+    modes: Object.fromEntries(spaces.map((space) => [String(space.id), space.mode === 'SOLO' ? 'SOLO' : 'COUPLE'])),
+    events: events.map((event): UpcomingEvent => ({ id: String(event.id), coupleId: String(event.couple_id), title: String(event.title), date: String(event.date), start: String(event.start), ownerId: event.owner_id == null ? null : asPartner(event.owner_id) })),
+    bills: bills.map((bill): DueBill => ({ id: String(bill.id), coupleId: String(bill.couple_id), createdBy: asPartner(bill.created_by), scope: bill.scope === 'PERSONAL' ? 'PERSONAL' : 'COUPLE', competenceDate: String(bill.competence_date), description: String(bill.description) })),
     names,
   }
 }

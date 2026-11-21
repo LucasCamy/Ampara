@@ -9,19 +9,20 @@ import { validateSpecialDate, type SpecialDateInput } from '../../domain/special
 import type { PartnerId, SpecialDateKind } from '../../domain/types'
 import { useNow } from '../../store/clock'
 import { dataStore } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { deleteSpecialDate, saveSpecialDate } from '../../store/specialActions'
 import { DeleteButton } from './fields'
 import { SHEET_FORM } from './forms'
 
 export function SpecialDateSheet({ id, onDone }: { id?: string; onDone: () => void }) {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const { viewer, partnerId, profiles } = usePeople()
   const [form, setForm] = useState<SpecialDateInput>(() => {
     const prev = id ? dataStore.get().specialDates[id] : undefined
     return prev
       ? { title: prev.kind === 'OTHER' ? prev.title : '', date: prev.date, kind: prev.kind, personId: prev.personId }
-      : { title: '', date: '', kind: 'ANNIVERSARY', personId: partnerId }
+      : { title: '', date: '', kind: isSolo ? 'OTHER' : 'ANNIVERSARY', personId: isSolo ? viewer : partnerId }
   })
   const [errors, setErrors] = useState<ReturnType<typeof validateSpecialDate>>({})
   const set = <K extends keyof SpecialDateInput>(k: K) => (v: SpecialDateInput[K]) => {
@@ -45,12 +46,12 @@ export function SpecialDateSheet({ id, onDone }: { id?: string; onDone: () => vo
         value={form.kind}
         onChange={set('kind')}
         options={[
-          { value: 'ANNIVERSARY', label: 'Namoro', icon: Heart, hint: 'aniversário do casal' },
+          ...(!isSolo ? [{ value: 'ANNIVERSARY' as const, label: 'Namoro', icon: Heart, hint: 'aniversário do casal' }] : []),
           { value: 'BIRTHDAY', label: 'Aniversário', icon: Cake },
           { value: 'OTHER', label: 'Outra data', icon: Star },
         ]}
       />
-      {form.kind === 'BIRTHDAY' ? (
+      {!isSolo && form.kind === 'BIRTHDAY' ? (
         <ChoiceChips<PartnerId>
           label="De quem"
           value={form.personId}

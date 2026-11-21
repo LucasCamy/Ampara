@@ -15,6 +15,7 @@ import pg from 'pg'
 import { localParts } from '../server/push/plan'
 import { enableWorkerLogin } from '../server/push/migrate'
 import { tick } from '../server/push/worker'
+import { addDays } from '../src/domain/dates'
 
 // só neste processo de teste: o serviço de push falso usa certificado autoassinado
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
@@ -114,7 +115,7 @@ try {
     [medId, couple, JSON.stringify([hhmm])],
   )
   for (const [dev, who] of [[ela, 'B'], [ele, 'A']] as const) {
-    await db.query("insert into push_subscriptions (endpoint, couple_id, partner_id, p256dh, auth, tz, show_details) values ($1, $2, $3, $4, $5, 'America/Sao_Paulo', false)", [
+    await db.query("insert into push_subscriptions (endpoint, couple_id, partner_id, p256dh, auth, tz, show_details, prefs) values ($1, $2, $3, $4, $5, 'America/Sao_Paulo', false, '{\"off\":[\"ritual\"]}')", [
       dev.endpoint,
       couple,
       who,
@@ -154,6 +155,45 @@ try {
   reply = 201
   const r5 = await tick(workerDb, opts, new Date())
   ok(r4.failed === 1 && r5.sent === 1, `falha temporária tenta de novo no próximo ciclo (falhas ${r4.failed}, depois enviados ${r5.sent})`)
+
+  // 5) compromissos e contas pessoais: o papel restrito lê só a pessoa inscrita, sem dados financeiros.
+  await db.query('update medications set deleted = true where id = $1', [medId])
+  await db.query('delete from help_requests where couple_id = $1', [couple])
+  const date = localParts(now, 'America/Sao_Paulo').date
+  const noon = new Date(`${date}T12:00:00-03:00`)
+  await db.query('insert into events (id,couple_id,title,date,start,"end",kind,owner_id) values ($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), couple, 'Consulta particular', date, '12:30', '13:30', 'HEALTH', 'B'])
+  for (const [who, status] of [['B', 'PREDICTED_DASHED'], ['A', 'PREDICTED_DASHED'], ['B', 'CONFIRMED_SOLID']] as const) {
+    await db.query("insert into transactions (id,couple_id,created_by,paid_by,scope,type,status,amount_cents,category,description,partner_a_share_cents,partner_b_share_cents,competence_date) values ($1,$2,$3,$3,'PERSONAL','EXPENSE',$4,3500,'HEALTH','Conta privada',0,0,$5)", [randomUUID(), couple, who, status, date])
+  }
+  const beforeCalendar = received.length
+  const calendar = await tick(workerDb, opts, noon)
+  const calendarPayloads = received.slice(beforeCalendar).map((message) => JSON.parse(decrypt(message.body, ela)) as { category: string; body: string; title: string })
+  ok(calendar.sent === 2 && calendarPayloads.some((p) => p.category === 'event') && calendarPayloads.some((p) => p.category === 'home'), 'compromisso em 30 min e conta pessoal chegam ao aparelho certo')
+  ok(!JSON.stringify(calendarPayloads).includes('Consulta particular') && !JSON.stringify(calendarPayloads).includes('Conta privada') && !JSON.stringify(calendarPayloads).includes('3500'), 'calendário e contas não expõem descrição ou valores na tela bloqueada')
+  const transition = await tick(workerDb, opts, new Date(noon.getTime() + 20 * 60_000))
+  ok(transition.sent === 1, 'compromisso recebe a segunda margem de 10 min, sem repetir a conta')
+
+  await db.query("insert into transactions (id,couple_id,created_by,paid_by,scope,type,status,amount_cents,category,description,partner_a_share_cents,partner_b_share_cents,competence_date) values ($1,$2,'B','B','PERSONAL','EXPENSE','PREDICTED_DASHED',4500,'HOME','Conta em dois dias',0,0,$3)", [randomUUID(), couple, addDays(date, 2)])
+  const beforeAhead = received.length
+  const ahead = await tick(workerDb, opts, noon)
+  const aheadPayload = received[beforeAhead] ? JSON.parse(decrypt(received[beforeAhead]!.body, ela)) as { key: string } : null
+  ok(ahead.sent === 1 && aheadPayload?.key === `bills-ahead:B:${addDays(date, 2)}`, 'conta pessoal também lembra dois dias antes')
+
+  // 6) Solo: segundo lembrete gentil para a própria pessoa.
+  await db.query("update couples set mode = 'SOLO' where id = $1", [couple])
+  await db.query("update medications set deleted = false, times = '[\"11:30\"]' where id = $1", [medId])
+  const beforeSolo = received.length
+  const solo = await tick(workerDb, opts, noon)
+  const soloPayload = received[beforeSolo] ? JSON.parse(decrypt(received[beforeSolo]!.body, ela)) as { key: string; title: string } : null
+  ok(solo.sent === 1 && soloPayload?.key === `self-late:${medId}@${date}@11:30` && soloPayload.title === 'Um passo de cada vez', 'Solo envia reforço acolhedor à própria pessoa após o limite')
+
+  // 7) horários de ritual chegam junto da inscrição e cada janela sai só uma vez no dia.
+  await db.query('update push_subscriptions set prefs = $1 where endpoint = $2', [JSON.stringify({ off: [], rituals: { morning: { enabled: true, time: '12:00' }, afternoon: { enabled: false, time: '14:30' }, evening: { enabled: false, time: '21:00' } } }), ela.endpoint])
+  const beforeRitual = received.length
+  const ritual = await tick(workerDb, opts, noon)
+  const ritualPayload = received[beforeRitual] ? JSON.parse(decrypt(received[beforeRitual]!.body, ela)) as { category: string; key: string } : null
+  ok(ritual.sent === 1 && ritualPayload?.category === 'ritual' && ritualPayload.key === `ritual:${couple}:B:${date}:morning`, 'ritual usa o horário configurado e o aparelho decifra a categoria')
+  ok((await tick(workerDb, opts, noon)).sent === 0, 'nenhum reforço, conta ou ritual repete no próximo ciclo')
 } finally {
   await db.query('delete from push_sent where key like $1', [`%localhost:${port}%`])
   await db.query('delete from couples where id = $1', [couple])

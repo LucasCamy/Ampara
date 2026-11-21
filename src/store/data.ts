@@ -79,14 +79,25 @@ export function transact(recipe: (tx: Tx) => void): () => void {
 /** Volta aos dados de exemplo mantendo nomes, convite e o vínculo do casal */
 export function resetData() {
   const cur = dataStore.get()
+  // O exemplo atual descreve duas pessoas; nunca substitui um espaço pessoal por ele.
+  if (cur.couple.couple?.mode === 'SOLO') return
   const A = cur.profiles.A!
   const B = cur.profiles.B!
   const seed = withIdentity(buildSeed(new Date()), {
     a: { name: A.displayName, pronoun: A.pronoun },
     b: { name: B.displayName, pronoun: B.pronoun },
     inviteCode: cur.couple.couple?.inviteCode ?? '',
+    shareA: A.sharePersonalFinances,
+    shareB: B.sharePersonalFinances,
   })
-  dataStore.set(() => seed)
+  dataStore.set(() => ({
+    ...seed,
+    couple: cur.couple,
+    profiles: {
+      A: { ...seed.profiles.A!, monthlyBudgetCents: A.monthlyBudgetCents, enabledModules: A.enabledModules },
+      B: { ...seed.profiles.B!, monthlyBudgetCents: B.monthlyBudgetCents, enabledModules: B.enabledModules },
+    },
+  }))
 }
 
 /** Coloca todas as entidades na fila (primeira subida ao conectar a nuvem). Não altera nenhum dado. */
@@ -127,6 +138,8 @@ export function enqueueAll(who: PartnerId) {
     // pedido de ajuda e lembrete carinhoso: quem pediu ou mandou cria (help_insert, nudges_insert)
     if (c === 'helpRequests') return (e as HelpRequest).requesterId === who
     if (c === 'nudges') return (e as Nudge).from === who
+    // O autor cria o foco. Participar de um convite já existente é uma edição, nunca uma criação em nome do par.
+    if (c === 'focusSessions') return (e as { startedBy: PartnerId }).startedBy === who
     return true
   }
   dataStore.set((s) => {

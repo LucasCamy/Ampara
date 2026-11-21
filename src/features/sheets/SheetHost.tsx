@@ -3,6 +3,7 @@ import { Sheet } from '../../components/Sheet'
 import { SearchX } from 'lucide-react'
 import { Button, EmptyState } from '../../components/ui'
 import { useData } from '../../store/data'
+import { useIsSolo } from '../../store/hooks'
 import { ui, useUi, type SheetKind } from '../../store/ui'
 import { EventSheet } from './EventSheet'
 import { ExpenseSheet } from './ExpenseSheet'
@@ -21,8 +22,14 @@ import { SpecialDateSheet } from './SpecialDateSheet'
 import { RoutineSheet } from './RoutineSheet'
 import { SosSheet } from './SosSheet'
 import { TaskSheet } from './TaskSheet'
+import { QuickCaptureSheet } from './QuickCaptureSheet'
+import { UnstuckSheet } from './UnstuckSheet'
+import { TemplatesSheet } from './TemplatesSheet'
 
 const TITLES: Record<SheetKind, { title: string; description: string }> = {
+  quickCapture: { title: 'Captura livre', description: 'Escreva ou dite uma frase. Confira o que foi entendido antes de salvar.' },
+  unstuck: { title: 'Travei', description: 'Um começo pequeno, sem cobrança.' },
+  templates: { title: 'Ideias para começar', description: 'Escolha o que ajuda agora. Dá para desfazer.' },
   task: { title: 'Nova tarefa rápida', description: 'Escreva, escolha para quem e salve. Menos de 3 segundos.' },
   expense: { title: 'Registrar gasto', description: 'Valor, para quem e pronto. Divisão já vem preenchida.' },
   med: { title: 'Confirmar remédio', description: 'Engoliu agora ou vai pegar água? A gente lembra.' },
@@ -42,6 +49,7 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
+  task: { title: 'Editar tarefa', description: 'Ajuste a tarefa ou escolha um primeiro passo pequeno.' },
   newMed: { title: 'Editar remédio', description: 'Mudou a dose ou o horário? Ajuste aqui. Doses já registradas ficam no histórico.' },
   routine: { title: 'Editar rotina', description: 'Qualquer um de vocês pode ajustar ou excluir.' },
   event: { title: 'Editar compromisso', description: 'Mudou o dia ou o horário? Ajuste aqui.' },
@@ -53,17 +61,27 @@ const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: strin
 
 /** Assina o uiStore.sheet e, só em modo edição, se o item ainda existe (pode ter sido excluído no outro aparelho) */
 export function SheetHost() {
+  const isSolo = useIsSolo()
   const sheet = useUi((s) => s.sheet)
+  const unstuckStep = useUi((s) => s.unstuckStep ?? 1)
   const close = useCallback(() => ui.closeSheet(), [])
   const editId = sheet?.params.id
   const exists = useData(
-    (d) => !editId || (sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : sheet?.kind === 'goal' ? !!d.savingsGoals[editId] : sheet?.kind === 'pay' || sheet?.kind === 'tx' ? !!d.transactions[editId] : sheet?.kind === 'rule' ? !!d.recurrences[editId] : !!d.meds[editId]),
+    (d) => !editId || (sheet?.kind === 'task' ? !!d.tasks[editId] : sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : sheet?.kind === 'goal' ? !!d.savingsGoals[editId] : sheet?.kind === 'pay' || sheet?.kind === 'tx' ? !!d.transactions[editId] : sheet?.kind === 'rule' ? !!d.recurrences[editId] : !!d.meds[editId]),
   )
   const editing = !!editId
-  const meta = sheet ? ((editing && EDIT_TITLES[sheet.kind]) || TITLES[sheet.kind]) : null
-  const base = sheet && exists ? SHEET_SUBMIT[sheet.kind] : undefined
+  const soloMeta: Partial<typeof TITLES> = {
+    task: { title: 'Nova tarefa rápida', description: 'Escreva e salve. Se ajudar, comece com um passo pequeno.' },
+    expense: { title: 'Registrar gasto', description: 'Valor e descrição para cuidar do seu mês.' },
+    sos: { title: 'Travei', description: 'Um passo pequeno, sem cobrança.' },
+    routine: { title: 'Nova rotina', description: 'As pequenas coisas que ajudam no seu dia.' },
+    goal: { title: 'Nova caixinha', description: 'Guarde aos poucos para um objetivo seu.' },
+  }
+  const meta = sheet ? ((editing && EDIT_TITLES[sheet.kind]) || (isSolo && soloMeta[sheet.kind]) || TITLES[sheet.kind]) : null
+  const isUnstuck = sheet?.kind === 'unstuck' || (isSolo && sheet?.kind === 'sos')
+  const base = isUnstuck ? { label: unstuckStep === 3 ? 'Começar 5 min' : 'Continuar', testId: unstuckStep === 3 ? 'unstuck-start' : 'unstuck-next' } : sheet && exists ? SHEET_SUBMIT[sheet.kind] : undefined
   const submit = base && editing && sheet?.kind !== 'pay' ? { ...base, label: 'Salvar alterações' } : base
-  const formId = sheet && sheet.kind in SHEET_FORM ? SHEET_FORM[sheet.kind as keyof typeof SHEET_FORM] : undefined
+  const formId = isUnstuck ? SHEET_FORM.unstuck : sheet && sheet.kind in SHEET_FORM ? SHEET_FORM[sheet.kind as keyof typeof SHEET_FORM] : undefined
   return (
     <Sheet
       open={!!sheet}
@@ -89,10 +107,13 @@ export function SheetHost() {
         ) : undefined
       }
     >
-      {sheet?.kind === 'task' ? <TaskSheet params={sheet.params} onDone={close} /> : null}
+      {sheet?.kind === 'task' && exists ? <TaskSheet key={editId ?? 'new'} params={sheet.params} onDone={close} /> : null}
+      {sheet?.kind === 'quickCapture' ? <QuickCaptureSheet params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'expense' ? <ExpenseSheet params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'med' ? <MedSheet onDone={close} /> : null}
-      {sheet?.kind === 'sos' ? <SosSheet params={sheet.params} onDone={close} /> : null}
+      {sheet?.kind === 'sos' ? (isSolo ? <UnstuckSheet params={sheet.params} onDone={close} /> : <SosSheet params={sheet.params} onDone={close} />) : null}
+      {sheet?.kind === 'unstuck' ? <UnstuckSheet params={sheet.params} onDone={close} /> : null}
+      {sheet?.kind === 'templates' ? <TemplatesSheet params={sheet.params} onDone={close} /> : null}
       {sheet && !exists ? (
         <div className="pt-2 pb-4">
           <EmptyState icon={SearchX} title="Este item não existe mais." text="Ele foi excluído, talvez no outro aparelho." action={<Button onClick={close}>Fechar</Button>} />
@@ -107,7 +128,7 @@ export function SheetHost() {
       {sheet?.kind === 'tour' ? <TourSheet onDone={close} /> : null}
       {sheet?.kind === 'pay' && exists && editId ? <PaySheet key={editId} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'tx' && exists && editId ? <TxSheet id={editId} onDone={close} /> : null}
-      {sheet?.kind === 'rule' && exists && editId ? <RuleSheet key={editId} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'rule' && exists ? <RuleSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'goal' && exists ? <GoalSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'gift' && exists ? <GiftSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
     </Sheet>

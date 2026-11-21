@@ -5,6 +5,7 @@
 
 create table if not exists couples (
   id text primary key,
+  mode text not null default 'COUPLE' check (mode in ('SOLO', 'COUPLE')),
   invite_code text unique not null,
   paired_at timestamptz not null default now(),
   split_mode text not null check (split_mode in ('50_50', 'PROPORTIONAL')),
@@ -27,6 +28,8 @@ create table if not exists profiles (
   energy text not null check (energy in ('FULL', 'MEDIUM', 'OVERLOAD')),
   energy_updated_at timestamptz,
   share_personal_finances boolean not null default false,
+  monthly_budget_cents integer,
+  enabled_modules jsonb,
   updated_at timestamptz not null default now(),
   primary key (couple_id, id)
 );
@@ -46,6 +49,8 @@ create table if not exists tasks (
   completed_at timestamptz,
   completed_by text,
   source_medication_id uuid,
+  steps jsonb not null default '[]'::jsonb,
+  postpone_count integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -163,6 +168,7 @@ begin
     execute format('alter table %I enable row level security', t);
   end loop;
 end $$;
+
 
 -- Espaço: os dois leem e ajustam a divisão; ninguém apaga pela API (o cascade levaria os dados dos dois).
 -- Criar é pela RPC create_couple; couples_insert existe só porque o app sobe o espaço por upsert (ON CONFLICT
@@ -352,6 +358,15 @@ alter table couples add column if not exists updated_at timestamptz not null def
 alter table couples add column if not exists invite_code text;
 alter table couples alter column invite_code drop not null;
 
+-- Modo dual: migra espaços antigos como casal e preserva os dados existentes.
+alter table couples add column if not exists mode text not null default 'COUPLE';
+alter table couples drop constraint if exists couples_mode_check;
+alter table couples add constraint couples_mode_check check (mode in ('SOLO', 'COUPLE'));
+alter table profiles add column if not exists monthly_budget_cents integer;
+alter table profiles add column if not exists enabled_modules jsonb;
+alter table tasks add column if not exists steps jsonb not null default '[]'::jsonb;
+alter table tasks add column if not exists postpone_count integer not null default 0;
+
 -- Convites guardam só o hash do código; valem 7 dias e uma vez
 create table if not exists couple_invites (
   code_hash text primary key,
@@ -365,16 +380,22 @@ alter table couple_members enable row level security;
 drop policy if exists members_read on couple_members;
 create policy members_read on couple_members for select using (couple_id = my_couple_id());
 
--- Cria o espaço na nuvem: quem chama vira o Parceiro A
-create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer)
+-- Cria o espaço na nuvem: quem chama vira a pessoa A, também no modo Solo.
+create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer, p_mode text)
 returns text language plpgsql security definer set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'not authenticated'; end if;
   if exists (select 1 from couple_members where user_id = auth.uid()) then raise exception 'already paired'; end if;
-  insert into couples (id, split_mode, ratio_a_bps) values (p_couple_id, p_split_mode, p_ratio_a_bps);
+  insert into couples (id, split_mode, ratio_a_bps, mode) values (p_couple_id, p_split_mode, p_ratio_a_bps, p_mode);
   insert into couple_members (couple_id, user_id, partner_id) values (p_couple_id, auth.uid(), 'A');
   return p_couple_id;
 end $$;
+
+-- Assinatura anterior: aparelhos antigos continuam criando espaços de casal.
+create or replace function create_couple(p_couple_id text, p_split_mode text, p_ratio_a_bps integer)
+returns text language sql security definer set search_path = public as $$
+  select create_couple(p_couple_id, p_split_mode, p_ratio_a_bps, 'COUPLE')
+$$;
 
 -- Registra o convite do par (o código em texto claro nunca é gravado)
 create or replace function create_invite(p_code text)
@@ -382,6 +403,7 @@ returns void language plpgsql security definer set search_path = public, extensi
 declare v_couple text := my_couple_id(); v_partner text;
 begin
   if v_couple is null then raise exception 'not paired'; end if;
+  if (select mode from couples where id = v_couple) <> 'COUPLE' then raise exception 'invite requires couple mode'; end if;
   v_partner := case my_partner_id() when 'A' then 'B' else 'A' end;
   if exists (select 1 from couple_members where couple_id = v_couple and partner_id = v_partner) then raise exception 'partner already joined'; end if;
   delete from couple_invites where couple_id = v_couple;
@@ -411,10 +433,10 @@ returns table (couple_id text, partner_id text) language sql stable security def
   select couple_id, partner_id from couple_members where user_id = auth.uid()
 $$;
 
-revoke all on function create_couple(text, text, integer), create_invite(text), join_couple(text), my_membership() from public, anon;
+revoke all on function create_couple(text, text, integer), create_couple(text, text, integer, text), create_invite(text), join_couple(text), my_membership() from public, anon;
 revoke all on function partner_joined(text, text) from public, anon;
 grant execute on function partner_joined(text, text) to authenticated;
-grant execute on function create_couple(text, text, integer), create_invite(text), join_couple(text), my_membership() to authenticated;
+grant execute on function create_couple(text, text, integer), create_couple(text, text, integer, text), create_invite(text), join_couple(text), my_membership() to authenticated;
 
 -- Cursor de pull carimbado pelo servidor: relógios diferentes entre aparelhos não fazem perder alterações.
 -- updated_at continua sendo o relógio de quem editou (usado para "última edição vence").
@@ -716,7 +738,7 @@ create index if not exists idx_savings_goals_pull on savings_goals (couple_id, u
 do $$
 declare t text;
 begin
-  foreach t in array array['focus_sessions','savings_goals'] loop
+  foreach t in array array['savings_goals'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists %I on %I', t || '_read', t);
     execute format('create policy %I on %I for select using (couple_id = my_couple_id())', t || '_read', t);
@@ -730,6 +752,64 @@ begin
     execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
   end loop;
 end $$;
+
+-- Foco individual usa joined_by = started_by. O título de uma tarefa privada também não pode
+-- vazar por um foco conjunto antigo. Esta função só devolve a autorização, nunca o conteúdo da tarefa.
+create or replace function focus_task_shared(p_task_id uuid, p_couple_id text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select (p_couple_id = my_couple_id() or session_user = 'ampara_worker' or current_setting('role') = 'ampara_worker')
+    and (p_task_id is null or exists (
+      select 1 from tasks where id = p_task_id and couple_id = p_couple_id and not deleted
+        and (assigned_to is null or visible_to_partner or (sent_by is not null and sent_by <> assigned_to))
+    ))
+$$;
+revoke all on function focus_task_shared(uuid, text) from public, anon;
+grant execute on function focus_task_shared(uuid, text) to authenticated;
+
+-- O INSERT do upsert também é verificado ao entrar num convite já existente, como em help_requests.
+create or replace function focus_session_exists(p_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from focus_sessions where id = p_id and couple_id = my_couple_id()
+    and joined_by is distinct from started_by and focus_task_shared(task_id, couple_id))
+$$;
+revoke all on function focus_session_exists(uuid) from public, anon;
+grant execute on function focus_session_exists(uuid) to authenticated;
+
+alter table focus_sessions enable row level security;
+drop policy if exists focus_sessions_read on focus_sessions;
+drop policy if exists focus_sessions_insert on focus_sessions;
+drop policy if exists focus_sessions_update on focus_sessions;
+drop policy if exists focus_sessions_delete on focus_sessions;
+create policy focus_sessions_read on focus_sessions for select using (
+  couple_id = my_couple_id() and (started_by = my_partner_id()
+    or (joined_by is distinct from started_by and focus_task_shared(task_id, couple_id)))
+);
+create policy focus_sessions_insert on focus_sessions for insert with check (
+  couple_id = my_couple_id() and (started_by = my_partner_id() or focus_session_exists(id))
+);
+create policy focus_sessions_update on focus_sessions for update
+  using (couple_id = my_couple_id() and (started_by = my_partner_id()
+    or (joined_by is distinct from started_by and focus_task_shared(task_id, couple_id))))
+  with check (couple_id = my_couple_id() and (started_by = my_partner_id()
+    or (joined_by is distinct from started_by and focus_task_shared(task_id, couple_id))));
+create policy focus_sessions_delete on focus_sessions for delete using (
+  couple_id = my_couple_id() and (started_by = my_partner_id()
+    or (joined_by is distinct from started_by and focus_task_shared(task_id, couple_id)))
+);
+
+-- UPDATE não pode trocar a autoria nem mover o registro entre espaços, mesmo passando pelo WITH CHECK.
+create or replace function protect_focus_identity() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if new.id is distinct from old.id or new.couple_id is distinct from old.couple_id or new.started_by is distinct from old.started_by then
+    raise exception 'focus identity cannot change' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_focus_identity on focus_sessions;
+create trigger trg_focus_identity before update on focus_sessions for each row execute function protect_focus_identity();
+drop trigger if exists trg_focus_sessions_synced on focus_sessions;
+create trigger trg_focus_sessions_synced before insert or update on focus_sessions for each row execute function touch_synced_at();
 
 -- =====================================================================
 -- Iteração 16: lembretes com a tela bloqueada (Web Push)
@@ -877,7 +957,7 @@ begin
 end $$;
 grant ampara_worker to postgres; -- para a validação poder "virar" o worker (set role)
 grant usage on schema public to ampara_worker;
-grant select on medications, medication_logs, help_requests, profiles to ampara_worker;
+grant select on medications, medication_logs, help_requests to ampara_worker;
 grant select, update (last_ok_at), delete on push_subscriptions to ampara_worker;
 grant select, insert on push_config to ampara_worker;
 grant select, insert, delete on push_sent to ampara_worker;
@@ -915,3 +995,39 @@ begin
     execute format('create policy %I on %I for select to ampara_worker using (true)', 'worker_read', t);
   end loop;
 end $$;
+grant execute on function focus_task_shared(uuid, text) to ampara_worker;
+drop policy if exists worker_focus_scope on focus_sessions;
+create policy worker_focus_scope on focus_sessions as restrictive for select to ampara_worker using (
+  joined_by is distinct from started_by and focus_task_shared(task_id, couple_id)
+);
+
+-- =====================================================================
+-- Modo dual: compromissos e contas previstas, somente o necessário para os lembretes.
+-- =====================================================================
+-- O worker não recebe valores, divisão, pagamento, saldos ou o histórico confirmado. Só lê linhas de
+-- pessoas com inscrição ativa (ou dados compartilhados de um espaço com inscrição). Políticas do app intactas.
+revoke select on couples, events, transactions, profiles from ampara_worker;
+grant select (couple_id, id, display_name) on profiles to ampara_worker;
+grant select (id, mode) on couples to ampara_worker;
+grant select (id, couple_id, title, date, start, owner_id, deleted) on events to ampara_worker;
+grant select (id, couple_id, created_by, scope, status, type, competence_date, description, deleted) on transactions to ampara_worker;
+
+drop policy if exists worker_read on couples;
+create policy worker_read on couples for select to ampara_worker using (true);
+drop policy if exists worker_scope on couples;
+create policy worker_scope on couples as restrictive for select to ampara_worker using (
+  exists (select 1 from push_subscriptions s where s.couple_id = couples.id)
+);
+drop policy if exists worker_read on events;
+create policy worker_read on events for select to ampara_worker using (true);
+drop policy if exists worker_scope on events;
+create policy worker_scope on events as restrictive for select to ampara_worker using (
+  not deleted and exists (select 1 from push_subscriptions s where s.couple_id = events.couple_id and (events.owner_id is null or s.partner_id = events.owner_id))
+);
+drop policy if exists worker_read on transactions;
+create policy worker_read on transactions for select to ampara_worker using (true);
+drop policy if exists worker_scope on transactions;
+create policy worker_scope on transactions as restrictive for select to ampara_worker using (
+  not deleted and status = 'PREDICTED_DASHED' and type = 'EXPENSE' and
+  exists (select 1 from push_subscriptions s where s.couple_id = transactions.couple_id and (transactions.scope = 'COUPLE' or s.partner_id = transactions.created_by))
+);

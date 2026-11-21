@@ -2,6 +2,11 @@ import { monthKey } from './dates'
 import { firstName } from './format'
 import type { PartnerId, Profile, Transaction } from './types'
 
+/** Transparência financeira não transforma uma conta pessoal do par em lembrete para o visualizador. */
+export function canReceiveBillReminder(tx: Pick<Transaction, 'scope' | 'createdBy'>, viewer: PartnerId): boolean {
+  return tx.scope === 'COUPLE' || tx.createdBy === viewer
+}
+
 /**
  * Espelho da política RLS de `transactions` (supabase/schema.sql):
  * o visualizador lê uma transação se

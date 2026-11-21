@@ -1,9 +1,37 @@
 import { daysBetween } from './cycle'
-import type { DateKey, FocusSession, SavingsGoal } from './types'
+import { canViewTask } from './tasks'
+import type { DateKey, FocusSession, PartnerId, SavingsGoal, Task } from './types'
 
 /* ---------- body doubling ---------- */
 
-export const FOCUS_DURATIONS = [15, 25, 45] as const
+export const FOCUS_DURATIONS = [5, 15, 25, 45] as const
+
+/** Um foco individual ou ligado a uma tarefa privada nunca revela o título ao par. */
+export function canViewFocusSession(session: FocusSession, viewer: PartnerId, tasks: Record<string, Task>): boolean {
+  if (session.startedBy === viewer) return true
+  if (session.joinedBy === session.startedBy) return false
+  const task = session.taskId ? tasks[session.taskId] : undefined
+  return !session.taskId || (!!task && canViewTask(task, 'A') && canViewTask(task, 'B'))
+}
+
+/** O mesmo começo de foco é usado no formulário e no fluxo Travei. */
+export function buildFocusSession(input: { id: string; title: string; minutes: number; startedBy: PartnerId; taskId?: string | null }, now: Date): FocusSession | null {
+  const title = input.title.trim().slice(0, 80)
+  if (!title || !FOCUS_DURATIONS.some((duration) => duration === input.minutes) || !Number.isFinite(now.getTime())) return null
+  const iso = now.toISOString()
+  return {
+    id: input.id,
+    title,
+    startedBy: input.startedBy,
+    taskId: input.taskId ?? null,
+    durationMin: input.minutes,
+    startedAt: iso,
+    endsAt: new Date(now.getTime() + input.minutes * 60_000).toISOString(),
+    joinedBy: null,
+    status: 'RUNNING',
+    updatedAt: iso,
+  }
+}
 
 export type FocusView =
   | { state: 'running'; minutesLeft: number; endsAtLabel: string }

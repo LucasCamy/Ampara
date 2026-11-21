@@ -4,12 +4,14 @@ import { toDateKey } from '../../domain/dates'
 import { upcomingDates } from '../../domain/specialDates'
 import { useNow } from '../../store/clock'
 import { dataStore, useData } from '../../store/data'
+import { useIsSolo } from '../../store/hooks'
 import { deleteGift, saveGift, type GiftInput } from '../../store/specialActions'
 import { DeleteButton } from './fields'
 import { SHEET_FORM } from './forms'
 
 /** Ideia de presente: só quem anota vê. Pré-preenche a data quando vem de uma data especial. */
 export function GiftSheet({ id, params, onDone }: { id?: string; params: Record<string, string>; onDone: () => void }) {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const dates = useData((s) => s.specialDates)
   const upcoming = useMemo(() => upcomingDates(Object.values(dates), today).slice(0, 4), [dates, today])
@@ -38,7 +40,7 @@ export function GiftSheet({ id, params, onDone }: { id?: string; params: Record<
           setError(undefined)
         }}
         error={error}
-        placeholder="Ex.: o livro que ela comentou"
+        placeholder={isSolo ? 'Ex.: um livro para uma pessoa querida' : 'Ex.: o livro que ela comentou'}
         maxLength={80}
         testId="gift-title"
         autoFocus={!id}
@@ -60,7 +62,7 @@ export function GiftSheet({ id, params, onDone }: { id?: string; params: Record<
           options={[{ value: 'NONE', label: 'Sem data' }, ...upcoming.map((u) => ({ value: u.item.id, label: u.item.title, hint: `${u.on.slice(8, 10)}/${u.on.slice(5, 7)}` }))]}
         />
       ) : null}
-      <p className="text-[13px] text-muted">Fica só no seu aparelho e na sua conta. Seu par nunca vê.</p>
+      <p className="text-[13px] text-muted">{isSolo ? 'Suas ideias ficam guardadas para quando quiser escolher um presente.' : 'Fica só no seu aparelho e na sua conta. Seu par nunca vê.'}</p>
       {id ? <DeleteButton label="Excluir ideia" testId="gift-delete" onClick={() => deleteGift(id) && onDone()} /> : null}
     </form>
   )

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Medication } from '../../src/domain/types'
 import { localParts, planNotifications, type PlanInput, type PushSub } from './plan'
+import { defaultRitualSchedules } from '../../src/domain/rituals'
 
 const SP = 'America/Sao_Paulo'
 // 2026-11-06 08:03 em São Paulo (UTC-3)
@@ -119,5 +120,60 @@ describe('categorias e preferências do aparelho', () => {
     ])
     expect(planNotifications(base({ meds: [], nudges, focus }), at('10:30'))).toEqual([])
     expect(planNotifications(base({ meds: [], nudges, subs: [{ ...ela, prefs: { off: ['partner'], quiet: null } }] }), at('10:02'))).toEqual([])
+  })
+})
+
+describe('Solo, vencimentos e margens de transição', () => {
+  it('segundo lembrete Solo é acolhedor, só para quem toma, sem detalhes por padrão', () => {
+    const input = base({ modes: { c1: 'SOLO' } })
+    expect(planNotifications(input, at('08:29'))).toEqual([])
+    expect(planNotifications(input, at('08:31'))).toEqual([expect.objectContaining({ endpoint: ela.endpoint, category: 'med', ref: 'self-late:venv@2026-11-06@08:00', title: 'Um passo de cada vez' })])
+    expect(planNotifications(input, at('08:31'))[0]!.body).not.toContain('Venvanse')
+  })
+
+  it('soneca ativa e confirmação cancelam o lembrete Solo', () => {
+    const log = { id: 'venv@2026-11-06@08:00', coupleId: 'c1', medicationId: 'venv', status: 'SNOOZED_WATER' as const, snoozeUntil: at('08:40').toISOString(), snoozeCount: 1 }
+    expect(planNotifications(base({ modes: { c1: 'SOLO' }, logs: [log] }), at('08:31'))).toEqual([])
+    expect(planNotifications(base({ modes: { c1: 'SOLO' }, logs: [{ ...log, status: 'TAKEN' }] }), at('08:41'))).toEqual([])
+  })
+
+  it('contas pessoais vão só ao dono no dia e dois dias antes, sem valores ou descrição privada', () => {
+    const bills = [{ id: 'bill', coupleId: 'c1', createdBy: 'B' as const, scope: 'PERSONAL' as const, competenceDate: '2026-11-08', description: 'Consulta particular' }]
+    const input = base({ meds: [], bills })
+    const before = planNotifications(input, at('09:00'))
+    expect(before).toHaveLength(1)
+    expect(before[0]).toMatchObject({ endpoint: ela.endpoint, category: 'home', ref: 'bills-ahead:B:2026-11-08' })
+    expect(JSON.stringify(before)).not.toContain('Consulta particular')
+    expect(planNotifications(input, new Date('2026-11-08T09:00:00-03:00'))[0]?.ref).toBe('bills:B:2026-11-08')
+    expect(planNotifications(input, at('07:59'))).toEqual([])
+  })
+
+  it('compromisso respeita dono, margem de 30 e 10 min e fuso do aparelho', () => {
+    const events = [{ id: 'event', coupleId: 'c1', title: 'Exame privado', ownerId: 'B' as const, date: '2026-11-06', start: '09:00' }]
+    const input = base({ meds: [], events })
+    expect(planNotifications(input, at('08:30'))).toEqual([expect.objectContaining({ endpoint: ela.endpoint, ref: 'event:event@2026-11-06T09:00#30', category: 'event' })])
+    expect(planNotifications(input, at('08:50'))[0]?.ref).toBe('event:event@2026-11-06T09:00#10')
+    expect(JSON.stringify(planNotifications(input, at('08:50')))).not.toContain('Exame privado')
+    expect(planNotifications(input, at('09:00'))).toEqual([])
+    expect(planNotifications({ ...input, subs: [{ ...ela, tz: 'America/Cuiaba' }] }, at('08:30'))).toEqual([])
+  })
+
+  it('transição alcança um compromisso depois da meia-noite', () => {
+    const events = [{ id: 'night', coupleId: 'c1', title: 'Viagem', ownerId: 'A' as const, date: '2026-11-07', start: '00:10' }]
+    expect(planNotifications(base({ meds: [], events }), at('23:40'))[0]?.ref).toBe('event:night@2026-11-07T00:10#30')
+  })
+
+  it('rituais seguem horário e categoria do aparelho, com chave por dia e janela', () => {
+    const rituals = defaultRitualSchedules()
+    rituals.afternoon = { enabled: true, time: '15:10' }
+    const sub = { ...ela, prefs: { ...ela.prefs, rituals } }
+    const msgs = planNotifications(base({ meds: [], subs: [sub] }), at('15:10'))
+    expect(msgs).toEqual([expect.objectContaining({ category: 'ritual', ref: 'ritual:c1:B:2026-11-06:afternoon' })])
+    expect(planNotifications(base({ meds: [], subs: [{ ...sub, prefs: { ...sub.prefs, off: ['ritual'] } }] }), at('15:10'))).toEqual([])
+  })
+
+  it('foco individual dentro de Casal não chama o par', () => {
+    const focus = [{ id: 'self', coupleId: 'c1', startedBy: 'A' as const, joinedBy: 'A' as const, title: 'Meu começo', durationMin: 5, startedAt: at('10:00').toISOString() }]
+    expect(planNotifications(base({ meds: [], focus }), at('10:01'))).toEqual([])
   })
 })

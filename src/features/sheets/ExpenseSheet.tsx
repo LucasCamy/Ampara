@@ -12,7 +12,8 @@ import { toDateKey } from '../../domain/dates'
 import { MAX_INSTALLMENTS, splitInstallments, validateRepeat, type Repeat } from '../../domain/ledger'
 import { useNow } from '../../store/clock'
 import { saveEntry } from '../../store/financeActions'
-import { useCouple, usePeople } from '../../store/hooks'
+import { useData } from '../../store/data'
+import { useCouple, useIsSolo, usePeople } from '../../store/hooks'
 import { SHEET_FORM } from './forms'
 
 /** Máscara de caixa eletrônico: os dígitos sempre entram pela direita */
@@ -22,14 +23,29 @@ const caretToEnd = (e: { currentTarget: HTMLInputElement }) => {
   if (el.selectionStart !== end || el.selectionEnd !== end) el.setSelectionRange(end, end)
 }
 
+const shoppingIdsFrom = (raw: string | undefined): string[] => {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? [...new Set(parsed.filter((item): item is string => typeof item === 'string'))] : []
+  } catch {
+    return []
+  }
+}
+
 export function ExpenseSheet({ params, onDone }: { params: Record<string, string>; onDone: () => void }) {
   const { viewer, partnerId, partner, me } = usePeople()
+  const isSolo = useIsSolo()
   const couple = useCouple()
+  const shoppingItems = useData((state) => state.shoppingItems)
+  const [shoppingIds] = useState(() => shoppingIdsFrom(params.shoppingIds))
+  const [clearShopping, setClearShopping] = useState(false)
+  const selectedPurchased = shoppingIds.filter((itemId) => shoppingItems[itemId]?.checked)
   const initialCents = params.amount ? (parseMoneyToCents(params.amount) ?? 0) : 0
   const [cents, setCents] = useState(initialCents)
   const [description, setDescription] = useState(params.title ?? '')
-  const [category, setCategory] = useState<TxCategory>('MARKET')
-  const [scope, setScope] = useState<'COUPLE' | 'PERSONAL'>(params.scope === 'PERSONAL' ? 'PERSONAL' : 'COUPLE')
+  const [category, setCategory] = useState<TxCategory>(() => CATEGORY_ORDER.find((value) => value === params.category) ?? 'MARKET')
+  const [scope, setScope] = useState<'COUPLE' | 'PERSONAL'>(isSolo || params.scope === 'PERSONAL' ? 'PERSONAL' : 'COUPLE')
   const [paidBy, setPaidBy] = useState<PartnerId>(viewer)
   const [rule, setRule] = useState<SplitRule>(defaultSplitRule(couple))
   const [gift, setGift] = useState(params.gift === '1')
@@ -40,14 +56,15 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
   const [installments, setInstallments] = useState('2')
   const [errors, setErrors] = useState<{ amount?: string; description?: string; date?: string; installments?: string }>({})
   const id = useId()
+  const effectiveScope = isSolo ? 'PERSONAL' : scope
 
   const ratioA = couple.ratioABps / 100
   const ratioLabel = viewer === 'A' ? `${ratioA}/${100 - ratioA}` : `${100 - ratioA}/${ratioA}`
   const preview = useMemo(() => {
-    if (scope !== 'COUPLE' || cents <= 0) return null
+    if (effectiveScope !== 'COUPLE' || cents <= 0) return null
     const s = computeShares(cents, rule, paidBy, couple.ratioABps)
     return { mine: viewer === 'A' ? s.partnerAShareCents : s.partnerBShareCents, theirs: viewer === 'A' ? s.partnerBShareCents : s.partnerAShareCents }
-  }, [scope, cents, rule, paidBy, couple.ratioABps, viewer])
+  }, [effectiveScope, cents, rule, paidBy, couple.ratioABps, viewer])
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -62,14 +79,15 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
       amountCents: cents,
       description: desc,
       category,
-      scope,
-      paidBy,
+      scope: effectiveScope,
+      paidBy: isSolo ? viewer : paidBy,
       splitRule: rule,
-      isSecretGift: scope === 'PERSONAL' && gift,
+      isSecretGift: !isSolo && effectiveScope === 'PERSONAL' && gift,
       status,
       date,
       repeat,
       installments: repeat === 'INSTALLMENTS' ? Number(installments) : undefined,
+      ...(clearShopping ? { checkedShoppingIds: shoppingIds } : {}),
     })
     onDone()
   }
@@ -134,7 +152,7 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
         options={CATEGORY_ORDER.map((c) => ({ value: c, label: CATEGORIES[c].label, icon: CATEGORIES[c].icon }))}
       />
 
-      <ChoiceChips<'COUPLE' | 'PERSONAL'>
+      {!isSolo ? <ChoiceChips<'COUPLE' | 'PERSONAL'>
         label="De quem é o gasto"
         value={scope}
         onChange={setScope}
@@ -142,9 +160,9 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
           { value: 'COUPLE', label: 'Do casal', icon: Users },
           { value: 'PERSONAL', label: 'Só meu', icon: User },
         ]}
-      />
+      /> : null}
 
-      {scope === 'COUPLE' ? (
+      {!isSolo && scope === 'COUPLE' ? (
         <div className="flex flex-col gap-5 rounded-[20px] bg-subtle p-4">
           <ChoiceChips<PartnerId>
             label="Quem pagou?"
@@ -172,7 +190,7 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
             </p>
           ) : null}
         </div>
-      ) : (
+      ) : !isSolo ? (
         <div className="rounded-[20px] bg-subtle p-4">
           <Switch
             checked={gift}
@@ -186,7 +204,23 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
             description={`Fica oculto para ${firstName(partner.displayName)}, mesmo com a transparência ligada. ${me.sharePersonalFinances ? '' : 'Sua aba pessoal já está fechada agora.'}`}
           />
         </div>
-      )}
+      ) : null}
+
+      {selectedPurchased.length ? (
+        <div className="rounded-[20px] bg-subtle p-4">
+          <Switch
+            checked={clearShopping}
+            onChange={setClearShopping}
+            testId="expense-clear-shopping"
+            label="Limpar itens marcados ao salvar"
+            description={
+              <>
+                <span className="font-data">{selectedPurchased.length}</span> {selectedPurchased.length === 1 ? 'item desta compra' : 'itens desta compra'}. Só os que continuam marcados saem da lista. Dá para desfazer junto com o gasto.
+              </>
+            }
+          />
+        </div>
+      ) : null}
 
       <ChoiceChips<Repeat>
         label="Repetição"

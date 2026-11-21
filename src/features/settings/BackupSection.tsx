@@ -90,6 +90,7 @@ export function RestoreForm({ replacing, onDone }: { replacing: boolean; onDone?
   }
 
   const people = file ? (['A', 'B'] as PartnerId[]).filter((p) => file.vault.people[p].status === 'active') : []
+  const names = file ? (['A', 'B'] as PartnerId[]).filter((p) => file.vault.people[p].status !== 'absent').map((p) => file.vault.people[p].name).join(' e ') : ''
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4" data-testid="restore-form">
       <div>
@@ -113,7 +114,7 @@ export function RestoreForm({ replacing, onDone }: { replacing: boolean; onDone?
             <span className="font-data">
               {file.exportedAt.slice(8, 10)}/{file.exportedAt.slice(5, 7)}/{file.exportedAt.slice(0, 4)}
             </span>{' '}
-            · {file.vault.people.A.name} e {file.vault.people.B.name}
+            · {names}
           </p>
         ) : null}
       </div>
@@ -168,7 +169,7 @@ export function BackupSection() {
     <section className="module p-4 sm:p-5" aria-labelledby="backup" data-testid="backup-section">
       <SectionHeader id="backup" title="Backup" rest="· cifrado" />
       <p className="text-[14px] text-muted">
-        Um arquivo com tudo deste aparelho, cifrado do mesmo jeito que aqui. Se o celular sumir ou o navegador limpar os dados, é por ele que vocês voltam. A conexão com a nuvem não vai junto: depois de restaurar, conecte de novo em Ajustes.
+        Um arquivo com tudo deste aparelho, cifrado do mesmo jeito que aqui. Se o celular sumir ou o navegador limpar os dados, é por ele que você recupera o acesso. A conexão com a nuvem não vai junto: depois de restaurar, conecte de novo em Ajustes.
       </p>
       <Actions>
         <Button block variant="quiet" icon={Download} onClick={() => setPanel(panel === 'export' ? null : 'export')} aria-expanded={panel === 'export'} data-testid="backup-export-open">

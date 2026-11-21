@@ -19,20 +19,22 @@ export interface PushState {
 }
 
 const DETAILS_KEY = 'ampara:push-details'
+function loadShowDetails() {
+  try { return localStorage.getItem(DETAILS_KEY) === '1' } catch { return false }
+}
 export const pushStore = createStore<PushState>({
   subscribed: null,
-  showDetails: typeof localStorage !== 'undefined' && localStorage.getItem(DETAILS_KEY) === '1',
+  showDetails: loadShowDetails(),
   busy: false,
 })
 export const usePush = <S>(sel: (s: PushState) => S) => useStore(pushStore, sel)
 
 export function pushSupport(): PushSupport {
   if (typeof window === 'undefined') return 'unsupported'
-  const capable = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
-  if (capable) return 'ok'
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
-  const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
-  return ios && !standalone ? 'needs-install' : 'unsupported'
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const standalone = (typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches) || (navigator as Navigator & { standalone?: boolean }).standalone === true
+  if (ios && !standalone) return 'needs-install'
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window ? 'ok' : 'unsupported'
 }
 
 export const permission = (): NotificationPermission | 'unsupported' => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
@@ -84,6 +86,7 @@ async function withBusy<T>(fn: () => Promise<T>): Promise<T> {
 /** Pede a permissão (só depois do toque da pessoa) e inscreve este navegador */
 export function enablePush(): Promise<void> {
   return withBusy(async () => {
+    if (pushSupport() !== 'ok') throw new Error('Instale o Ampara na Tela de Início e ative os lembretes por lá.')
     const perm = await Notification.requestPermission()
     if (perm !== 'granted') throw new Error(perm === 'denied' ? 'As notificações estão bloqueadas para o Ampara. Libere nas configurações do navegador.' : 'Permissão não concedida.')
     const key = await cloudRpc<string | null>('push_public_key', {})
@@ -110,7 +113,7 @@ export function disablePush(): Promise<void> {
 
 /** Mostrar o nome do remédio na tela bloqueada (desligado por padrão: é dado de saúde) */
 export function setShowDetails(value: boolean): Promise<void> {
-  localStorage.setItem(DETAILS_KEY, value ? '1' : '0')
+  try { localStorage.setItem(DETAILS_KEY, value ? '1' : '0') } catch { /* preferência vale na sessão */ }
   pushStore.set((s) => ({ ...s, showDetails: value }))
   return withBusy(async () => {
     const reg = await registration()

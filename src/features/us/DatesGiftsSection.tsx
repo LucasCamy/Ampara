@@ -7,7 +7,7 @@ import { datesToRemind, describeUpcoming, giftsFor, upcomingDates, whenLabel, ty
 import type { GiftIdea, SpecialDateKind } from '../../domain/types'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { setGiftStatus } from '../../store/specialActions'
 import { ui } from '../../store/ui'
 
@@ -27,6 +27,7 @@ function usePersonName() {
 }
 
 export function DatesGiftsSection() {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const { viewer } = usePeople()
   const dates = useData((s) => s.specialDates)
@@ -51,7 +52,7 @@ export function DatesGiftsSection() {
           }
         />
         {upcoming.length === 0 ? (
-          <EmptyState icon={Heart} title="Nenhuma data ainda." text="Aniversário de namoro, aniversários de vocês, primeiro encontro. O app lembra uma semana antes." />
+          <EmptyState icon={Heart} title="Nenhuma data ainda." text={isSolo ? 'Aniversários, encontros e conquistas que você quer lembrar. O app lembra uma semana antes.' : 'Aniversário de namoro, aniversários de vocês, primeiro encontro. O app lembra uma semana antes.'} />
         ) : (
           <ul className="flex flex-col gap-2">
             {upcoming.map((u) => {
@@ -88,7 +89,7 @@ export function DatesGiftsSection() {
           }
         />
         {gifts.length === 0 ? (
-          <EmptyState icon={Gift} title="Nenhuma ideia guardada." text="Ouviu “queria tanto aquilo”? Anote na hora. Fica escondido do seu par." />
+          <EmptyState icon={Gift} title="Nenhuma ideia guardada." text={isSolo ? 'Ideias de presente para pessoas queridas ou para você. Anote quando lembrar.' : 'Ouviu “queria tanto aquilo”? Anote na hora. Fica escondido do seu par.'} />
         ) : (
           <ul className="flex flex-col gap-2">
             {gifts.map((g) => (

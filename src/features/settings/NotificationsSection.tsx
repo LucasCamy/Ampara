@@ -33,7 +33,7 @@ export function NotificationsSection() {
     <section className="module p-4 sm:p-5" aria-labelledby="lembretes" data-testid="push-section">
       <SectionHeader id="lembretes" title="Lembretes" rest="· na tela bloqueada" />
       <p className="text-[14px] text-muted">
-        Remédio na hora, “pegou a água?” depois de 5 min, rede de apoio, pedido de ajuda, lembrete carinhoso e foco junto.
+        Remédios, contas que vencem, compromissos com margem para a transição e check-ins nos horários que você escolher.
       </p>
       <p className="mt-2 text-[13px] text-muted" data-testid="push-categories-note">
         Com o app fechado o som é o padrão do celular, mas cada tipo vibra diferente (Android) e remédio e pedido de ajuda ficam na
@@ -43,10 +43,14 @@ export function NotificationsSection() {
       {support === 'needs-install' ? (
         <div className="mt-3 flex items-start gap-2 rounded-[16px] bg-subtle p-3 text-[14px] text-ink" data-testid="push-needs-install">
           <Share size={18} aria-hidden className="mt-0.5 shrink-0 text-action" />
-          <p>
-            No iPhone os lembretes só funcionam com o Ampara na Tela de Início: toque em <strong>Compartilhar</strong> e em{' '}
-            <strong>Adicionar à Tela de Início</strong>, abra por lá e volte aqui.
-          </p>
+          <div>
+            <p className="font-semibold">Ativar no iPhone · iOS 16.4 ou mais recente</p>
+            <ol className="mt-2 flex flex-col gap-2">
+              <li><span className="font-data">1.</span> No Safari, toque em <strong>Compartilhar</strong> e em <strong>Adicionar à Tela de Início</strong>.</li>
+              <li><span className="font-data">2.</span> Abra o Ampara pelo ícone da Tela de Início e conecte sua nuvem em Ajustes.</li>
+              <li><span className="font-data">3.</span> Volte a Lembretes, toque em <strong>Ativar lembretes</strong> e permita os avisos.</li>
+            </ol>
+          </div>
         </div>
       ) : support === 'unsupported' ? (
         <p className="mt-3 text-[14px] text-muted" data-testid="push-unsupported">

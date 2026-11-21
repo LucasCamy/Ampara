@@ -22,11 +22,14 @@ import { BackupSection } from './BackupSection'
 import { CloudSection } from './CloudSection'
 import { NotificationsSection } from './NotificationsSection'
 import { AlertsSection } from './AlertsSection'
+import { ReadingSection } from './ReadingSection'
+import { RitualsSection } from './RitualsSection'
+import { InvitePartnerSection, ModulesSection } from './SpaceSections'
 import { AboutSection } from '../shell/UpdateBanner'
 import { renameProfile, setSharePersonal, setSplit } from '../../store/actions'
 import { resetData } from '../../store/data'
-import { useCouple, usePeople } from '../../store/hooks'
-import { ui, useUi, type SheetKind } from '../../store/ui'
+import { useCouple, useIsSolo, usePeople } from '../../store/hooks'
+import { ui, useUi, type SettingsGroup, type SheetKind } from '../../store/ui'
 import { adapterName } from '../../sync/engine'
 
 const SHORTCUTS: { quick: SheetKind; name: string; icon: LucideIcon; how: string }[] = [
@@ -37,20 +40,17 @@ const SHORTCUTS: { quick: SheetKind; name: string; icon: LucideIcon; how: string
 ]
 
 /** Grupos de Ajustes: cada um cabe em poucas telas no celular, em vez de uma coluna única de dez cartões */
-type Group = 'casal' | 'nuvem' | 'aparelho' | 'atalhos'
-let lastGroup: Group = 'casal' // ao voltar para Ajustes, abre no grupo em que estava
+type Group = SettingsGroup
 
 export function SettingsScreen() {
-  const [group, setGroupState] = useState<Group>(lastGroup)
-  const setGroup = (g: Group) => {
-    lastGroup = g
-    setGroupState(g)
-  }
+  const isSolo = useIsSolo()
+  const group = useUi((s) => s.settingsGroup ?? 'casal')
+  const setGroup = ui.setSettingsGroup
 
   return (
     <div>
       <div className="mb-4">
-        <Title anchor="Ajustes" rest="do casal." />
+        <Title anchor="Ajustes" rest={isSolo ? 'do seu espaço.' : 'do casal.'} />
       </div>
       <div className="mb-5">
         <Segmented<Group>
@@ -58,8 +58,9 @@ export function SettingsScreen() {
           value={group}
           onChange={setGroup}
           stretch
+          size="sm"
           options={[
-            { value: 'casal', label: 'Casal', testId: 'settings-group-casal' },
+            { value: 'casal', label: isSolo ? 'Espaço' : 'Casal', testId: 'settings-group-casal' },
             { value: 'nuvem', label: 'Nuvem', testId: 'settings-group-nuvem' },
             { value: 'aparelho', label: 'Aparelho', shortLabel: 'App', testId: 'settings-group-aparelho' },
             { value: 'atalhos', label: 'Atalhos', testId: 'settings-group-atalhos' },
@@ -84,11 +85,30 @@ export function SettingsScreen() {
 }
 
 function CoupleGroup() {
+  const isSolo = useIsSolo()
   const { viewer, me, partner, profiles } = usePeople()
   const couple = useCouple()
   const partnerPending = useAuth((s) => s.people?.[s.who === 'A' ? 'B' : 'A']?.status === 'invited')
   const mode = couple.splitMode === 'PROPORTIONAL' ? 'PROPORTIONAL' : '50_50'
   const ratioA = couple.ratioABps / 100
+  if (isSolo) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="flex flex-col gap-6">
+          <section className="module p-4 sm:p-5" aria-labelledby="meu-espaco">
+            <SectionHeader id="meu-espaco" title="Meu espaço" />
+            <StatusBadge kind="ok">Só para mim</StatusBadge>
+            <p className="mt-2 text-[13px] text-muted">Sincronização: {adapterName()}. Seus dados ficam cifrados neste aparelho.</p>
+            <div className="mt-4">
+              <NameField key={`${viewer}-${me.displayName}`} id={viewer} value={me.displayName} label="Seu nome" />
+            </div>
+          </section>
+          <InvitePartnerSection />
+        </div>
+        <ModulesSection />
+      </div>
+    )
+  }
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
       <section className="module p-4 sm:p-5" aria-labelledby="pareamento">
@@ -149,18 +169,22 @@ function CoupleGroup() {
             </p>
           </div>
         </section>
+        <ModulesSection />
       </div>
     </div>
   )
 }
 
 function DeviceGroup() {
+  const isSolo = useIsSolo()
   const { viewer, partner, profiles } = usePeople()
   const theme = useUi((s) => s.theme)
   const [confirmReset, setConfirmReset] = useState(false)
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
       <div className="flex flex-col gap-6">
+        <ReadingSection />
+        <RitualsSection />
         <AlertsSection />
         <SecuritySection partnerName={firstName(partner.displayName)} />
         <AboutSection />
@@ -175,7 +199,7 @@ function DeviceGroup() {
           <StatusBadge kind="ok" className="mt-3">
             Salvo no aparelho · funciona offline
           </StatusBadge>
-          <div className="mt-4">
+          {!isSolo ? <div className="mt-4">
             {confirmReset ? (
               <div className={cx('rounded-[16px] border border-err bg-err-soft p-3')} role="alert">
                 <p className="text-[14px] font-semibold text-ink">Apagar os dados deste aparelho e voltar ao exemplo inicial?</p>
@@ -202,7 +226,7 @@ function DeviceGroup() {
                 Restaurar dados de exemplo
               </Button>
             )}
-          </div>
+          </div> : null}
         </section>
       </div>
     </div>
@@ -210,6 +234,7 @@ function DeviceGroup() {
 }
 
 function ShortcutsSection() {
+  const isSolo = useIsSolo()
   const [copied, setCopied] = useState<string | null>(null)
   const base = `${location.origin}${location.pathname}`
   const copy = async (text: string, key: string) => {
@@ -248,8 +273,8 @@ function ShortcutsSection() {
                   <s.icon size={20} aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-bold text-ink">{s.name}</p>
-                  <p className="text-[13px] text-muted">{s.how}</p>
+                  <p className="text-[15px] font-bold text-ink">{isSolo && s.quick === 'sos' ? 'Ampara: Travei' : s.name}</p>
+                  <p className="text-[13px] text-muted">{isSolo && s.quick === 'sos' ? 'Ajuda a escolher um começo e focar por cinco minutos.' : s.how}</p>
                   <p className="font-data mt-1 text-[12px] break-all text-ink">/?quick={s.quick}</p>
                 </div>
               </div>

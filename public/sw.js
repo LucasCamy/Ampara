@@ -60,8 +60,10 @@ const KINDS = {
   support: { vibrate: [150], sticky: false, action: 'Ver no Hoje' },
   partner: { vibrate: [60, 60, 60], sticky: false, action: null },
   home: { vibrate: [], sticky: false, action: null },
+  event: { vibrate: [100, 70, 100], sticky: false, action: 'Ver compromisso' },
+  ritual: { vibrate: [80], sticky: false, action: 'Abrir check-in' },
 }
-const SOUNDS = ['med', 'water', 'help', 'support', 'partner', 'home']
+const SOUNDS = ['med', 'water', 'help', 'support', 'partner', 'home', 'event', 'ritual']
 
 self.addEventListener('push', (e) => {
   let data = {}

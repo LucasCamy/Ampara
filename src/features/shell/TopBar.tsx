@@ -1,11 +1,11 @@
-import { Lock, BatteryFull, BatteryLow, BatteryMedium, Cloud, CloudOff, Moon, RefreshCw, Settings, Sun, type LucideIcon } from 'lucide-react'
+import { Lock, BatteryFull, BatteryLow, BatteryMedium, Cloud, CloudOff, Mic, Moon, RefreshCw, Settings, SquareX, Sun, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { cx, Segmented } from '../../components/ui'
 import type { EnergyLevel } from '../../domain/types'
 import { setEnergy } from '../../store/actions'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { ui, useUi } from '../../store/ui'
-import { lock, switchPerson } from '../../auth/session'
+import { lock, retryLocalSave, switchPerson, useLocalSaveStatus } from '../../auth/session'
 import { useSync } from '../../sync/engine'
 import { firstName } from '../../domain/format'
 
@@ -37,30 +37,32 @@ export function BatterySelector({ compactLabels = false, fill = false }: { compa
 
 export function SyncPill() {
   const { online, syncing, pending, forced } = useSync()
-  const state = !online ? 'offline' : syncing || pending > 0 ? 'syncing' : 'ok'
-  const Icon = state === 'offline' ? CloudOff : state === 'syncing' ? RefreshCw : Cloud
-  const text = state === 'offline' ? `Offline${pending ? ` · ${pending}` : ''}` : state === 'syncing' ? `Enviando ${pending}` : 'Sincronizado'
+  const localSave = useLocalSaveStatus()
+  const state = localSave === 'error' ? 'error' : !online ? 'offline' : syncing || pending > 0 || localSave === 'saving' ? 'syncing' : 'ok'
+  const Icon = state === 'error' ? SquareX : localSave === 'saving' ? RefreshCw : state === 'offline' ? CloudOff : state === 'syncing' ? RefreshCw : Cloud
+  const text = state === 'error' ? 'Não salvo' : localSave === 'saving' ? 'Salvando' : state === 'offline' ? `Offline${pending ? ` · ${pending}` : ''}` : state === 'syncing' ? `Enviando ${pending}` : 'Sincronizado'
   const full =
-    state === 'offline'
-      ? `Modo offline, salvando no aparelho, ${pending} na fila`
+    state === 'error' ? 'Não foi possível salvar no aparelho' : localSave === 'saving' ? 'Salvando no aparelho' : state === 'offline'
+      ? `Modo offline, salvo no aparelho, ${pending} na fila`
       : state === 'syncing'
         ? `Sincronizando ${pending} alterações`
         : 'Sincronizado'
   return (
     <button
       type="button"
-      onClick={() => ui.setForcedOffline(!forced)}
+      onClick={() => state === 'error' ? retryLocalSave() : ui.setForcedOffline(!forced)}
       data-testid="sync-pill"
       data-state={state}
-      aria-label={`${full}. Tocar para ${forced ? 'voltar a sincronizar' : 'simular modo offline'}`}
-      title={forced ? 'Voltar a sincronizar' : 'Simular modo offline'}
+      data-local-save={localSave}
+      aria-label={`${full}. Tocar para ${state === 'error' ? 'tentar salvar de novo' : forced ? 'voltar a sincronizar' : 'simular modo offline'}`}
+      title={state === 'error' ? 'Tentar salvar de novo' : forced ? 'Voltar a sincronizar' : 'Simular modo offline'}
       className={cx(
         'press inline-flex min-h-11 min-w-0 items-center gap-1.5 overflow-hidden rounded-full border px-2.5 text-[12px] font-semibold whitespace-nowrap',
-        state === 'offline' ? 'border-dashed border-warn bg-warn-soft text-warn' : state === 'syncing' ? 'border-dashed border-line-strong text-muted' : 'border-line text-muted',
+        state === 'error' ? 'border-err bg-err-soft text-err' : state === 'offline' ? 'border-dashed border-warn bg-warn-soft text-warn' : state === 'syncing' ? 'border-dashed border-line-strong text-muted' : 'border-line text-muted',
       )}
     >
       <Icon size={15} aria-hidden />
-      <span className="tabular truncate">{text}</span>
+      <span className="font-data truncate">{text}</span>
     </button>
   )
 }
@@ -174,11 +176,13 @@ export function TopBar() {
 
 /** Linha de contexto que rola junto com a página no mobile (só a barra principal fica fixa) */
 export function ContextRow() {
+  const isSolo = useIsSolo()
   return (
     <div className="mx-auto flex max-w-[720px] items-center gap-1 px-4 pt-3 lg:hidden">
       <div className="min-w-0 flex-1">
-        <PerspectiveSwitch />
+        {!isSolo ? <PerspectiveSwitch /> : null}
       </div>
+      <button type="button" onClick={() => ui.openSheet('quickCapture')} aria-label="Captura livre" data-testid="quick-capture" className="press hoverable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink"><Mic size={19} aria-hidden /></button>
       <LockButton />
       <ThemeToggle />
     </div>

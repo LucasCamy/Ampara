@@ -7,6 +7,7 @@ import { addMinutesToTime, DURATION_SHORTCUTS, minutesOf, toDateKey } from '../.
 import { deleteEvent, saveEvent } from '../../store/actions'
 import { useNow } from '../../store/clock'
 import { dataStore } from '../../store/data'
+import { useIsSolo } from '../../store/hooks'
 import { DeleteButton } from './fields'
 import { SHEET_FORM } from './forms'
 
@@ -14,18 +15,22 @@ const START_SHORTCUTS = ['09:00', '14:00', '19:00'].map((t) => ({ value: t, labe
 
 /** Novo compromisso (params.date vem da Agenda) ou edição quando params.id existe */
 export function EventSheet({ params, onDone }: { params: Record<string, string>; onDone: () => void }) {
+  const isSolo = useIsSolo()
   const id = params.id
   // "hoje" do mesmo relógio do app que o atalho "Hoje" do DateField usa
   const today = toDateKey(useNow())
   const [form, setForm] = useState<EventInput>(() => {
     const prev = id ? dataStore.get().events[id] : undefined
-    if (prev) return eventToInput(prev)
+    if (prev) {
+      const input = eventToInput(prev)
+      return isSolo ? { ...input, owner: 'ME' } : input
+    }
     return {
       title: params.title ?? '',
       date: params.date && isDateKey(params.date) ? params.date : today,
       start: '19:00',
       end: '20:00',
-      owner: 'US',
+      owner: isSolo ? 'ME' : 'US',
       type: 'APPOINTMENT',
     }
   })
@@ -51,7 +56,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
     const next = validateEvent(form)
     setErrors(next)
     if (hasErrors(next)) return
-    if (saveEvent(form, id)) onDone()
+    if (saveEvent(isSolo ? { ...form, owner: 'ME' } : form, id)) onDone()
   }
 
   return (
@@ -77,7 +82,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
           }
         />
       </div>
-      <ChoiceChips<EventOwner>
+      {!isSolo ? <ChoiceChips<EventOwner>
         label="De quem é"
         value={form.owner}
         onChange={set('owner')}
@@ -85,7 +90,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
           { value: 'US', label: 'Nós / Casal', icon: Users },
           { value: 'ME', label: 'Meu', icon: User, hint: 'só você vê' },
         ]}
-      />
+      /> : null}
       <ChoiceChips<EventType>
         label="Tipo"
         value={form.type}

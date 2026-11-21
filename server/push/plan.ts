@@ -1,7 +1,9 @@
 import { serverAllows, type AlertCategory, type AlertSound, type ServerPrefs } from '../../src/domain/alerts'
-import { minutesOf } from '../../src/domain/dates'
+import { addDays, minutesOf } from '../../src/domain/dates'
+import { ritualAlertKey, RITUAL_LABELS, RITUAL_WINDOWS } from '../../src/domain/rituals'
 import { isScheduledOn, logId } from '../../src/domain/medication'
-import type { DoseStatus, Medication, PartnerId } from '../../src/domain/types'
+import { canReceiveBillReminder } from '../../src/domain/privacy'
+import type { DoseStatus, Medication, PartnerId, SpaceMode } from '../../src/domain/types'
 
 /**
  * Decide QUAIS lembretes mandar agora. Função pura (sem banco, sem rede): o worker só busca os dados,
@@ -50,6 +52,26 @@ export interface OpenFocus {
   title: string
   durationMin: number
   startedAt: string
+  joinedBy?: PartnerId | null
+}
+
+export interface UpcomingEvent {
+  id: string
+  coupleId: string
+  title: string
+  date: string
+  start: string
+  ownerId: PartnerId | null
+}
+
+/** O worker não recebe valores nem dados de pagamento, só o necessário para lembrar o vencimento. */
+export interface DueBill {
+  id: string
+  coupleId: string
+  createdBy: PartnerId
+  scope: 'PERSONAL' | 'COUPLE'
+  competenceDate: string
+  description: string
 }
 
 export interface PlanInput {
@@ -62,6 +84,9 @@ export interface PlanInput {
   nudges?: OpenNudge[]
   /** sessões de foco rodando, sem ninguém junto */
   focus?: OpenFocus[]
+  events?: UpcomingEvent[]
+  bills?: DueBill[]
+  modes?: Record<string, SpaceMode>
   /** nome de exibição por casal e pessoa */
   names: Record<string, Partial<Record<PartnerId, string>>>
 }
@@ -113,6 +138,7 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
   for (const sub of input.subs) {
     const { date, minutes } = localParts(now, sub.tz)
     const partnerName = first(input.names[sub.coupleId]?.[sub.partnerId === 'A' ? 'B' : 'A'], 'Seu par')
+    const solo = input.modes?.[sub.coupleId] === 'SOLO'
     const push = (m: Omit<PushMessage, 'endpoint' | 'ref' | 'sound'> & { sound?: AlertSound }) => {
       if (!serverAllows(sub.prefs, m.category, minutes)) return
       out.push({ endpoint: sub.endpoint, ...m, sound: m.sound ?? m.category, ref: m.key, key: `${m.key}|${sub.endpoint}` })
@@ -123,7 +149,7 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
       const routine = med.kind === 'ROUTINE'
       // remédio: só a dona; rotina: quem é o responsável, ou os dois
       const mine = routine ? !med.assignee || med.assignee === sub.partnerId : med.ownerId === sub.partnerId
-      const partnersMed = !routine && med.ownerId !== null && med.ownerId !== sub.partnerId && med.notifyPartnerOnDelay
+      const partnersMed = !solo && !routine && med.ownerId !== null && med.ownerId !== sub.partnerId && med.notifyPartnerOnDelay
 
       for (const time of med.times) {
         const id = logId(med.id, date, time)
@@ -131,6 +157,12 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
         if (resolved(log?.status)) continue
         const late = minutes - minutesOf(time)
         const snoozing = log?.status === 'SNOOZED_WATER' && !!log.snoozeUntil && new Date(log.snoozeUntil) > now
+        const selfLate = solo && mine && !routine && !snoozing && late >= med.delayMinutesThreshold && late <= med.delayMinutesThreshold + LATE_WINDOW_MIN
+
+        if (selfLate) {
+          push({ key: `self-late:${id}`, tag: `dose-${id}`, url: '/?quick=med', category: 'med', label: `Remédio · ${time}`, title: 'Um passo de cada vez', body: sub.showDetails ? `${med.name} ainda está sem confirmação. Se já tomou, registre quando puder.` : 'Seu remédio ainda está sem confirmação. Se já tomou, registre quando puder.' })
+          continue
+        }
 
         // 1) chegou a hora (para quem toma ou faz)
         if (mine && !snoozing && !log?.snoozeCount && late >= 0 && late <= DUE_WINDOW_MIN) {
@@ -179,9 +211,39 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
       }
     }
 
+    // Compromissos do usuário, inclusive do espaço: margem para trocar de atividade.
+    for (const event of input.events ?? []) {
+      if (event.coupleId !== sub.coupleId || (event.ownerId !== null && event.ownerId !== sub.partnerId)) continue
+      const until = (Date.parse(`${event.date}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 60_000 + minutesOf(event.start) - minutes
+      for (const lead of [30, 10]) {
+        const elapsed = lead - until
+        if (elapsed < 0 || elapsed >= DUE_WINDOW_MIN || until <= 0) continue
+        push({ key: `event:${event.id}@${event.date}T${event.start}#${lead}`, tag: `event-${event.id}-${lead}`, url: '/#/hoje', category: 'event', label: `Compromisso · ${event.start}`, title: sub.showDetails ? event.title : 'Seu compromisso está chegando', body: lead === 30 ? 'Separe um pouco de tempo para a transição.' : 'Faltam poucos minutos. Você pode começar a se preparar.' })
+      }
+    }
+
+    // Contas pessoais só chegam ao dono. A tela bloqueada não recebe valor ou descrição sem detalhes.
+    if (minutes >= 8 * 60) {
+      for (const ahead of [0, 2]) {
+        const dueDate = addDays(date, ahead)
+        const bills = (input.bills ?? []).filter((bill) => bill.coupleId === sub.coupleId && canReceiveBillReminder(bill, sub.partnerId) && bill.competenceDate === dueDate)
+        if (!bills.length) continue
+        const when = ahead ? 'em 2 dias' : 'hoje'
+        push({ key: ahead ? `bills-ahead:${sub.partnerId}:${dueDate}` : `bills:${sub.partnerId}:${date}`, tag: `bills-${sub.partnerId}-${dueDate}-${ahead}`, url: '/#/financas', category: 'home', label: `Contas · vence ${when}`, title: sub.showDetails && bills.length === 1 ? `${bills[0]!.description} vence ${when}` : `${bills.length === 1 ? 'Uma conta sua vence' : `${bills.length} contas suas vencem`} ${when}`, body: 'Abra o Ampara para conferir. Dê baixa quando pagar.' })
+      }
+    }
+
+    for (const window of RITUAL_WINDOWS) {
+      const schedule = sub.prefs.rituals?.[window]
+      if (!schedule?.enabled) continue
+      const elapsed = minutes - minutesOf(schedule.time)
+      if (elapsed < 0 || elapsed >= DUE_WINDOW_MIN) continue
+      push({ key: ritualAlertKey(sub.coupleId, sub.partnerId, date, window), tag: `ritual-${window}-${date}`, url: '/#/hoje', category: 'ritual', label: `Check-in · ${schedule.time}`, title: RITUAL_LABELS[window], body: 'Um momento curto para perceber seu ritmo, sem cobrança.' })
+    }
+
     // 4) pedido de ajuda do par
     for (const h of input.help) {
-      if (h.coupleId !== sub.coupleId || h.requesterId === sub.partnerId) continue
+      if (solo || h.coupleId !== sub.coupleId || h.requesterId === sub.partnerId) continue
       const age = (now.getTime() - new Date(h.createdAt).getTime()) / 60_000
       // tolera relógio do banco um pouco à frente do worker
       if (age < -2 || age > HELP_WINDOW_MIN) continue
@@ -198,7 +260,7 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
 
     // 5) lembrete carinhoso do par
     for (const n of input.nudges ?? []) {
-      if (n.coupleId !== sub.coupleId || n.to !== sub.partnerId) continue
+      if (solo || n.coupleId !== sub.coupleId || n.to !== sub.partnerId) continue
       const age = (now.getTime() - new Date(n.createdAt).getTime()) / 60_000
       if (age < -2 || age > PARTNER_WINDOW_MIN) continue
       push({
@@ -215,7 +277,7 @@ export function planNotifications(input: PlanInput, now: Date): PushMessage[] {
 
     // 6) foco junto: o par começou e chamou
     for (const f of input.focus ?? []) {
-      if (f.coupleId !== sub.coupleId || f.startedBy === sub.partnerId) continue
+      if (solo || f.joinedBy || f.coupleId !== sub.coupleId || f.startedBy === sub.partnerId) continue
       const age = (now.getTime() - new Date(f.startedAt).getTime()) / 60_000
       if (age < -2 || age > Math.min(PARTNER_WINDOW_MIN, f.durationMin)) continue
       push({

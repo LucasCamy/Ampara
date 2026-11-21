@@ -98,6 +98,51 @@ test.describe('Autenticação e segurança', () => {
     await expect(page.getByTestId('login-form')).toBeVisible()
   })
 
+  test('migra cofre cifrado do localStorage para IndexedDB e continua exigindo a senha', async ({ page, errors }) => {
+    void errors
+    await open(page)
+    await goSettings(page, 'aparelho')
+    await page.getByRole('button', { name: 'Bloquear agora', exact: true }).click()
+    await expect(page.getByTestId('login-form')).toBeVisible()
+
+    // Reproduz o armazenamento da versão anterior, sem deixar uma sessão lembrada.
+    await page.evaluate(async () => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('ampara-local', 1)
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tx = database.transaction('vault', 'readwrite')
+          const store = tx.objectStore('vault')
+          const request = store.get('primary')
+          request.onsuccess = () => {
+            if (!request.result) return tx.abort()
+            localStorage.setItem('ampara:vault:v1', JSON.stringify(request.result))
+            store.delete('primary')
+          }
+          tx.oncomplete = () => resolve()
+          tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Não foi possível preparar o cofre legado.'))
+        })
+      } finally {
+        database.close()
+      }
+    })
+    await page.reload()
+    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('app')).toHaveCount(0)
+    await expect(page.getByText('Venvanse')).toHaveCount(0)
+    expect(await page.evaluate(() => localStorage.getItem('ampara:vault:v1'))).toBeNull()
+    await page.getByTestId('login-password').fill(PASSWORDS.A)
+    await page.getByTestId('login-submit').click()
+    await expect(page.getByTestId('app')).toBeVisible({ timeout: 15_000 })
+    await goSettings(page, 'casal')
+    await expect(page.getByTestId('settings-invite')).toContainText('Namorada')
+    await page.reload()
+    await expect(page.getByTestId('app')).toBeVisible({ timeout: 15_000 })
+  })
+
   test('bloquear em uma aba bloqueia as outras', async ({ page, context, errors }) => {
     void errors
     await open(page)

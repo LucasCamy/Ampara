@@ -1,18 +1,19 @@
 import { firstName } from '../../domain/format'
-import { Check, CircleDashed, Home, Package, Pill, Plus, ReceiptText, ShoppingBasket, ShoppingCart, X, type LucideIcon } from 'lucide-react'
+import { Check, CircleDashed, Home, Lightbulb, Package, Pill, Plus, ReceiptText, ShoppingBasket, ShoppingCart, X, type LucideIcon } from 'lucide-react'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { Button, ChoiceChips, cx, EmptyState, FieldError, SectionHeader } from '../../components/ui'
 import { isLowStock } from '../../domain/medication'
-import { findDuplicate, SHOP_CATEGORY, SHOP_ORDER, shoppingView } from '../../domain/shopping'
+import { findDuplicate, findMedicationItem, SHOP_CATEGORY, SHOP_ORDER, shoppingExpenseDraft, shoppingView } from '../../domain/shopping'
 import type { ShopCategory, ShoppingItem } from '../../domain/types'
 import { useData } from '../../store/data'
-import { usePeople } from '../../store/hooks'
-import { addShoppingItem, finishShopping, removeShoppingItem, toggleShoppingItem } from '../../store/shoppingActions'
+import { useIsSolo, usePeople } from '../../store/hooks'
+import { addMedicationToShopping, addShoppingItem, finishShopping, removeShoppingItem, toggleShoppingItem } from '../../store/shoppingActions'
 import { ui } from '../../store/ui'
 
 const SHOP_ICON: Record<ShopCategory, LucideIcon> = { MARKET: ShoppingBasket, PHARMACY: Pill, HOME: Home, OTHER: Package }
 
 export function ShoppingSection() {
+  const isSolo = useIsSolo()
   const { viewer, profiles } = usePeople()
   const all = useData((s) => s.shoppingItems)
   const meds = useData((s) => s.meds)
@@ -26,7 +27,7 @@ export function ShoppingSection() {
   const lowMeds = useMemo(() => {
     const list = Object.values(all)
     return Object.values(meds).filter(
-      (m) => (m.ownerId === viewer || m.ownerId === null) && isLowStock(m) && !list.some((i) => i.sourceMedicationId === m.id && !i.checked) && !findDuplicate(list, m.name),
+      (m) => (m.ownerId === viewer || m.ownerId === null) && isLowStock(m) && !findMedicationItem(list, m.id) && !findDuplicate(list, m.name),
     )
   }, [meds, all, viewer])
 
@@ -45,7 +46,7 @@ export function ShoppingSection() {
 
   return (
     <section aria-labelledby="compras-title" data-testid="shopping-section">
-      <SectionHeader id="compras-title" title="Lista de compras" rest={v.pending ? `· ${v.pending} ${v.pending === 1 ? 'item' : 'itens'}` : '· os dois veem'} />
+      <SectionHeader id="compras-title" title="Lista de compras" rest={v.pending ? `· ${v.pending} ${v.pending === 1 ? 'item' : 'itens'}` : isSolo ? '· para não esquecer' : '· os dois veem'} action={<Button size="sm" variant="ghost" icon={Lightbulb} onClick={() => ui.openSheet('templates', { group: 'shopping' })} data-testid="ideas-shopping">Ideias prontas</Button>} />
       <form onSubmit={submit} className="card p-4" noValidate data-testid="shopping-form">
         <label htmlFor="shopping-line" className="mb-2 block text-[14px] font-semibold text-ink">
           O que falta?
@@ -92,7 +93,7 @@ export function ShoppingSection() {
       {lowMeds.length ? (
         <div className="mt-3 flex flex-wrap gap-2" aria-label="Remédios acabando">
           {lowMeds.map((m) => (
-            <Button key={m.id} size="sm" variant="quiet" icon={Pill} className="grow basis-[130px]" onClick={() => addShoppingItem(m.name, 'PHARMACY', m.id)} data-testid="shopping-low-med">
+            <Button key={m.id} block size="sm" variant="quiet" icon={Pill} className="grow basis-[130px]" onClick={() => addMedicationToShopping(m.id)} data-testid="shopping-low-med">
               Repor {m.name}
             </Button>
           ))}
@@ -101,7 +102,7 @@ export function ShoppingSection() {
 
       <div className="mt-3 flex flex-col gap-3">
         {v.groups.length === 0 && v.inCart.length === 0 ? (
-          <EmptyState icon={ShoppingCart} title="Lista vazia." text="Lembrou de algo que acabou? Escreva acima: aparece na hora no celular do seu par." />
+          <EmptyState icon={ShoppingCart} title="Lista vazia." text={isSolo ? 'Lembrou de algo que acabou? Escreva acima para lembrar na hora de comprar.' : 'Lembrou de algo que acabou? Escreva acima: aparece na hora no celular do seu par.'} />
         ) : null}
         {v.groups.map((g) => (
           <div key={g.category} className="card p-2" data-testid={`shop-group-${g.category}`}>
@@ -129,8 +130,17 @@ export function ShoppingSection() {
               <Button variant="primary" icon={Check} onClick={finishShopping} data-testid="shop-finish" className="grow basis-[150px]">
                 Terminei a compra
               </Button>
-              <Button variant="secondary" icon={ReceiptText} onClick={() => ui.openSheet('expense', { title: 'Compras do mercado' })} data-testid="shop-expense" className="grow basis-[150px]">
-                Registrar o gasto
+              <Button
+                variant="secondary"
+                icon={ReceiptText}
+                onClick={() => {
+                  const draft = shoppingExpenseDraft(Object.values(all))
+                  if (draft) ui.openSheet('expense', { title: draft.title, category: draft.category, shoppingIds: JSON.stringify(draft.ids), scope: isSolo ? 'PERSONAL' : 'COUPLE' })
+                }}
+                data-testid="shop-expense"
+                className="grow basis-[150px]"
+              >
+                Lançar gasto das compras
               </Button>
             </div>
           </div>

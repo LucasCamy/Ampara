@@ -1,4 +1,5 @@
 import { CATEGORY, decide, normalizePrefs, type AlertCandidate, type AlertCategory, type AlertPrefs, type AlertSound } from '../domain/alerts'
+import type { RitualSchedule, RitualWindow } from '../domain/rituals'
 import { playSound, vibrate } from '../features/alerts/sound'
 import { createStore, useStore } from './createStore'
 
@@ -37,6 +38,12 @@ export function setAlertPrefs(updater: (p: AlertPrefs) => AlertPrefs) {
   } catch {
     /* sem armazenamento: vale só nesta sessão */
   }
+}
+
+export const alertPrefs = {
+  setRitualSchedule(window: RitualWindow, patch: Partial<RitualSchedule>) {
+    setAlertPrefs((p) => ({ ...p, rituals: { ...p.rituals, [window]: { ...p.rituals[window], ...patch } } }))
+  },
 }
 
 export const alertsStore = createStore<ShownAlert[]>([])

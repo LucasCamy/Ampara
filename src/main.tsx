@@ -9,16 +9,24 @@ import '@fontsource/plus-jakarta-sans/800.css'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
 import '@fontsource/jetbrains-mono/600.css'
+import '@fontsource/lexend/latin-400.css'
+import '@fontsource/lexend/latin-500.css'
+import '@fontsource/lexend/latin-600.css'
+import '@fontsource/lexend/latin-700.css'
+import '@fontsource/lexend/latin-800.css'
+import '@fontsource/atkinson-hyperlegible/latin-400.css'
+import '@fontsource/atkinson-hyperlegible/latin-700.css'
 import './index.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { startClocks } from './store/clock'
-import { applyTheme, uiStore } from './store/ui'
+import { applyReading, applyTheme, uiStore } from './store/ui'
 import { startSync } from './sync/engine'
 import { startAuth } from './auth/session'
 
 applyTheme(uiStore.get().theme)
+applyReading(uiStore.get().readingFont, uiStore.get().readingComfort)
 startClocks()
 startSync()
 startUpdateChecks()

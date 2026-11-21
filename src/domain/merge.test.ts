@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyRemote, pickWinner, purgeUnauthorized } from './merge'
 import { buildSeed } from './seed'
 import type { MedicationLog, Task, Transaction } from './types'
+import { buildFocusSession } from './together'
 
 const base = buildSeed(new Date('2026-11-06T10:00:00'))
 const task = Object.values(base.tasks)[0] as Task
@@ -20,6 +21,20 @@ const log = (status: MedicationLog['status'], updatedAt: string): MedicationLog 
 })
 
 describe('merge de sincronização', () => {
+  it('remove focos individuais do par, legados ligados a tarefa privada e a fila desses focos', () => {
+    const privateTask = Object.values(base.tasks).find((task) => task.assignedTo === 'B' && !task.visibleToPartner)!
+    const focus = (id: string) => buildFocusSession({ id, title: 'Título de foco', minutes: 5, startedBy: 'B' }, new Date('2026-11-06T10:00:00'))!
+    const individual = { ...focus('individual'), joinedBy: 'B' as const }
+    const legacy = { ...focus('legacy'), taskId: privateTask.id }
+    const shared = focus('shared')
+    const own = { ...focus('own'), startedBy: 'A' as const, joinedBy: 'A' as const }
+    const state = { ...base, focusSessions: { individual, legacy, shared, own }, outbox: [{ id: 'queued', entityType: 'focusSessions' as const, entityId: 'legacy', operation: 'UPSERT' as const, payload: legacy, hlc: '', status: 'FAILED' as const, attempts: 1 }] }
+    const purged = purgeUnauthorized(state, 'A')
+    expect(Object.keys(purged.focusSessions).sort()).toEqual(['own', 'shared'])
+    expect(purged.outbox).toEqual([])
+    const revoked = purgeUnauthorized(purged, 'A', { visible: { focusSessions: new Set() } })
+    expect(Object.keys(revoked.focusSessions)).toEqual(['own'])
+  })
   it('a última edição vence', () => {
     const newer = { ...task, title: 'remoto', updatedAt: '2099-01-01T00:00:00Z' }
     const { state, changed } = applyRemote(base, 'tasks', [{ entity: newer, deleted: false }])

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findDuplicate, parseShoppingLine, shoppingView } from './shopping'
+import { findDuplicate, findMedicationItem, parseShoppingLine, shoppingExpenseDraft, shoppingView } from './shopping'
 import type { ShoppingItem } from './types'
 
 const item = (p: Partial<ShoppingItem> & Pick<ShoppingItem, 'id' | 'title'>): ShoppingItem => ({
@@ -53,5 +53,37 @@ describe('lista', () => {
     ])
     expect(v.inCart.map((i) => i.id)).toEqual(['3'])
     expect(v.pending).toBe(3)
+  })
+
+  it('uma reposição aberta é identificada pelo remédio mesmo depois de renomear o item', () => {
+    const open = item({ id: 'repo', title: 'Nome antigo', sourceMedicationId: 'med-1' })
+    const purchased = item({ id: 'anterior', title: 'Nome novo', sourceMedicationId: 'med-1', checked: true })
+    expect(findMedicationItem([purchased, open], 'med-1')).toBe(open)
+    expect(findMedicationItem([purchased], 'med-1')).toBeUndefined()
+  })
+})
+
+describe('gasto das compras', () => {
+  it('não abre um gasto quando nada foi comprado', () => {
+    expect(shoppingExpenseDraft([item({ id: 'aberto', title: 'Arroz' })])).toBeNull()
+  })
+
+  it.each([
+    ['MARKET', 'Compras do mercado', 'MARKET'],
+    ['PHARMACY', 'Compras da farmácia', 'HEALTH'],
+    ['HOME', 'Compras para casa', 'HOME'],
+    ['OTHER', 'Compras', 'OTHER'],
+  ] as const)('pré-preenche a categoria %s sem inventar o valor', (category, title, expenseCategory) => {
+    const draft = shoppingExpenseDraft([item({ id: 'comprado', title: 'Um item', category, checked: true }), item({ id: 'a-comprar', title: 'Outro item' })])
+    expect(draft).toEqual({ title, category: expenseCategory, ids: ['comprado'] })
+    expect(draft).not.toHaveProperty('amountCents')
+  })
+
+  it('uma compra mista inclui somente os ids marcados e mantém categoria neutra', () => {
+    expect(shoppingExpenseDraft([
+      item({ id: 'mercado', title: 'Arroz', checked: true }),
+      item({ id: 'farmacia', title: 'Remédio', checked: true, category: 'PHARMACY' }),
+      item({ id: 'pendente', title: 'Sabão', category: 'HOME' }),
+    ])).toEqual({ title: 'Compras', category: 'OTHER', ids: ['mercado', 'farmacia'] })
   })
 })

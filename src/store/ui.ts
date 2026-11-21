@@ -2,8 +2,12 @@ import type { PartnerId } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 export type Tab = 'hoje' | 'agenda' | 'nos' | 'rotinas' | 'financas' | 'ajustes'
-export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'newMed' | 'routine' | 'event' | 'period' | 'cycleSetup' | 'specialDate' | 'gift' | 'goal' | 'pay' | 'tx' | 'rule' | 'tour'
+export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'unstuck' | 'templates' | 'newMed' | 'routine' | 'event' | 'period' | 'cycleSetup' | 'specialDate' | 'gift' | 'goal' | 'pay' | 'tx' | 'rule' | 'tour' | 'quickCapture'
 export type Theme = 'light' | 'dark'
+export type ReadingFont = 'jakarta' | 'lexend' | 'atkinson'
+export type ReadingComfort = 'default' | 'wide'
+export type AgendaView = 'DAY' | 'WEEK' | 'MONTH' | 'INBOX'
+export type SettingsGroup = 'casal' | 'nuvem' | 'aparelho' | 'atalhos'
 
 export interface SheetState {
   kind: SheetKind
@@ -15,6 +19,7 @@ export interface Toast {
   id: number
   message: string
   undo?: () => void
+  action?: { label: string; onClick: () => void }
   tone: 'ok' | 'info' | 'warn'
 }
 
@@ -22,8 +27,13 @@ export interface UiState {
   viewer: PartnerId
   tab: Tab
   theme: Theme
+  readingFont: ReadingFont
+  readingComfort: ReadingComfort
   forcedOffline: boolean
   sheet: SheetState | null
+  agendaView?: AgendaView
+  unstuckStep?: 1 | 2 | 3
+  settingsGroup?: SettingsGroup
   toasts: Toast[]
 }
 
@@ -32,7 +42,15 @@ const TABS: Tab[] = ['hoje', 'agenda', 'nos', 'rotinas', 'financas', 'ajustes']
 
 function loadPrefs(): Partial<UiState> {
   try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as Partial<UiState>
+    const raw: unknown = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+    const value = raw as Record<string, unknown>
+    return {
+      theme: value.theme === 'light' || value.theme === 'dark' ? value.theme : undefined,
+      forcedOffline: typeof value.forcedOffline === 'boolean' ? value.forcedOffline : undefined,
+      readingFont: value.readingFont === 'lexend' || value.readingFont === 'atkinson' ? value.readingFont : 'jakarta',
+      readingComfort: value.readingComfort === 'wide' ? 'wide' : 'default',
+    }
   } catch {
     return {}
   }
@@ -53,6 +71,8 @@ export const uiStore = createStore<UiState>({
   viewer: 'A',
   tab: initialTab(),
   theme: prefs.theme ?? systemTheme(),
+  readingFont: prefs.readingFont ?? 'jakarta',
+  readingComfort: prefs.readingComfort ?? 'default',
   forcedOffline: prefs.forcedOffline ?? false,
   sheet: null,
   toasts: [],
@@ -61,11 +81,12 @@ export const uiStore = createStore<UiState>({
 uiStore.subscribe(() => {
   const s = uiStore.get()
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: s.theme, forcedOffline: s.forcedOffline }))
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: s.theme, forcedOffline: s.forcedOffline, readingFont: s.readingFont, readingComfort: s.readingComfort }))
   } catch {
     /* armazenamento indisponível: preferências ficam só na sessão */
   }
   applyTheme(s.theme)
+  applyReading(s.readingFont, s.readingComfort)
 })
 
 let appliedTheme: Theme | null = null
@@ -86,6 +107,17 @@ export function applyTheme(theme: Theme) {
   })
 }
 
+/** Preferência de leitura é deste aparelho e também vale na tela de entrada. */
+let appliedReading: string | null = null
+export function applyReading(font: ReadingFont, comfort: ReadingComfort) {
+  if (typeof document === 'undefined') return
+  const value = `${font}/${comfort}`
+  if (value === appliedReading) return
+  appliedReading = value
+  document.documentElement.dataset.font = font
+  document.documentElement.dataset.reading = comfort
+}
+
 export const useUi = <S>(sel: (s: UiState) => S) => useStore(uiStore, sel)
 
 let toastSeq = 0
@@ -104,11 +136,34 @@ export const ui = {
   setTheme(theme: Theme) {
     uiStore.set((s) => ({ ...s, theme }))
   },
+  setReadingFont(readingFont: ReadingFont) {
+    uiStore.set((s) => s.readingFont === readingFont ? s : { ...s, readingFont })
+  },
+  setReadingComfort(readingComfort: ReadingComfort) {
+    uiStore.set((s) => s.readingComfort === readingComfort ? s : { ...s, readingComfort })
+  },
+  setAgendaView(agendaView: AgendaView) {
+    uiStore.set((s) => ({ ...s, agendaView }))
+  },
+  openInbox() {
+    ui.setAgendaView('INBOX')
+    ui.setTab('agenda')
+  },
+  setSettingsGroup(settingsGroup: SettingsGroup) {
+    uiStore.set((s) => ({ ...s, settingsGroup }))
+  },
+  openSettings(settingsGroup: SettingsGroup) {
+    ui.setSettingsGroup(settingsGroup)
+    ui.setTab('ajustes')
+  },
   setForcedOffline(forcedOffline: boolean) {
     uiStore.set((s) => ({ ...s, forcedOffline }))
   },
   openSheet(kind: SheetKind, params: Record<string, string> = {}) {
-    uiStore.set((s) => ({ ...s, sheet: { kind, params } }))
+    uiStore.set((s) => ({ ...s, sheet: { kind, params }, unstuckStep: 1 }))
+  },
+  setUnstuckStep(unstuckStep: 1 | 2 | 3) {
+    uiStore.set((s) => ({ ...s, unstuckStep }))
   },
   /** Mesmo comportamento dos atalhos ?quick=, sem recarregar a página (a sessão em memória continua aberta) */
   launchQuick(kind: SheetKind, params: Record<string, string> = {}) {
@@ -118,9 +173,9 @@ export const ui = {
   closeSheet() {
     uiStore.set((s) => (s.sheet ? { ...s, sheet: null } : s))
   },
-  toast(message: string, opts: { undo?: () => void; tone?: Toast['tone'] } = {}) {
+  toast(message: string, opts: { undo?: () => void; action?: Toast['action']; tone?: Toast['tone'] } = {}) {
     const id = ++toastSeq
-    const t: Toast = { id, message, tone: opts.tone ?? 'ok', ...(opts.undo ? { undo: opts.undo } : {}) }
+    const t: Toast = { id, message, tone: opts.tone ?? 'ok', ...(opts.undo ? { undo: opts.undo } : {}), ...(opts.action ? { action: opts.action } : {}) }
     uiStore.set((s) => ({ ...s, toasts: [...s.toasts.slice(-2), t] }))
     timers.set(
       id,

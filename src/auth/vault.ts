@@ -199,6 +199,8 @@ export async function createSingleVault(
   data: DataState,
   iterations = PBKDF2_ITERATIONS,
 ): Promise<{ vault: Vault; key: CryptoKey }> {
+  const weak = validatePassword(password, { name: people[who].name })
+  if (weak) throw new AuthError('WEAK_PASSWORD', weak)
   const dek = await generateDek()
   const other: PartnerId = who === 'A' ? 'B' : 'A'
   const slots = {

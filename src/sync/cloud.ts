@@ -2,8 +2,9 @@ import { isSingleDevice, onSessionChange, readCloudSecret, setupFromCloud, useAu
 import { validatePassword } from '../auth/vault'
 import { applyRemote, purgeUnauthorized, type VisibleIds } from '../domain/merge'
 import type { SyncAdapter } from '../domain/outbox'
-import { buildEmpty, uuid } from '../domain/seed'
-import { COLLECTIONS, type CollectionName, type CycleSettings, type DataState, type PartnerId, type Profile } from '../domain/types'
+import { buildEmpty, normalizeState, uuid } from '../domain/seed'
+import { canViewFocusSession } from '../domain/together'
+import { COLLECTIONS, type CollectionName, type CycleSettings, type DataState, type FocusSession, type PartnerId, type Profile } from '../domain/types'
 import { createStore, useStore } from '../store/createStore'
 import { dataStore, enqueueAll } from '../store/data'
 import {
@@ -144,6 +145,13 @@ export const cloudAdapter: SyncAdapter = {
       // tabela ainda não existe no servidor: fica na fila até o schema novo ser aplicado
       if (missingTables.has(e.entityType)) continue
       try {
+        if (e.entityType === 'focusSessions' && e.operation === 'UPSERT') {
+          const who = authStore.get().who
+          if (!who || !canViewFocusSession(e.payload as FocusSession, who, dataStore.get().tasks)) {
+            accepted.push(e.id)
+            continue
+          }
+        }
         if (e.operation === 'DELETE') await softDelete(cfg, token, e.entityType, e.entityId, space)
         else {
           // perfil do par: só cria se ainda não existe; alterar é com o aparelho do par (profiles_update)
@@ -226,6 +234,7 @@ export async function pull(): Promise<number> {
         meds: await listIds(cfg, token, 'meds', space),
         cycleSettings: await listIdsSafe('cycleSettings', token, space),
         cycleLogs: await listIdsSafe('cycleLogs', token, space),
+        focusSessions: await listIdsSafe('focusSessions', token, space),
       }
     : {}
   if (secret !== from) return 0 // sessão fechada ou trocada durante o download
@@ -239,7 +248,7 @@ export async function pull(): Promise<number> {
       state = r.state
       changed += r.changed
     }
-    return who && single ? purgeUnauthorized(state, who, { visible, protect, since }) : state
+    return normalizeState(who && single ? purgeUnauthorized(state, who, { visible, protect, since }) : state)
   })
   if (cursor !== from.cursor) {
     secret = { ...from, ...(secret ?? {}), cursor }
@@ -279,7 +288,7 @@ export async function connect(mode: 'signup' | 'signin', email: string, password
       space = mine.couple_id
     } else if (who === 'A' && !space) {
       space = uuid()
-      await rpc(cfg, s.accessToken, 'create_couple', { p_couple_id: space, p_split_mode: couple.splitMode, p_ratio_a_bps: couple.ratioABps })
+      await rpc(cfg, s.accessToken, 'create_couple', { p_couple_id: space, p_split_mode: couple.splitMode, p_ratio_a_bps: couple.ratioABps, p_mode: couple.mode ?? 'COUPLE' })
     } else if (space) {
       const joined = await rpc<Membership[]>(cfg, s.accessToken, 'join_couple', { p_code: couple.inviteCode })
       if (joined?.[0]?.partner_id !== who) throw new Error('O convite deste espaço é de outra pessoa.')
@@ -294,7 +303,7 @@ export async function connect(mode: 'signup' | 'signin', email: string, password
     await persist()
     // o par ainda não entrou na nuvem: registra o convite (só o hash fica no servidor)
     const partner: PartnerId = who === 'A' ? 'B' : 'A'
-    if (who === 'A' && authStore.get().people?.[partner].status !== 'absent' && !mine) {
+    if (who === 'A' && couple.mode !== 'SOLO' && couple.inviteCode && authStore.get().people?.[partner].status !== 'absent' && !mine) {
       await rpc(cfg, s.accessToken, 'create_invite', { p_code: couple.inviteCode }).catch(() => undefined)
     }
     enqueueAll(who)
@@ -316,7 +325,18 @@ export async function cloudRpc<T>(name: string, args: Record<string, unknown>): 
 
 export async function publishInvite(code: string) {
   const token = await accessToken()
-  if (cfg && token) await rpc(cfg, token, 'create_invite', { p_code: code }).catch(() => undefined)
+  const couple = dataStore.get().couple.couple
+  const who = authStore.get().who
+  if (!cfg || !token || !who || !couple?.spaceId || couple.mode === 'SOLO') return
+  // A promoção local pode ainda estar na fila: publique o modo antes de registrar o convite.
+  await upsertRow(cfg, token, 'couple', toRow('couple', couple, couple.spaceId))
+  const partner: PartnerId = who === 'A' ? 'B' : 'A'
+  const profile = dataStore.get().profiles[partner]
+  if (profile && authStore.get().people?.[partner].status === 'invited') {
+    // O Solo já pode ter enviado um perfil vazio. Só antes do par entrar o RLS permite substituí-lo.
+    await upsertRow(cfg, token, 'profiles', toRow('profiles', profile, couple.spaceId))
+  }
+  await rpc(cfg, token, 'create_invite', { p_code: code })
 }
 
 export async function disconnect() {
@@ -348,7 +368,7 @@ async function downloadAll(token: string, space: string): Promise<DataState> {
   if (!state.profiles.A || !state.profiles.B || !state.couple.couple?.spaceId) {
     throw new Error('O espaço na nuvem ainda não tem os perfis. Peça para quem criou abrir o app conectado.')
   }
-  return { ...state, lastSyncedAt: cursor }
+  return normalizeState({ ...state, lastSyncedAt: cursor })
 }
 
 export interface NewDeviceInput {

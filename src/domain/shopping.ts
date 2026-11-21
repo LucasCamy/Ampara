@@ -1,4 +1,4 @@
-import type { ShopCategory, ShoppingItem } from './types'
+import type { ShopCategory, ShoppingItem, TxCategory } from './types'
 
 /** Lista de compras: captura em uma linha ("2 kg arroz", "leite x3"), sem duplicar, agrupada por loja */
 
@@ -48,6 +48,25 @@ const norm = (s: string) =>
 export function findDuplicate(items: ShoppingItem[], title: string): ShoppingItem | undefined {
   const t = norm(title)
   return items.find((i) => !i.checked && norm(i.title) === t)
+}
+
+/** Uma reposição aberta continua sendo a mesma, mesmo se o nome do remédio mudou. */
+export function findMedicationItem(items: ShoppingItem[], medicationId: string): ShoppingItem | undefined {
+  return items.find((i) => !i.checked && i.sourceMedicationId === medicationId)
+}
+
+/** Contexto de captura do gasto: só os itens que já estão no carrinho, sem inventar um valor. */
+export function shoppingExpenseDraft(items: ShoppingItem[]): { title: string; category: TxCategory; ids: string[] } | null {
+  const checked = items.filter((i) => i.checked)
+  if (!checked.length) return null
+  const category = checked.every((i) => i.category === checked[0]!.category) ? checked[0]!.category : 'OTHER'
+  const draft: Record<ShopCategory, { title: string; category: TxCategory }> = {
+    MARKET: { title: 'Compras do mercado', category: 'MARKET' },
+    PHARMACY: { title: 'Compras da farmácia', category: 'HEALTH' },
+    HOME: { title: 'Compras para casa', category: 'HOME' },
+    OTHER: { title: 'Compras', category: 'OTHER' },
+  }
+  return { ...draft[category], ids: checked.map((i) => i.id) }
 }
 
 export interface ShoppingView {

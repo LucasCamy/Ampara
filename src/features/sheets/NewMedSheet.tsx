@@ -8,12 +8,13 @@ import { PACK_KINDS, type PackKind } from '../../domain/pillPack'
 import { deleteMedication, saveMedication } from '../../store/actions'
 import { useNow } from '../../store/clock'
 import { dataStore } from '../../store/data'
-import { usePeople } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { DeleteButton, TimesField } from './fields'
 import { SHEET_FORM } from './forms'
 
 /** Novo remédio, ou edição quando recebe `id` (só remédios próprios) */
 export function NewMedSheet({ id, onDone }: { id?: string; onDone: () => void }) {
+  const isSolo = useIsSolo()
   const { partner } = usePeople()
   const today = toDateKey(useNow())
   const [form, setForm] = useState<MedicationInput>(() => {
@@ -34,7 +35,7 @@ export function NewMedSheet({ id, onDone }: { id?: string; onDone: () => void })
     const next = validateMedication(form, today)
     setErrors(next)
     if (hasErrors(next)) return
-    if (saveMedication(form, id)) onDone()
+    if (saveMedication({ ...form, shareWithPartner: !isSolo && form.shareWithPartner }, id)) onDone()
   }
 
   return (
@@ -77,7 +78,7 @@ export function NewMedSheet({ id, onDone }: { id?: string; onDone: () => void })
         placeholder={isPack ? 'Ex.: 63 (3 cartelas)' : 'Ex.: 30'}
         testId="new-med-stock"
       />
-      <div className="rounded-[20px] bg-subtle p-4">
+      {!isSolo ? <div className="rounded-[20px] bg-subtle p-4">
         <Switch
           checked={form.shareWithPartner}
           onChange={set('shareWithPartner')}
@@ -85,7 +86,7 @@ export function NewMedSheet({ id, onDone }: { id?: string; onDone: () => void })
           label="Rede de apoio do par (+30 min)"
           description={`Se você atrasar mais de 30 min, ${firstName(partner.displayName)} recebe um aviso gentil. Desligado, só você vê este remédio.`}
         />
-      </div>
+      </div> : null}
       {id ? <DeleteButton label="Excluir remédio" testId="new-med-delete" onClick={() => deleteMedication(id) && onDone()} /> : null}
     </form>
   )

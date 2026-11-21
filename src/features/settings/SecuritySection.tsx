@@ -4,6 +4,7 @@ import { changeMyPassword, lock, reinvitePartner, useAuth, wipeDevice } from '..
 import { validatePassword } from '../../auth/vault'
 import { Actions, Button, cx, FieldError, SectionHeader, StatusBadge } from '../../components/ui'
 import { ui } from '../../store/ui'
+import { useIsSolo } from '../../store/hooks'
 import { publishInvite } from '../../sync/cloud'
 
 type Panel = null | 'password' | 'reinvite' | 'wipe'
@@ -34,6 +35,7 @@ function PwInput({ label, value, onChange, error, testId, autoComplete }: { labe
 
 /** Segurança da conta: troca de senha, recuperação do par e apagar o aparelho, sempre com a senha de novo */
 export function SecuritySection({ partnerName }: { partnerName: string }) {
+  const isSolo = useIsSolo()
   const remembered = useAuth((s) => s.remembered)
   const [panel, setPanel] = useState<Panel>(null)
   const [current, setCurrent] = useState('')
@@ -83,9 +85,9 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
         <Button block variant={panel === 'password' ? 'secondary' : 'quiet'} icon={KeyRound} onClick={() => reset(panel === 'password' ? null : 'password')} aria-expanded={panel === 'password'}>
           Trocar senha
         </Button>
-        <Button block variant={panel === 'reinvite' ? 'secondary' : 'quiet'} icon={UserPlus} onClick={() => reset(panel === 'reinvite' ? null : 'reinvite')} aria-expanded={panel === 'reinvite'}>
+        {!isSolo ? <Button block variant={panel === 'reinvite' ? 'secondary' : 'quiet'} icon={UserPlus} onClick={() => reset(panel === 'reinvite' ? null : 'reinvite')} aria-expanded={panel === 'reinvite'}>
           Novo convite para {partnerName}
-        </Button>
+        </Button> : null}
       </Actions>
 
       {panel === 'password' ? (
@@ -130,8 +132,12 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
             onSubmit={(e) =>
               run(e, async () => {
                 const code = await reinvitePartner(current)
-                await publishInvite(code)
                 setInvite(code)
+                try {
+                  await publishInvite(code)
+                } catch {
+                  ui.toast('O novo convite vale neste aparelho. A nuvem não recebeu o código; tente gerar outro quando estiver conectado.', { tone: 'warn' })
+                }
               })
             }
           >
@@ -151,7 +157,7 @@ export function SecuritySection({ partnerName }: { partnerName: string }) {
             noValidate
             onSubmit={(e) => run(e, () => wipeDevice(current))}
           >
-            <p className="text-[14px] font-semibold text-ink">Apagar o espaço do casal deste aparelho? Não dá para desfazer.</p>
+            <p className="text-[14px] font-semibold text-ink">Apagar {isSolo ? 'seu espaço' : 'o espaço do casal'} deste aparelho? Não dá para desfazer.</p>
             <PwInput label="Confirme com sua senha" value={current} onChange={setCurrent} error={errors.current} autoComplete="current-password" />
             <div className="flex flex-col gap-2">
               <Button block type="submit" variant="secondary" className="border-err text-err" busy={busy}>

@@ -194,6 +194,7 @@ test.describe('Ampara', () => {
     await input.fill('Comprar lâmpada offline')
     await input.press('Enter')
     await expect(pill).toHaveText(/Offline · 1/)
+    await expect(pill).toHaveAttribute('data-local-save', 'saved')
 
     await page.reload()
     await goTab(page, 'agenda')

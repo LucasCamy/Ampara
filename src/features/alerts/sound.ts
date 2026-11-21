@@ -45,6 +45,8 @@ const MOTIFS: Record<AlertSound, Note[]> = {
     { f: 1568, at: 0.02, d: 0.5, bell: true },
   ],
   home: [{ f: 600, at: 0, d: 0.05 }],
+  event: [{ f: 587, at: 0, d: 0.2 }, { f: 740, at: 0.24, d: 0.28 }],
+  ritual: [{ f: 440, at: 0, d: 0.45, bell: true }],
 }
 
 const GAIN: Record<AlertVolume, number> = { LOW: 0.08, MEDIUM: 0.18, HIGH: 0.32 }

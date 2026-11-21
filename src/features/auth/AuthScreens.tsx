@@ -4,7 +4,7 @@ import { activate, enterApp, login, lockedUntil, setup, useAuth, type PersonHead
 import { validatePassword } from '../../auth/vault'
 import { Button, ChoiceChips, cx, FieldError, Segmented, Switch, Title } from '../../components/ui'
 import { enterFromCloud, useCloud } from '../../sync/cloud'
-import type { PartnerId, Pronoun, SplitMode } from '../../domain/types'
+import type { PartnerId, Pronoun, SpaceMode, SplitMode } from '../../domain/types'
 import { ThemeToggle } from '../shell/TopBar'
 import { Bone } from '../../components/Skeleton'
 import { RestoreForm } from '../settings/BackupSection'
@@ -105,7 +105,7 @@ const PRONOUNS: { value: Pronoun; label: string }[] = [
   { value: 'ela', label: 'Ela' },
 ]
 
-/* ---------- T01: criar o espaço do casal ---------- */
+/* ---------- T01: criar o espaço ---------- */
 
 export function SetupScreen() {
   const cloudOn = useCloud((s) => s.configured)
@@ -193,6 +193,9 @@ function CloudEntryScreen({ onBack }: { onBack: () => void }) {
 
 function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => void }) {
   const hasLegacy = useAuth((s) => s.hasLegacyData)
+  const [spaceMode, setSpaceMode] = useState<SpaceMode>('COUPLE')
+  const [cycle, setCycle] = useState(false)
+  const isSolo = spaceMode === 'SOLO'
   const [restoring, setRestoring] = useState(false)
   const [name, setName] = useState('')
   const [pronoun, setPronoun] = useState<Pronoun>('ele')
@@ -211,7 +214,7 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
     e.preventDefault()
     const next: Record<string, string | null> = {
       name: name.trim() ? null : 'Como você quer ser chamado(a)?',
-      partner: partner.trim() ? null : 'Qual o nome do seu par?',
+      partner: isSolo || partner.trim() ? null : 'Qual o nome do seu par?',
       pw: validatePassword(pw, { name }),
       pw2: pw2 === pw ? null : 'As senhas não são iguais.',
     }
@@ -219,14 +222,20 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
     if (Object.values(next).some(Boolean)) return
     setBusy(true)
     try {
-      await setup({
-        a: { name: name.trim(), pronoun, password: pw },
-        b: { name: partner.trim(), pronoun: partnerPronoun },
-        splitMode: split,
-        shareA: share,
-        demo,
-        remember,
-      })
+      const a = { name: name.trim(), pronoun, password: pw }
+      if (isSolo) {
+        await setup({ mode: 'SOLO', cycle, a, remember })
+      } else {
+        await setup({
+          mode: 'COUPLE',
+          a,
+          b: { name: partner.trim(), pronoun: partnerPronoun },
+          splitMode: split,
+          shareA: share,
+          demo,
+          remember,
+        })
+      }
     } catch (err) {
       setErrors({ form: err instanceof Error ? err.message : 'Não foi possível criar o espaço.' })
       setBusy(false)
@@ -235,14 +244,14 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
 
   return (
     <Shell>
-      <Title size="xl" anchor="Bem-vindos ao Ampara." rest="Menos peso mental, mais parceria." />
+      <Title size="xl" anchor="Seu espaço no Ampara." rest="Menos peso mental, mais cuidado." />
       <p className="mt-3 text-[15px] text-muted">
-        Tudo fica cifrado neste aparelho. Sem a senha, ninguém abre os dados de vocês, nem quem pegar o celular.
+        Tudo fica cifrado neste aparelho. Sem a senha, ninguém abre seus dados, nem quem pegar o celular.
       </p>
       {cloudOn ? (
         <div className="card mt-5 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="min-w-0 flex-1 basis-[200px] text-[14px] text-ink">
-            <strong>Seu par já usa o Ampara?</strong> Entre com o convite ou com sua conta.
+            <strong>Já usa o Ampara?</strong> Entre com sua conta ou com um convite.
           </p>
           <Button variant="quiet" icon={Cloud} className="w-full sm:w-auto" onClick={onCloud} data-testid="setup-cloud">
             Entrar pela nuvem
@@ -265,6 +274,20 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
         ) : null}
       </div>
       <form onSubmit={submit} noValidate className="module mt-6 flex flex-col gap-5 p-4 sm:p-6" data-testid="setup-form">
+        <Segmented<SpaceMode>
+          label="Como você quer usar o Ampara?"
+          hideLabel={false}
+          value={spaceMode}
+          onChange={(value) => {
+            setSpaceMode(value)
+            setErrors({})
+          }}
+          stretch
+          options={[
+            { value: 'SOLO', label: 'Só para mim', testId: 'setup-mode-solo' },
+            { value: 'COUPLE', label: 'Para um casal', testId: 'setup-mode-couple' },
+          ]}
+        />
         <div className="flex flex-col gap-4">
           <h2 className="text-[16px] font-bold text-ink">Você</h2>
           <TextField label="Seu nome" value={name} onChange={setName} error={errors.name} autoComplete="given-name" testId="setup-name" autoFocus />
@@ -283,14 +306,14 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
           <TextField label="Repita a senha" type="password" value={pw2} onChange={setPw2} error={errors.pw2} autoComplete="new-password" testId="setup-password2" maxLength={128} />
         </div>
 
-        <div className="flex flex-col gap-4 border-t border-line pt-5">
+        {!isSolo ? <div className="flex flex-col gap-4 border-t border-line pt-5">
           <h2 className="text-[16px] font-bold text-ink">Seu par</h2>
           <TextField label="Nome do seu par" value={partner} onChange={setPartner} error={errors.partner} testId="setup-partner" />
           <ChoiceChips label="Como falar do seu par" value={partnerPronoun} onChange={setPartnerPronoun} options={PRONOUNS} />
           <p className="text-[13px] text-muted">Seu par cria a própria senha no primeiro acesso, com um código de convite que aparece no próximo passo.</p>
-        </div>
+        </div> : null}
 
-        <div className="flex flex-col gap-4 border-t border-line pt-5">
+        {!isSolo ? <div className="flex flex-col gap-4 border-t border-line pt-5">
           <h2 className="text-[16px] font-bold text-ink">Combinados</h2>
           <ChoiceChips<SplitMode>
             label="Como vocês dividem os gastos da casa?"
@@ -317,11 +340,24 @@ function LocalSetup({ cloudOn, onCloud }: { cloudOn: boolean; onCloud: () => voi
             label="Manter conectado neste aparelho (14 dias)"
             description="Desligado: o app bloqueia após 15 min sem uso e a cada vez que abrir."
           />
-        </div>
+        </div> : (
+          <div className="border-t border-line pt-5">
+            <Switch
+              checked={cycle}
+              onChange={setCycle}
+              testId="setup-cycle"
+              label="Acompanhar meu ciclo menstrual"
+              description="Opcional. Você pode ativar ou desativar os módulos depois, em Ajustes."
+            />
+            {hasLegacy ? (
+              <p className="mt-3 text-[13px] text-muted">Este aparelho tem dados antigos de casal. Escolha Para um casal para cifrá-los e continuar.</p>
+            ) : null}
+          </div>
+        )}
 
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
         <Button type="submit" variant="primary" size="lg" busy={busy} data-testid="setup-submit" className="w-full">
-          {busy ? 'Protegendo os dados...' : 'Criar nosso espaço'}
+          {busy ? 'Protegendo os dados...' : isSolo ? 'Criar meu espaço' : 'Criar nosso espaço'}
         </Button>
       </form>
     </Shell>

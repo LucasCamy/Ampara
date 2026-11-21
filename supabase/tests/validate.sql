@@ -28,11 +28,17 @@ begin
    where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f);
   assert missing is null, 'FALHOU: funções ausentes: ' || coalesce(missing, '');
 
+  select string_agg(v.tbl || '.' || v.col, ', ') into missing
+    from (values ('couples','mode'), ('profiles','monthly_budget_cents'), ('profiles','enabled_modules'),
+                 ('tasks','steps'), ('tasks','postpone_count')) v(tbl, col)
+   where not exists (select 1 from information_schema.columns c where c.table_schema = 'public' and c.table_name = v.tbl and c.column_name = v.col);
+  assert missing is null, 'FALHOU: colunas do modo dual ausentes: ' || coalesce(missing, '');
+
   -- regra 11: política "for all" também libera SELECT; tabelas com privacidade só têm política por comando
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('couples','profiles','help_requests','nudges','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences');
+     and tablename in ('couples','profiles','help_requests','nudges','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences','focus_sessions');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
 \echo 'ok  estrutura: 24 tabelas, RLS ligado em todas, 9 funções'
@@ -80,6 +86,8 @@ insert into transactions (id, couple_id, created_by, paid_by, scope, is_secret_g
 do $$ begin
   assert (select count(*) from transactions) = 3, 'FALHOU: o autor deveria ver os 3 lançamentos dele';
   assert (select my_partner_id()) = 'A', 'FALHOU: quem cria o espaço deveria ser o Parceiro A';
+  assert (select mode from couples) = 'COUPLE', 'FALHOU: assinatura antiga não criou espaço de casal';
+  assert not exists (select 1 from tasks where steps <> '[]'::jsonb or postpone_count <> 0), 'FALHOU: tarefas antigas perderam os padrões';
 end $$;
 \echo 'ok  Lucas criou espaço, convite, perfis, tarefas, evento, remédios, dose e 3 lançamentos'
 
@@ -501,6 +509,11 @@ select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-0000000
 insert into savings_goals (id, couple_id, title, target_cents, created_by) values ('99999999-0000-4000-8000-000000000001', 'space-teste', 'Viagem', 600000, 'A');
 insert into focus_sessions (id, couple_id, started_by, title, duration_min, started_at, ends_at, status) values
   ('99999999-0000-4000-8000-000000000002', 'space-teste', 'A', 'Louça', 25, now(), now() + interval '25 minutes', 'RUNNING');
+insert into tasks (id, couple_id, created_by, assigned_to, title, effort, status, visible_to_partner)
+  values ('99999999-0000-4000-8000-000000000003', 'space-teste', 'A', 'A', 'Tarefa privada no foco', 'FOCUS', 'PENDING', false);
+insert into focus_sessions (id, couple_id, started_by, title, task_id, duration_min, started_at, ends_at, joined_by, status) values
+  ('99999999-0000-4000-8000-000000000004', 'space-teste', 'A', 'Micro-passo privado individual', '99999999-0000-4000-8000-000000000003', 5, now(), now() + interval '5 minutes', 'A', 'RUNNING'),
+  ('99999999-0000-4000-8000-000000000005', 'space-teste', 'A', 'Foco conjunto antigo ligado a tarefa privada', '99999999-0000-4000-8000-000000000003', 25, now(), now() + interval '25 minutes', null, 'RUNNING');
 
 reset role;
 set local role authenticated;
@@ -510,11 +523,40 @@ update focus_sessions set joined_by = 'B' where id = '99999999-0000-4000-8000-00
 do $$ begin
   assert (select saved_cents from savings_goals) = 15000, 'FALHOU: ela não guardou na caixinha do casal';
   assert (select joined_by from focus_sessions) = 'B', 'FALHOU: ela não entrou na sessão';
+  assert (select count(*) from focus_sessions) = 1, 'FALHOU: foco individual ou tarefa privada vazou para o par';
+  update focus_sessions set title = 'Indevido', status = 'DONE' where id = '99999999-0000-4000-8000-000000000004';
+  delete from focus_sessions where id in ('99999999-0000-4000-8000-000000000004', '99999999-0000-4000-8000-000000000005');
+  begin
+    update focus_sessions set started_by = 'B' where id = '99999999-0000-4000-8000-000000000002';
+    raise exception 'FALHOU: par alterou autoria do foco conjunto';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update focus_sessions set joined_by = 'A' where id = '99999999-0000-4000-8000-000000000002';
+    raise exception 'FALHOU: par converteu foco conjunto em individual do outro';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into focus_sessions (id, couple_id, started_by, title, duration_min, started_at, ends_at, status)
+      values ('99999999-0000-4000-8000-000000000006', 'space-teste', 'A', 'Convite forjado pelo par', 5, now(), now() + interval '5 minutes', 'RUNNING');
+    raise exception 'FALHOU: par criou foco em nome da outra pessoa';
+  exception when insufficient_privilege then null;
+  end;
   begin
     update savings_goals set saved_cents = -1;
     raise exception 'FALHOU: caixinha ficou negativa';
   exception when check_violation then null;
   end;
+end $$;
+-- O adaptador usa upsert também para entrar em um foco que o autor já subiu.
+insert into focus_sessions (id, couple_id, started_by, title, duration_min, started_at, ends_at, joined_by, status)
+  values ('99999999-0000-4000-8000-000000000002', 'space-teste', 'A', 'Louça juntos', 25, now(), now() + interval '25 minutes', 'B', 'RUNNING')
+  on conflict (id) do update set title = excluded.title, joined_by = excluded.joined_by;
+reset role;
+do $$ begin
+  assert (select title from focus_sessions where id = '99999999-0000-4000-8000-000000000004') = 'Micro-passo privado individual', 'FALHOU: par alterou ou apagou foco individual';
+  assert exists(select 1 from focus_sessions where id = '99999999-0000-4000-8000-000000000005'), 'FALHOU: par apagou foco ligado a tarefa privada';
+  assert (select title from focus_sessions where id = '99999999-0000-4000-8000-000000000002') = 'Louça juntos', 'FALHOU: upsert do par não atualizou o foco conjunto';
 end $$;
 
 reset role;
@@ -530,7 +572,7 @@ reset role;
 insert into push_config (id, public_key, private_key) values (1, 'chave-publica-teste', 'chave-privada-teste') on conflict (id) do nothing;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
-select save_push_subscription('https://push.exemplo.test/ela-1', 'p256dh-dela', 'auth-dela', 'America/Sao_Paulo', false) as _ \gset
+select save_push_subscription('https://push.exemplo.test/ela-1', 'p256dh-dela', 'auth-dela', 'America/Sao_Paulo', false, '{"off":["home"]}'::jsonb) as _ \gset
 do $$ begin
   assert (select count(*) from push_subscriptions) = 1, 'FALHOU: ela não vê a própria inscrição';
   assert (select prefs->'off'->>0 from push_subscriptions) = 'home', 'FALHOU: preferências de aviso não gravadas';
@@ -618,12 +660,19 @@ end $$;
 
 -- ---------------------------------------------------------------- 6i. papel do worker: só o que os lembretes precisam
 reset role;
+insert into transactions (id, couple_id, created_by, paid_by, scope, type, status, amount_cents, category, description, partner_a_share_cents, partner_b_share_cents, competence_date)
+values ('cccc1111-0000-4000-8000-000000000001', 'space-teste', 'B', 'B', 'PERSONAL', 'EXPENSE', 'PREDICTED_DASHED', 3500, 'HEALTH', 'Conta pessoal inscrita', 0, 3500, current_date),
+       ('cccc1111-0000-4000-8000-000000000002', 'space-teste', 'A', 'A', 'PERSONAL', 'EXPENSE', 'PREDICTED_DASHED', 3500, 'HEALTH', 'Conta sem inscrição', 3500, 0, current_date);
+insert into events (id, couple_id, title, date, start, "end", kind, owner_id)
+values ('cccc2222-0000-4000-8000-000000000001', 'space-teste', 'Consulta da pessoa inscrita', current_date, '09:00', '10:00', 'HEALTH', 'B');
 set local role ampara_worker;
 do $$ begin
   assert (select count(*) from medications) >= 2, 'FALHOU: worker não lê os remédios de todos os casais';
   assert (select count(*) from profiles) >= 2, 'FALHOU: worker não lê os nomes';
   perform 1 from medication_logs; perform 1 from help_requests; perform 1 from push_subscriptions;
   perform 1 from nudges; perform 1 from focus_sessions;
+  assert exists(select 1 from focus_sessions where id = '99999999-0000-4000-8000-000000000002'), 'FALHOU: worker deixou de ler foco compartilhado';
+  assert not exists(select 1 from focus_sessions where id in ('99999999-0000-4000-8000-000000000004', '99999999-0000-4000-8000-000000000005')), 'FALHOU: worker leu foco individual ou título de tarefa privada';
   begin
     perform 1 from mood_checkins;
     raise exception 'FALHOU: worker leu o check-in';
@@ -631,9 +680,30 @@ do $$ begin
   end;
   insert into push_sent (key) values ('teste-worker');
   delete from push_sent where key = 'teste-worker';
+  assert (select mode from couples where id = 'space-teste') = 'COUPLE', 'FALHOU: worker não leu modo do espaço inscrito';
+  assert exists (select 1 from transactions where id = 'cccc1111-0000-4000-8000-000000000001'), 'FALHOU: worker não leu vencimento pessoal da pessoa inscrita';
+  assert not exists (select 1 from transactions where status <> 'PREDICTED_DASHED' or type <> 'EXPENSE'), 'FALHOU: worker viu histórico financeiro confirmado ou receita';
+  assert not exists (select 1 from transactions where id = 'cccc1111-0000-4000-8000-000000000002'), 'FALHOU: worker leu conta pessoal sem inscrição';
+  assert exists (select 1 from events where id = 'cccc2222-0000-4000-8000-000000000001'), 'FALHOU: worker não leu compromisso da pessoa inscrita';
+  assert not exists (select 1 from events where id = '22222222-0000-4000-8000-000000000002'), 'FALHOU: worker leu compromisso privado sem inscrição';
   begin
-    perform 1 from transactions;
-    raise exception 'FALHOU: worker leu lançamentos';
+    perform amount_cents from transactions;
+    raise exception 'FALHOU: worker leu valores financeiros';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform monthly_budget_cents from profiles;
+    raise exception 'FALHOU: worker leu teto mensal pessoal';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform invite_code from couples;
+    raise exception 'FALHOU: worker leu convite do espaço';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update events set title = 'invadido';
+    raise exception 'FALHOU: worker alterou compromisso';
   exception when insufficient_privilege then null;
   end;
   begin
@@ -658,7 +728,74 @@ do $$ begin
   end;
 end $$;
 reset role;
-\echo 'ok  worker: lê remédios, doses, ajuda, lembretes carinhosos, foco e nomes; não lê lançamentos, ciclo, presentes nem check-in; não altera nada do casal'
+\echo 'ok  worker: lê somente lembretes necessários, vencimentos sem valores e compromissos inscritos; não lê histórico, ciclo, presentes nem check-in; não altera dados do espaço'
+
+-- ---------------------------------------------------------------- 6j. Solo, campos novos e promoção preservando dados
+reset role;
+insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values ('eeeeeeee-0000-4000-8000-00000000000e', 'authenticated', 'authenticated', 'solo@teste.local', '', now(), now(), now()),
+       ('ffffffff-0000-4000-8000-00000000000f', 'authenticated', 'authenticated', 'par-solo@teste.local', '', now(), now(), now());
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-00000000000e","role":"authenticated"}', true) as _ \gset
+select create_couple('space-solo', '50_50', 5000, 'SOLO') as _ \gset
+insert into profiles (id, couple_id, display_name, pronoun, energy, monthly_budget_cents, enabled_modules)
+values ('A', 'space-solo', 'Pessoa Solo', 'ele', 'FULL', 180000, '{"cycle":false,"shopping":true,"goals":true}');
+insert into tasks (id, couple_id, created_by, assigned_to, title, effort, status, due_date, visible_to_partner, steps, postpone_count)
+values ('eeee1111-0000-4000-8000-000000000001', 'space-solo', 'A', 'A', 'Separar documentos', 'FOCUS', 'PENDING', current_date, false,
+        '[{"id":"passo-1","text":"Abrir a pasta","done":true}]', 3);
+insert into transactions (id, couple_id, created_by, paid_by, scope, type, status, amount_cents, category, description,
+                          partner_a_share_cents, partner_b_share_cents, competence_date)
+values ('eeee2222-0000-4000-8000-000000000001', 'space-solo', 'A', 'A', 'PERSONAL', 'EXPENSE', 'PREDICTED_DASHED', 3500, 'HEALTH', 'Farmácia', 3500, 0, current_date);
+do $$ begin
+  assert (select mode from couples) = 'SOLO' and (select count(*) from couple_members) = 1, 'FALHOU: Solo não ficou com apenas a pessoa A';
+  assert (select monthly_budget_cents from profiles) = 180000 and (select enabled_modules->>'cycle' from profiles) = 'false', 'FALHOU: preferências Solo não foram persistidas';
+  assert (select postpone_count from tasks) = 3 and (select steps->0->>'done' from tasks) = 'true', 'FALHOU: micro-passos ou contagem não persistiram';
+  begin
+    perform create_invite('SOLOA-TESTE');
+    raise exception 'FALHOU: Solo publicou convite antes da promoção';
+  exception when raise_exception then
+    if sqlerrm like 'FALHOU%' then raise; end if;
+  end;
+  begin
+    update couples set mode = 'INVALID';
+    raise exception 'FALHOU: aceitou modo inválido';
+  exception when check_violation then null;
+  end;
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"cccccccc-0000-4000-8000-00000000000c","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select count(*) from couples where id = 'space-solo') = 0, 'FALHOU: conta de fora viu espaço Solo';
+  assert (select count(*) from profiles where couple_id = 'space-solo') + (select count(*) from tasks where couple_id = 'space-solo') +
+         (select count(*) from transactions where couple_id = 'space-solo') = 0, 'FALHOU: conta de fora viu dados Solo';
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-00000000000e","role":"authenticated"}', true) as _ \gset
+update couples set mode = 'COUPLE' where id = 'space-solo';
+insert into profiles (id, couple_id, display_name, pronoun, energy) values ('B', 'space-solo', 'Par', 'ela', 'MEDIUM');
+select create_invite('SOLOB-TESTE') as _ \gset
+do $$ begin
+  assert (select count(*) from tasks) = 1 and (select postpone_count from tasks) = 3, 'FALHOU: promoção perdeu a tarefa Solo';
+  assert (select amount_cents from transactions) = 3500, 'FALHOU: promoção perdeu o lançamento pessoal';
+end $$;
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"ffffffff-0000-4000-8000-00000000000f","role":"authenticated"}', true) as _ \gset
+select * from join_couple('SOLOB-TESTE') \gset
+update profiles set monthly_budget_cents = 1, enabled_modules = '{}'::jsonb where id = 'A';
+do $$ begin
+  assert (select mode from couples) = 'COUPLE' and (select my_partner_id()) = 'B', 'FALHOU: par não entrou no espaço promovido';
+  assert (select count(*) from transactions) = 0 and (select count(*) from tasks) = 0, 'FALHOU: promoção expôs dados pessoais fechados';
+  assert (select monthly_budget_cents from profiles where id = 'A') = 180000 and
+         (select enabled_modules->>'shopping' from profiles where id = 'A') = 'true', 'FALHOU: par alterou preferências de A';
+end $$;
+reset role;
+\echo 'ok  Solo: dados novos persistem; RLS isola; convite exige promoção; Casal preserva tarefas, orçamento e privacidade'
 
 -- ---------------------------------------------------------------- 7. chave anônima não lê nem chama RPC
 reset role;
@@ -669,6 +806,11 @@ do $$ begin
   begin
     perform create_couple('x', '50_50', 5000);
     raise exception 'FALHOU: anon chamou create_couple';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform create_couple('x', '50_50', 5000, 'SOLO');
+    raise exception 'FALHOU: anon criou espaço Solo';
   exception when insufficient_privilege then null;
   end;
 end $$;

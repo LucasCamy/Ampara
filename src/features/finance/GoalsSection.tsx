@@ -1,12 +1,13 @@
 import { Minus, PiggyBank, Plus } from 'lucide-react'
 import { useId, useMemo, useRef, useState } from 'react'
-import { Button, cx, EditButton, EmptyState, SectionHeader, StatusBadge } from '../../components/ui'
+import { Button, cx, EditButton, EmptyState, FieldError, SectionHeader, StatusBadge } from '../../components/ui'
 import { toDateKey } from '../../domain/dates'
 import { digitsToCents, formatCents } from '../../domain/format'
 import { goalView } from '../../domain/together'
 import type { SavingsGoal } from '../../domain/types'
 import { useNow } from '../../store/clock'
 import { useData } from '../../store/data'
+import { useIsSolo, usePeople } from '../../store/hooks'
 import { moveGoal } from '../../store/togetherActions'
 import { ui } from '../../store/ui'
 
@@ -22,7 +23,7 @@ const caretToEnd = (e: { currentTarget: HTMLInputElement }) => {
  * Veio preenchido (ex.: baixa com o valor previsto)? O primeiro dígito digitado SUBSTITUI o valor e apagar zera,
  * como numa calculadora. Detectado no onChange (teclados Android nem sempre informam a tecla).
  */
-export function MoneyInput({ cents, onChange, label, testId, hideLabel }: { cents: number; onChange: (c: number) => void; label: string; testId: string; hideLabel?: boolean }) {
+export function MoneyInput({ cents, onChange, label, testId, hideLabel, error, describedBy }: { cents: number; onChange: (c: number) => void; label: string; testId: string; hideLabel?: boolean; error?: string; describedBy?: string }) {
   const id = useId()
   const pristine = useRef(cents > 0)
   const change = (raw: string) => {
@@ -49,8 +50,11 @@ export function MoneyInput({ cents, onChange, label, testId, hideLabel }: { cent
         value={formatCents(cents)}
         onChange={(e) => change(e.target.value)}
         data-testid={testId}
-        className="font-data min-h-12 w-full min-w-0 rounded-[16px] border border-line-strong bg-bg px-4 text-[16px] text-ink"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : describedBy}
+        className={cx('font-data min-h-12 w-full min-w-0 rounded-[16px] border bg-bg px-4 text-[16px] text-ink', error ? 'border-err' : 'border-line-strong')}
       />
+      {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : null}
     </div>
   )
 }
@@ -59,13 +63,16 @@ const FILL = { ok: 'bg-ok', warn: 'bg-warn', action: 'bg-action' } as const
 
 export function GoalsSection() {
   const goals = useData((s) => s.savingsGoals)
+  const { me } = usePeople()
+  const isSolo = useIsSolo()
   const list = useMemo(() => Object.values(goals).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [goals])
+  if (me.enabledModules?.goals === false) return null
   return (
     <section aria-labelledby="caixinhas" data-testid="goals-section">
       <SectionHeader
         id="caixinhas"
         title="Caixinhas"
-        rest="· metas do casal"
+        rest={isSolo ? '· suas metas' : '· metas do casal'}
         action={
           <Button size="sm" variant="quiet" icon={Plus} onClick={() => ui.openSheet('goal')} data-testid="goal-add">
             Nova caixinha
@@ -73,7 +80,7 @@ export function GoalsSection() {
         }
       />
       {list.length === 0 ? (
-        <EmptyState icon={PiggyBank} title="Nenhuma caixinha." text="Viagem, reserva, casa nova: guardem juntos e vejam quanto falta." />
+        <EmptyState icon={PiggyBank} title="Nenhuma caixinha." text={isSolo ? 'Viagem, reserva, casa nova: guarde aos poucos e acompanhe quanto falta.' : 'Viagem, reserva, casa nova: guardem juntos e vejam quanto falta.'} />
       ) : (
         <ul className="flex flex-col gap-3">
           {list.map((g) => (
@@ -86,6 +93,7 @@ export function GoalsSection() {
 }
 
 function GoalCard({ goal }: { goal: SavingsGoal }) {
+  const isSolo = useIsSolo()
   const today = toDateKey(useNow())
   const v = goalView(goal, today)
   const [cents, setCents] = useState(0)
@@ -97,7 +105,7 @@ function GoalCard({ goal }: { goal: SavingsGoal }) {
           <p className="text-[16px] font-bold break-words text-ink">{goal.title}</p>
           <p className="text-[14px] text-muted">
             <span className="font-data font-semibold whitespace-nowrap text-ink">{formatCents(goal.savedCents)}</span> de{' '}
-            <span className="font-data whitespace-nowrap">{formatCents(goal.targetCents)}</span> · casal
+            <span className="font-data whitespace-nowrap">{formatCents(goal.targetCents)}</span> · {isSolo ? 'sua meta' : 'casal'}
           </p>
         </div>
         <EditButton label={`Editar caixinha ${goal.title}`} onClick={() => ui.openSheet('goal', { id: goal.id })} testId="goal-edit" />
