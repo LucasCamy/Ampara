@@ -157,3 +157,89 @@ test('com a IA do PC: soltar organiza sozinho, mostra onde ficou e Desfazer volt
   await expect(page.getByText('Organizei em Estudos › Idiomas.')).toBeVisible()
 })
 
+test('isso vai acontecer: a ideia vira tarefa com micro-passo, fica ligada e a tarefa mostra a origem', async ({ page, errors }, info) => {
+  void errors
+  await at(page, '10:00')
+  await open(page)
+  await goTab(page, 'ideias')
+  await page.getByTestId('idea-capture-input').fill('quero voltar a correr de manhã')
+  await page.getByTestId('idea-capture-save').click()
+  await page.getByTestId('ideas-view-caixa').click()
+  await page.getByTestId('inbox-organize').click()
+  const org = page.getByTestId('sheet-organizeIdea')
+  await org.getByTestId('organize-area-A:saude').click()
+  await org.getByTestId('organize-topic-new').click()
+  await org.getByLabel('Nome do assunto').fill('Corrida')
+  await org.getByLabel('3. Nome da ideia').fill('Voltar a correr')
+  await org.getByTestId('nature-PLANO').click()
+  await org.getByTestId('organize-save').click()
+  await expect(org).toBeHidden()
+
+  await page.getByTestId('ideas-view-esboco').click()
+  await page.getByTestId('ideas-outline').getByRole('button', { name: /Voltar a correr/ }).click()
+  await page.getByTestId('idea-concretize').click()
+  const sheet = page.getByTestId('sheet-concretize')
+  await expect(sheet.getByLabel('O que fazer')).toHaveValue('Voltar a correr')
+  await sheet.getByLabel('O que fazer').fill('Correr 20 minutos')
+  await sheet.getByLabel('Passo 1').fill('Separar o tênis')
+  await sheet.getByTestId('concretize-today').click()
+  await noHorizontalOverflow(page)
+  await shot(page, '74-ideias-concretizar', info.project.name)
+  await sheet.getByTestId('concretize-save').click()
+  await expect(sheet).toBeHidden()
+  await expect(page.getByText('Virou tarefa: Correr 20 minutos')).toBeVisible()
+
+  // a ideia continua, agora "Virou ação", com a tarefa ligada
+  await page.getByTestId('ideas-show-todas').click()
+  const row = page.getByTestId('ideas-outline').getByRole('button', { name: /Voltar a correr/ })
+  await expect(row).toContainText('Virou ação')
+  await row.click()
+  const card = page.getByTestId('sheet-idea')
+  await expect(card.getByTestId('idea-actions')).toContainText('Correr 20 minutos')
+  await card.getByTestId('idea-actions').getByRole('button').first().click()
+  const task = page.getByTestId('sheet-task')
+  await expect(task.getByTestId('task-from-idea')).toContainText('Voltar a correr')
+  await page.keyboard.press('Escape')
+
+  // a tarefa está no Hoje
+  await goTab(page, 'hoje')
+  await expect(page.getByText('Correr 20 minutos').first()).toBeVisible()
+})
+
+test('isso vai acontecer com a IA do PC: a sugestão preenche a gaveta e a pessoa confirma', async ({ page, errors }) => {
+  void errors
+  await at(page, '10:00')
+  await page.addInitScript(() => {
+    ;(window as unknown as { amparaDesktop: unknown }).amparaDesktop = {
+      version: 'teste',
+      status: async () => ({ claude: true, model: 'modelo-teste' }),
+      runStructured: async (req: { system: string; input: string }) => {
+        await new Promise((r) => setTimeout(r, 200))
+        if (req.system.includes('concretizar@1')) {
+          return { model: 'm', json: { versao: 'concretizar@1', forma: 'COMPROMISSO', titulo: 'Corrida com o João', passos: [], esforco: null, quando: null, data: '2026-11-07', inicio: '07:00', fim: '07:45', motivo: 'Vocês combinaram dia e hora.' } }
+        }
+        const { captura } = JSON.parse(req.input) as { captura: string }
+        const op = (o: Record<string, unknown>) => ({ tipo: null, trecho: null, ideia_id: null, assunto_id: null, assunto_ref: null, ref: null, area_id: null, nome: null, titulo: null, natureza: null, motivo: null, de_ideia: null, para_ideia: null, tipo_ligacao: null, resumo: null, estado: null, confianca: null, ...o })
+        return { model: 'm', json: { versao: 'organizador@1', operacoes: [
+          op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:saude', nome: 'Corrida' }),
+          op({ tipo: 'CRIAR_IDEIA', trecho: captura, assunto_ref: 's', titulo: 'Correr com o João', natureza: 'PLANO', confianca: 0.9 }),
+        ] } }
+      },
+    }
+  })
+  await open(page)
+  await goTab(page, 'ideias')
+  await page.getByTestId('idea-capture-input').fill('combinei de correr com o João sábado às 7h')
+  await page.getByTestId('idea-capture-save').click()
+  await expect(page.getByText('Organizei em Saúde › Corrida.')).toBeVisible()
+  await page.getByTestId('ideas-view-esboco').click()
+  await page.getByTestId('ideas-outline').getByRole('button', { name: /Correr com o João/ }).click()
+  await page.getByTestId('idea-concretize').click()
+  const sheet = page.getByTestId('sheet-concretize')
+  await expect(sheet.getByTestId('concretize-reason')).toContainText('Vocês combinaram dia e hora.')
+  await expect(sheet.getByLabel('Compromisso')).toHaveValue('Corrida com o João')
+  await expect(sheet.getByLabel('Início')).toHaveValue('07:00')
+  await sheet.getByTestId('concretize-save').click()
+  await expect(page.getByText('Virou compromisso: Corrida com o João')).toBeVisible()
+})
+

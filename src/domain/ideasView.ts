@@ -3,11 +3,11 @@
  * Funções puras: a tela só desenha o que sai daqui. Tudo é filtrado por dono (ADR-0009).
  */
 import { hierarchy, tree } from 'd3-hierarchy'
-import type { Idea, IdeaArea, IdeaCapture, IdeaLink, IdeaNature, IdeaNote, IdeaState, IdeaTopic, LinkType } from './ideas'
+import type { Idea, IdeaAction, IdeaArea, IdeaCapture, IdeaLink, IdeaNature, IdeaNote, IdeaState, IdeaTopic, LinkType } from './ideas'
 import type { DataState, PartnerId } from './types'
 
 /** Só as coleções das Ideias: a tela assina cada uma separada (sem re-render por outras mudanças). */
-export type IdeaData = Pick<DataState, 'ideaAreas' | 'ideaTopics' | 'ideas' | 'ideaCaptures' | 'ideaNotes' | 'ideaLinks'>
+export type IdeaData = Pick<DataState, 'ideaAreas' | 'ideaTopics' | 'ideas' | 'ideaCaptures' | 'ideaNotes' | 'ideaLinks'> & Partial<Pick<DataState, 'ideaActions'>>
 
 export const NATURE_LABEL: Record<IdeaNature, string> = {
   PLANO: 'Plano',
@@ -221,3 +221,29 @@ export function wrapLabel(text: string, max = 14): string[] {
   if (lines.length > 2) return [lines[0]!, `${lines[1]!.slice(0, max - 1)}…`]
   return lines
 }
+
+export interface ActionView { action: IdeaAction; title: string; done: boolean; when: string | null }
+
+/** O que a ideia virou (tarefas e compromissos ainda existentes), do mais novo para o mais antigo. */
+export function actionsOf(state: Pick<DataState, 'ideaActions' | 'tasks' | 'events'>, owner: PartnerId, ideaId: string): ActionView[] {
+  const out: ActionView[] = []
+  for (const action of Object.values(state.ideaActions)) {
+    if (action.ownerId !== owner || action.ideaId !== ideaId) continue
+    if (action.targetType === 'TASK') {
+      const t = state.tasks[action.targetId]
+      if (t) out.push({ action, title: t.title, done: t.status === 'DONE', when: t.dueDate })
+    } else {
+      const e = state.events[action.targetId]
+      if (e) out.push({ action, title: e.title, done: false, when: `${e.date} ${e.start}` })
+    }
+  }
+  return out.sort((a, b) => b.action.createdAt.localeCompare(a.action.createdAt))
+}
+
+/** De qual ideia veio esta tarefa ou compromisso (só para quem escreveu a ideia). */
+export function ideaOfTarget(state: Pick<DataState, 'ideaActions' | 'ideas'>, owner: PartnerId, targetId: string): Idea | null {
+  const action = Object.values(state.ideaActions).find((a) => a.ownerId === owner && a.targetId === targetId)
+  const idea = action ? state.ideas[action.ideaId] : undefined
+  return idea && idea.ownerId === owner ? idea : null
+}
+

@@ -55,7 +55,8 @@ Exporte um backup `.ampara` em Ajustes para ter uma cópia fora do aparelho. Det
 - **Ideias (segundo cérebro):** solte um pensamento em segundos (aba Ideias ou Captura livre, quando a frase
   parece pensamento e não tarefa). Ele fica na Caixa de entrada até você organizar em Área > Assunto > Ideia.
   Veja tudo em Esboço (lista) ou Mapa, com estados (solta, amadurecendo, guardada) e ligações. Só você vê,
-  inclusive no Casal. A organização por IA vem depois (ADRs em `docs/adr/`); sem IA, tudo funciona à mão.
+  inclusive no Casal. No app do PC a IA organiza sozinha; sem IA, tudo funciona à mão. Quando uma ideia
+  amadurece, "Isso vai acontecer" a transforma em tarefa com micro-passos ou compromisso, ligada à ideia.
 - **Módulos conectados:** estoque baixo pode entrar na lista de compras; comprar um remédio oferece reposição;
   itens comprados podem virar um gasto. Contas pessoais vencidas ou do dia também aparecem no Hoje.
 

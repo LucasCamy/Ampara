@@ -27,6 +27,7 @@ import { UnstuckSheet } from './UnstuckSheet'
 import { TemplatesSheet } from './TemplatesSheet'
 import { IdeaSheet } from './IdeaSheet'
 import { OrganizeIdeaSheet } from './OrganizeIdeaSheet'
+import { ConcretizeSheet } from './ConcretizeSheet'
 
 const TITLES: Record<SheetKind, { title: string; description: string }> = {
   quickCapture: { title: 'Captura livre', description: 'Escreva ou dite uma frase. Confira o que foi entendido antes de salvar.' },
@@ -50,6 +51,7 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
   tour: { title: 'Bem-vindo ao Ampara', description: 'Um minuto para conhecer. Dá para pular.' },
   idea: { title: 'Ideia', description: 'Só você vê. Ajuste, confira e veja como ela se liga às outras.' },
   organizeIdea: { title: 'Organizar pensamento', description: 'Escolha a área, o assunto e a ideia. Tudo pode mudar depois.' },
+  concretize: { title: 'Isso vai acontecer', description: 'Confira e ajuste. Só é criado quando você confirmar.' },
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
@@ -137,6 +139,7 @@ export function SheetHost() {
       {sheet?.kind === 'rule' && exists ? <RuleSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'goal' && exists ? <GoalSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'idea' && exists && editId ? <IdeaSheet key={editId} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'concretize' && sheet.params.ideaId ? <ConcretizeSheet key={sheet.params.ideaId} ideaId={sheet.params.ideaId} onDone={close} /> : null}
       {sheet?.kind === 'organizeIdea' ? <OrganizeIdeaSheet key={sheet.params.captureId ?? sheet.params.noteId} params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'gift' && exists ? <GiftSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
     </Sheet>

@@ -1,5 +1,5 @@
 import { firstName } from '../../domain/format'
-import { Brain, CalendarDays, ChevronDown, Inbox, Lock, Mail, Plus, Sun, Trash2, User, Users, Zap } from 'lucide-react'
+import { Brain, CalendarDays, ChevronDown, Inbox, Lightbulb, Lock, Mail, Plus, Sun, Trash2, User, Users, Zap } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { Button, ChoiceChips, cx, FieldError, StatusBadge, TextField } from '../../components/ui'
 import { addDays, toDateKey } from '../../domain/dates'
@@ -8,7 +8,9 @@ import { uuid } from '../../domain/seed'
 import type { Task, TaskEffort } from '../../domain/types'
 import { saveTask, type TaskDest, type TaskWhen } from '../../store/actions'
 import { useNow } from '../../store/clock'
-import { dataStore } from '../../store/data'
+import { dataStore, useData } from '../../store/data'
+import { ideaOfTarget } from '../../domain/ideasView'
+import { ui } from '../../store/ui'
 import { useIsSolo, usePeople } from '../../store/hooks'
 import { SHEET_FORM } from './forms'
 
@@ -28,6 +30,10 @@ export function TaskSheet({ params, onDone }: { params: Record<string, string>; 
   const [showSteps, setShowSteps] = useState(steps.length > 0 || params.stepsOpen === '1')
   const [error, setError] = useState<string | null>(null)
   const id = useId()
+  const ideaActions = useData((s) => s.ideaActions)
+  const ideas = useData((s) => s.ideas)
+  // só quem escreveu a ideia vê de onde a tarefa veio (ideias são privadas)
+  const origin = taskId ? ideaOfTarget({ ideaActions, ideas }, viewer, taskId) : null
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -50,6 +56,12 @@ export function TaskSheet({ params, onDone }: { params: Record<string, string>; 
 
   return (
     <form id={SHEET_FORM.task} onSubmit={submit} className="flex flex-col gap-5 pt-2" noValidate>
+      {origin ? (
+        <button type="button" onClick={() => ui.openSheet('idea', { id: origin.id })} className="press hoverable flex items-center gap-2 self-start rounded-[14px] bg-subtle px-3 py-2 text-left text-[14px] text-ink" data-testid="task-from-idea">
+          <Lightbulb size={16} aria-hidden className="shrink-0 text-action" />
+          <span>Veio da ideia: <strong>{origin.title}</strong></span>
+        </button>
+      ) : null}
       <div>
         <label htmlFor={`${id}-t`} className="mb-2 block text-[14px] font-semibold text-ink">
           O que precisa ser feito?

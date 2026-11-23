@@ -174,6 +174,8 @@ Cada proposta é um cartão com **[Aceitar]** e **[Agora não]**. Ela segue a re
 
 ## 7. Concretizar ("Isso vai acontecer")
 
+> Implementado em 2026-11-23 (veja a ADR-0001). "Lembrete" ficou fora: no Ampara, ele é uma tarefa com data ou um compromisso.
+
 1. A pessoa toca no botão dentro da ideia.
 2. A IA sugere **uma** forma de ação, conforme a natureza e as anotações: uma **tarefa com passos** (usa `tasks.steps`), um **evento** ou um **lembrete**.
 3. A pessoa confere, edita e confirma. Nada é criado sem esse toque.

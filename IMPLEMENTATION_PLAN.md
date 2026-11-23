@@ -622,4 +622,7 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 - **Feito (2026-11-23), bolinha no PC:** bolinha flutuante, painel compacto só com o campo (`CompactCapture`), bandeja,
   fechar esconde, posição salva, voz do Windows no "Falar". O protótipo AjudaMental foi desinstalado (sem ideias para
   importar). Validação: `desktop/test/bubble.cjs`, lint, typecheck, 587 testes, `e2e:quick` 152 verdes.
-
+- **Feito (2026-11-23), "Isso vai acontecer":** gaveta de concretizar com sugestão da IA (`concretizar@1`) ou proposta
+  padrão sem IA; tarefa com micro-passos ou compromisso ligados à ideia (`idea_actions`), estado "Virou ação",
+  Desfazer; cartão da ideia lista o que ela virou e a tarefa mostra "Veio da ideia". Validação: lint, typecheck,
+  595 testes, `e2e:quick` 156 verdes, print em 360 escuro, teste real com a assinatura.

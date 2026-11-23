@@ -36,3 +36,15 @@ Transformar todo pensamento em tarefa cria lista infinita e culpa, o oposto do q
 - Positivas: o Hoje continua limpo; pensamentos têm um lugar seguro; a origem de cada tarefa fica rastreável.
 - Negativas: novo módulo, novas tabelas e telas; a pessoa precisa aprender a diferença entre "soltar ideia"
   e "criar tarefa" (mitigado pelo campo único que decide sozinho, com prévia).
+
+## Implementação e verificação
+
+- **Implementado (2026-11-23):** botão "Isso vai acontecer" no cartão da ideia abre a gaveta de concretizar
+  (`ConcretizeSheet`). Com IA, o contrato `concretizar@1` (`src/domain/ideasConcretize.ts`) sugere UMA forma:
+  tarefa com até 3 micro-passos (o primeiro em menos de 5 minutos) ou compromisso, só quando há dia e hora ditos e
+  no futuro; fora disso vira tarefa. Sem IA, a proposta é uma tarefa sem data com o nome da ideia. A pessoa edita e
+  confirma; `concretizeIdea` cria a tarefa (pessoal e privada) ou o compromisso, grava `idea_actions` e marca
+  `VIROU_ACAO` numa operação com Desfazer. A ideia mostra o que virou; a tarefa mostra "Veio da ideia" só para quem
+  escreveu.
+- **Verificado:** 8 testes de unidade, 2 E2E (à mão e com IA simulada), teste real com a assinatura (tarefa com
+  micro-passos sem data; compromisso quando a anotação tinha dia e hora).

@@ -5,10 +5,12 @@
  * - A organização só grava o que o validador aprovou (ADR-0004) e deixa um registro para auditar e desfazer.
  * - Tudo pertence a quem está usando o app (viewer) e nunca é visível ao par (ADR-0009).
  */
-import { IDEA_LIMITS, defaultAreasFor, foldText, type Idea, type IdeaAiLog, type IdeaCapture, type IdeaLink, type IdeaMap, type IdeaNote, type IdeaTopic, type CaptureSource } from '../domain/ideas'
+import { IDEA_LIMITS, defaultAreasFor, foldText, type Idea, type IdeaAction, type IdeaAiLog, type IdeaCapture, type IdeaLink, type IdeaMap, type IdeaNote, type IdeaTopic, type CaptureSource } from '../domain/ideas'
 import { normalizeSpaces, type ValidationResult, type ValidatedOp } from '../domain/ideasValidate'
 import { uuid } from '../domain/seed'
-import type { DataState, PartnerId } from '../domain/types'
+import type { CalendarEvent, DataState, DateKey, PartnerId, Task } from '../domain/types'
+import { MAX_STEPS, dueDateOf, type ActionDraft } from '../domain/ideasConcretize'
+import { buildEvent, validateEvent, type EventInput } from '../domain/catalog'
 import { dataStore, transact, type Tx } from './data'
 import { uiStore } from './ui'
 
@@ -419,4 +421,52 @@ export function discardInboxNote(noteId: string): ActionResult {
   if (!n || n.ownerId !== viewer() || n.ideaId !== null) return fail('Este trecho não está mais na Caixa de entrada.')
   const undo = transactFresh((tx) => tx.remove('ideaNotes', noteId))
   return { ok: true, undo }
+}
+
+/* ---------------------------------------------------------------- "Isso vai acontecer" (ADR-0001) */
+
+/**
+ * Cria a tarefa (com micro-passos) ou o compromisso que a pessoa confirmou, liga à ideia (idea_actions) e marca a
+ * ideia como "Virou ação". A ideia continua existindo. Tudo numa operação, com Desfazer.
+ * A tarefa nasce pessoal e privada: veio de uma ideia, que é privada (ADR-0009).
+ */
+export function concretizeIdea(ideaId: string, draft: ActionDraft, today: DateKey): ActionResult & { targetId?: string } {
+  const owner = viewer()
+  const s = dataStore.get()
+  const idea = s.ideas[ideaId]
+  if (!idea || idea.ownerId !== owner) return fail('Esta ideia não existe mais.')
+  const title = draft.title.replace(/\s+/g, ' ').trim()
+  if (!title) return fail(draft.kind === 'TASK' ? 'Escreva o que precisa ser feito.' : 'Escreva o compromisso.')
+  const iso = nowIso()
+  let target: { type: 'TASK'; task: Task } | { type: 'EVENT'; event: CalendarEvent }
+
+  if (draft.kind === 'TASK') {
+    const steps = draft.steps.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, MAX_STEPS)
+    target = {
+      type: 'TASK',
+      task: {
+        id: uuid(), createdBy: owner, assignedTo: owner, title: title.slice(0, 120), effort: draft.effort, status: 'PENDING',
+        dueDate: dueDateOf(draft.when, today), dueTime: null, visibleToPartner: false, sentBy: null,
+        completedAt: null, completedBy: null, sourceMedicationId: null,
+        steps: steps.map((text) => ({ id: uuid(), text: text.slice(0, 120), done: false })),
+        postponeCount: 0, createdAt: iso, updatedAt: iso,
+      },
+    }
+  } else {
+    const input: EventInput = { title, date: draft.date, start: draft.start, end: draft.end, owner: 'ME', type: 'APPOINTMENT' }
+    const errors = validateEvent(input)
+    const first = Object.values(errors).find(Boolean)
+    if (first) return fail(first)
+    target = { type: 'EVENT', event: buildEvent(input, owner, uuid(), iso) }
+  }
+
+  const targetId = target.type === 'TASK' ? target.task.id : target.event.id
+  const undo = transactFresh((tx) => {
+    if (target.type === 'TASK') tx.put('tasks', target.task)
+    else tx.put('events', target.event)
+    const action: IdeaAction = { id: uuid(), ownerId: owner, ideaId, targetType: target.type, targetId, createdAt: iso, updatedAt: iso }
+    tx.put('ideaActions', action)
+    tx.put('ideas', { ...idea, state: 'VIROU_ACAO', updatedAt: iso })
+  })
+  return { ok: true, undo, targetId }
 }

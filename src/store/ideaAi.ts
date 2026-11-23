@@ -5,6 +5,8 @@
 import { currentProvider, type AiProvider } from '../ai/provider'
 import { ORGANIZER_SCHEMA, ORGANIZER_SYSTEM, ORGANIZER_VERSION, buildOrganizerInput, selectCandidates } from '../domain/ideasPrompt'
 import { validateOrganization } from '../domain/ideasValidate'
+import { CONCRETIZE_SCHEMA, CONCRETIZE_SYSTEM, buildConcretizeInput, defaultDraft, parseProposal, type ActionDraft } from '../domain/ideasConcretize'
+import type { DateKey } from '../domain/types'
 import { dataStore } from './data'
 import { applyOrganization, myIdeaMap } from './ideaActions'
 import { uiStore } from './ui'
@@ -62,3 +64,19 @@ export function describeAiResult(r: AiOrganizeResult): string {
   const where = r.places.length === 1 ? r.places[0] : `${r.places.length} lugares`
   return r.inboxCount ? `Organizei em ${where}. Uma parte ficou na Caixa de entrada.` : `Organizei em ${where}.`
 }
+
+/**
+ * "Isso vai acontecer": a IA sugere UMA forma de ação (tarefa com micro-passos ou compromisso). Só sugere;
+ * quem cria é a pessoa, na gaveta. Sem IA ou com resposta fora do combinado, volta a proposta padrão.
+ */
+export async function suggestAction(ideaId: string, today: DateKey, provider: AiProvider | null = currentProvider()): Promise<ActionDraft> {
+  const owner = uiStore.get().viewer
+  const state = dataStore.get()
+  const idea = state.ideas[ideaId]
+  if (!idea || idea.ownerId !== owner) throw new Error('Esta ideia não existe mais.')
+  if (!provider) return defaultDraft(idea)
+  const notes = Object.values(state.ideaNotes).filter((n) => n.ownerId === owner && n.ideaId === ideaId)
+  const r = await provider.runStructured({ system: CONCRETIZE_SYSTEM, schema: CONCRETIZE_SCHEMA, input: buildConcretizeInput(idea, notes, today) })
+  return parseProposal(r.json, idea, today)
+}
+

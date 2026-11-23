@@ -1,9 +1,11 @@
-import { Check, CircleDashed, Link2, X } from 'lucide-react'
+import { CalendarDays, Check, CircleCheck, CircleDashed, Link2, ListTodo, Rocket, X } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import { Button, ChoiceChips, cx, FieldError, Segmented, StatusBadge, TextField } from '../../components/ui'
 import type { IdeaNature, IdeaState } from '../../domain/ideas'
 import { IDEA_LIMITS } from '../../domain/ideas'
-import { LINK_LABEL, linksOf, notesOf } from '../../domain/ideasView'
+import { LINK_LABEL, actionsOf, linksOf, notesOf } from '../../domain/ideasView'
+import { useData } from '../../store/data'
+import { ui } from '../../store/ui'
 import { markIdeaReviewed, setLinkState, updateIdea } from '../../store/ideaActions'
 import { usePeople } from '../../store/hooks'
 import { IdeaStateBadge, NATURE_OPTIONS, shortDateTime, toastResult, useIdeaData } from '../ideas/ideaUi'
@@ -32,6 +34,10 @@ export function IdeaSheet({ id, onDone }: { id: string; onDone: () => void }) {
   )
   const topics = Object.values(data.ideaTopics).filter((t) => t.ownerId === viewer && !t.archived)
   const needsReview = idea.needsReview || notes.some((n) => n.needsReview)
+  const ideaActions = useData((s) => s.ideaActions)
+  const tasks = useData((s) => s.tasks)
+  const events = useData((s) => s.events)
+  const actions = useMemo(() => actionsOf({ ideaActions, tasks, events }, viewer, id), [ideaActions, tasks, events, viewer, id])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -53,6 +59,33 @@ export function IdeaSheet({ id, onDone }: { id: string; onDone: () => void }) {
           <Button type="button" variant="secondary" icon={Check} onClick={() => toastResult(markIdeaReviewed(id), 'Conferido')}>Está certo</Button>
         </div>
       ) : null}
+
+      <section aria-labelledby={`${uid}-acao`} className="flex flex-col gap-2">
+        <h3 id={`${uid}-acao`} className="sr-only">Virar ação</h3>
+        {actions.length ? (
+          <ul className="flex flex-col gap-2" data-testid="idea-actions">
+            {actions.map(({ action, title: t, done, when }) => (
+              <li key={action.id}>
+                <button
+                  type="button"
+                  onClick={() => ui.openSheet(action.targetType === 'TASK' ? 'task' : 'event', { id: action.targetId })}
+                  className="press hoverable flex w-full items-center gap-3 rounded-[16px] border border-line p-3 text-left"
+                >
+                  {action.targetType === 'TASK' ? <ListTodo size={18} aria-hidden className="shrink-0 text-action" /> : <CalendarDays size={18} aria-hidden className="shrink-0 text-action" />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] text-muted">Virou {action.targetType === 'TASK' ? 'tarefa' : 'compromisso'}{when ? <> · <span className="font-data">{when}</span></> : null}</span>
+                    <span className="block text-[15px] font-semibold break-words text-ink">{t}</span>
+                  </span>
+                  {done ? <CircleCheck size={18} aria-label="Concluída" className="shrink-0 text-ok" /> : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <Button type="button" variant={actions.length ? 'secondary' : 'primary'} icon={Rocket} onClick={() => ui.openSheet('concretize', { ideaId: id })} data-testid="idea-concretize">
+          {actions.length ? 'Criar outra ação' : 'Isso vai acontecer'}
+        </Button>
+      </section>
 
       <TextField label="Nome da ideia" value={title} onChange={(v) => { setTitle(v); setError(null) }} maxLength={80} error={error ?? undefined} />
 
