@@ -201,6 +201,8 @@ export function validateOrganization(rawCapture: string, response: unknown, map:
         topicRef = topicId
         topicId = null
       }
+      // ...ou repetem o mesmo id de assunto existente nos dois campos: também é o mesmo assunto
+      if (topicId && topicRef === topicId && topicById.has(topicId) && !newTopics.has(topicRef)) topicRef = null
       if (topicId && topicRef) refuse('use assunto_id ou assunto_ref, não os dois')
       if (topicId) {
         const t = topicById.get(topicId) ?? refuse('assunto não existe')

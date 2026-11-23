@@ -167,6 +167,10 @@ describe('estrutura fixa (ADR-0002)', () => {
     expect(run('aprender violão', [create({ assunto_id: 't-velho' })], map).rejected[0]?.reason).toBe('assunto arquivado')
     expect(run('aprender violão', [create({})], map).rejected[0]?.reason).toBe('falta assunto_id ou assunto_ref')
     expect(run('aprender violão', [create({ assunto_id: 't-viagem', assunto_ref: 'x' })], map).rejected[0]?.reason).toBe('use assunto_id ou assunto_ref, não os dois')
+    // o mesmo id de assunto existente repetido nos dois campos não é ambíguo
+    const same = run('aprender violão', [create({ assunto_id: 't-viagem', assunto_ref: 't-viagem' })], map)
+    expect(same.rejected).toEqual([])
+    expect(same.apply[0]).toMatchObject({ kind: 'CRIAR_IDEIA', topic: { id: 't-viagem' } })
   })
 
   it('a IA não cria Área e não usa Área escondida', () => {
