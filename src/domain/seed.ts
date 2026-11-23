@@ -4,6 +4,7 @@ import { computeShares } from './finance'
 import { occurrenceId } from './ledger'
 import { COLLECTIONS } from './types'
 import type {
+  Collections,
   CycleLog,
   ShoppingItem,
   SpecialDate,
@@ -28,6 +29,11 @@ import type {
   Transaction,
   TxCategory,
 } from './types'
+
+/** Coleções do módulo Ideias vazias (começa sem nada: nenhum exemplo de pensamento de ninguém). */
+export function emptyIdeas(): Pick<Collections, 'ideaAreas' | 'ideaTopics' | 'ideas' | 'ideaCaptures' | 'ideaNotes' | 'ideaLinks' | 'ideaActions' | 'ideaAiLog'> {
+  return { ideaAreas: {}, ideaTopics: {}, ideas: {}, ideaCaptures: {}, ideaNotes: {}, ideaLinks: {}, ideaActions: {}, ideaAiLog: {} }
+}
 
 export function uuid(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -307,6 +313,7 @@ export function buildSeed(now: Date): DataState {
     focusSessions: {},
     savingsGoals: byId(goals),
     recurrences: byId(recurrences),
+    ...emptyIdeas(),
     outbox: [],
     lastSyncedAt: iso,
   }
@@ -403,6 +410,7 @@ export function buildEmpty(now: Date, mode: SpaceMode = 'COUPLE', soloOwnerId: P
     focusSessions: {},
     savingsGoals: {},
     recurrences: {},
+    ...emptyIdeas(),
     outbox: [],
   }
 }

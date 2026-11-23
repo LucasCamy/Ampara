@@ -1,7 +1,7 @@
 import { compactSynced, enqueue, makeEntry } from '../domain/outbox'
 import { buildEmpty, buildSeed, uuid, withIdentity } from '../domain/seed'
 import { canViewRule } from '../domain/ledger'
-import { COLLECTIONS } from '../domain/types'
+import { COLLECTIONS, IDEA_COLLECTIONS } from '../domain/types'
 import type { CalendarEvent, Collections, CollectionName, CycleLog, CycleSettings, DataState, GiftIdea, HelpRequest, Nudge, RecurringRule, Medication, MedicationLog, PartnerId, Task, Transaction } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
@@ -140,6 +140,8 @@ export function enqueueAll(who: PartnerId) {
     if (c === 'nudges') return (e as Nudge).from === who
     // O autor cria o foco. Participar de um convite já existente é uma edição, nunca uma criação em nome do par.
     if (c === 'focusSessions') return (e as { startedBy: PartnerId }).startedBy === who
+    // ideias: só quem escreveu grava (espelho de ideas_*_insert)
+    if (IDEA_COLLECTIONS.includes(c)) return (e as { ownerId: PartnerId }).ownerId === who
     return true
   }
   dataStore.set((s) => {

@@ -1128,3 +1128,156 @@ create policy worker_scope on transactions as restrictive for select to ampara_w
   not deleted and status = 'PREDICTED_DASHED' and type = 'EXPENSE' and
   exists (select 1 from push_subscriptions s where s.couple_id = transactions.couple_id and (transactions.scope = 'COUPLE' or s.partner_id = transactions.created_by))
 );
+
+-- =====================================================================
+-- Iteração 24: Ideias, o segundo cérebro (ADR-0001 a 0004 e ADR-0009; docs/08-ideias-segundo-cerebro.md)
+-- =====================================================================
+-- Tudo aqui é PRIVADO de quem escreveu, inclusive no Casal: o par não lê, não altera e não cria em nome
+-- de ninguém. O worker de lembretes não recebe permissão nenhuma nestas tabelas.
+-- Estrutura fixa: Área (catálogo por pessoa) > Assunto > Ideia > Anotação, mais a Captura bruta.
+-- Os limites de texto e os vocabulários repetem src/domain/ideas.ts.
+
+-- Áreas: uma linha por pessoa e área. id = '<pessoa>:<chave>' (ex.: 'A:saude'), repetido entre espaços.
+create table if not exists idea_areas (
+  id text not null check (id ~ '^[AB]:[a-z0-9-]{1,40}$'),
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  name text not null check (char_length(name) between 1 and 40),
+  hidden boolean not null default false,
+  sort_order integer not null default 0 check (sort_order between 0 and 100),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  primary key (couple_id, id),
+  check (split_part(id, ':', 1) = owner_id)
+);
+
+create table if not exists idea_topics (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  area_id text not null,
+  name text not null check (char_length(name) between 1 and 40),
+  firm boolean not null default false,
+  archived boolean not null default false,
+  origin text not null check (origin in ('IA', 'PESSOA')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  check (split_part(area_id, ':', 1) = owner_id)
+);
+
+create table if not exists ideas (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  topic_id uuid not null,
+  title text not null check (char_length(title) between 1 and 80),
+  summary text not null default '' check (char_length(summary) <= 300),
+  nature text not null check (nature in ('PLANO', 'DESEJO', 'PREOCUPACAO', 'PERGUNTA', 'OBSERVACAO', 'REFLEXAO')),
+  state text not null default 'SOLTA' check (state in ('SOLTA', 'AMADURECENDO', 'VIROU_ACAO', 'GUARDADA')),
+  needs_review boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false
+);
+
+-- Captura: o que a pessoa soltou de uma vez, imutável (só muda o status da organização)
+create table if not exists idea_captures (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  text text not null check (char_length(text) between 1 and 8000),
+  source text not null check (source in ('TEXTO', 'VOZ')),
+  status text not null default 'PENDENTE' check (status in ('PENDENTE', 'ORGANIZADA', 'CAIXA')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false
+);
+
+-- Anotação: trecho literal de uma captura. idea_id nulo = Caixa de entrada.
+create table if not exists idea_notes (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  capture_id uuid not null,
+  idea_id uuid,
+  text text not null check (char_length(text) between 1 and 4000),
+  start_pos integer check (start_pos >= 0),
+  end_pos integer check (end_pos >= 0),
+  needs_review boolean not null default false,
+  inbox_reason text check (inbox_reason is null or char_length(inbox_reason) <= 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  check ((start_pos is null) = (end_pos is null) and (end_pos is null or end_pos > start_pos))
+);
+
+create table if not exists idea_links (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  from_idea_id uuid not null,
+  to_idea_id uuid not null,
+  type text not null check (type in ('RELACIONA', 'DEPENDE_DE', 'PARTE_DE', 'CONTRADIZ', 'EVOLUI_DE')),
+  reason text not null check (char_length(reason) between 1 and 200),
+  origin text not null check (origin in ('IA', 'PESSOA')),
+  state text not null default 'SUGERIDA' check (state in ('SUGERIDA', 'CONFIRMADA', 'RECUSADA')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  check (from_idea_id <> to_idea_id)
+);
+
+-- Concretizar: a ideia virou tarefa ou compromisso (a ideia continua existindo)
+create table if not exists idea_actions (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  idea_id uuid not null,
+  target_type text not null check (target_type in ('TASK', 'EVENT')),
+  target_id uuid not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false
+);
+
+-- Registro de cada organização feita pela IA: auditoria, "Por que aqui?" e Desfazer
+create table if not exists idea_ai_log (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  capture_id uuid not null,
+  provider text not null check (char_length(provider) between 1 and 40),
+  model text not null default '' check (char_length(model) <= 80),
+  prompt_version text not null check (prompt_version ~ '^organizador@[0-9]+$'),
+  result jsonb not null default '{}'::jsonb,
+  undone boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false
+);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('create index if not exists %I on %I (couple_id, updated_at)', 'idx_' || t || '_pull', t);
+    -- privado de quem escreveu: política por comando, nunca "for all" (regra 11 do AGENTS.md)
+    execute format('drop policy if exists %I on %I', t || '_read', t);
+    execute format('create policy %I on %I for select using (couple_id = my_couple_id() and owner_id = my_partner_id())', t || '_read', t);
+    execute format('drop policy if exists %I on %I', t || '_insert', t);
+    execute format('create policy %I on %I for insert with check (couple_id = my_couple_id() and owner_id = my_partner_id())', t || '_insert', t);
+    execute format('drop policy if exists %I on %I', t || '_update', t);
+    execute format('create policy %I on %I for update using (couple_id = my_couple_id() and owner_id = my_partner_id()) with check (couple_id = my_couple_id() and owner_id = my_partner_id())', t || '_update', t);
+    execute format('drop policy if exists %I on %I', t || '_delete', t);
+    execute format('create policy %I on %I for delete using (couple_id = my_couple_id() and owner_id = my_partner_id())', t || '_delete', t);
+    -- cursor do pull e "a versão mais nova vence" (keep < synced: keep_newest roda antes)
+    execute format('alter table %I add column if not exists synced_at timestamptz not null default clock_timestamp()', t);
+    execute format('drop trigger if exists trg_%I_synced on %I', t, t);
+    execute format('create trigger trg_%I_synced before insert or update on %I for each row execute function touch_synced_at()', t, t);
+    execute format('drop trigger if exists trg_%I_keep on %I', t, t);
+    execute format('create trigger trg_%I_keep before update on %I for each row execute function keep_newest()', t, t);
+  end loop;
+end $$;

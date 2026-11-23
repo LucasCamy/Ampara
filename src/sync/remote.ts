@@ -144,15 +144,23 @@ export const TABLES: Record<CollectionName, string> = {
   focusSessions: 'focus_sessions',
   savingsGoals: 'savings_goals',
   recurrences: 'recurrences',
+  ideaAreas: 'idea_areas',
+  ideaTopics: 'idea_topics',
+  ideas: 'ideas',
+  ideaCaptures: 'idea_captures',
+  ideaNotes: 'idea_notes',
+  ideaLinks: 'idea_links',
+  ideaActions: 'idea_actions',
+  ideaAiLog: 'idea_ai_log',
 }
 
 /** Tabelas com chave (couple_id, id): um registro por pessoa */
 const PER_PERSON = new Set<CollectionName>(['profiles', 'cycleSettings'])
 /**
- * Chave (couple_id, id) com id que se repete entre casais (check-in "A@2026-11-07"). Diferente de PER_PERSON,
+ * Chave (couple_id, id) com id que se repete entre casais (check-in "A@2026-11-07", área de ideias "A:saude"). Diferente de PER_PERSON,
  * tem a coluna deleted: mantém deleted no toRow e na exclusão lógica (que já filtra por couple_id).
  */
-const COUPLE_SCOPED_ID = new Set<CollectionName>(['moodCheckins'])
+const COUPLE_SCOPED_ID = new Set<CollectionName>(['moodCheckins', 'ideaAreas'])
 
 /**
  * Tabela que o servidor ainda não tem (app publicado antes do schema.sql novo ser aplicado).

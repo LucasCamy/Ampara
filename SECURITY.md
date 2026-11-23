@@ -196,3 +196,9 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   No projeto de produção, rode `supabase/tests/validate.sql` no SQL Editor depois de aplicar o schema.
 - **Sem realtime:** a descida acontece ao abrir, ao voltar online, ao sincronizar e a cada 30 s com o app aberto.
 - `style-src 'unsafe-inline'` permanece porque o Motion anima por atributo `style`.
+- **Ideias (segundo cérebro) são privadas de quem escreveu**, inclusive no Casal: as tabelas `idea_*` só aceitam
+  leitura e escrita de `owner_id = my_partner_id()`, o worker de lembretes não tem permissão nelas e
+  `purgeUnauthorized` tira do aparelho as ideias do par. Como no resto do app, **não é criptografia de ponta a
+  ponta**: quem opera o servidor consegue ler o texto. A criptografia de ponta a ponta das ideias está registrada
+  como evolução na [ADR-0009](docs/adr/0009-dados-das-ideias-privados-no-supabase.md). No mesmo aparelho com duas
+  pessoas vale a limitação do primeiro item.

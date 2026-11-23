@@ -6,6 +6,8 @@
  * A IA só escolhe dentro desta estrutura; quem grava é o validador (ideasValidate.ts).
  */
 
+import type { PartnerId } from './types'
+
 export const IDEA_NATURES = ['PLANO', 'DESEJO', 'PREOCUPACAO', 'PERGUNTA', 'OBSERVACAO', 'REFLEXAO'] as const
 export type IdeaNature = (typeof IDEA_NATURES)[number]
 
@@ -41,14 +43,24 @@ export const IDEA_LIMITS = {
 /** Destino de uma operação conforme a confiança (ADR-0004). */
 export const CONFIDENCE = { apply: 0.8, review: 0.6 } as const
 
-export interface IdeaArea {
+
+/** Campos comuns das entidades guardadas (cofre local e tabelas idea_* no Supabase). Sempre privadas do dono. */
+interface Owned {
+  /** Quem escreveu. Ideias nunca são do casal nem visíveis ao par (ADR-0009). */
+  ownerId: PartnerId
+  createdAt: string
+  updatedAt: string
+}
+
+/** Área: catálogo por pessoa. id = '<pessoa>:<chave>' (ex.: 'A:saude'). */
+export interface IdeaArea extends Owned {
   id: string
   name: string
   hidden: boolean
-  order: number
+  sortOrder: number
 }
 
-export interface IdeaTopic {
+export interface IdeaTopic extends Owned {
   id: string
   areaId: string
   name: string
@@ -58,7 +70,7 @@ export interface IdeaTopic {
   origin: Origin
 }
 
-export interface Idea {
+export interface Idea extends Owned {
   id: string
   topicId: string
   title: string
@@ -67,11 +79,9 @@ export interface Idea {
   state: IdeaState
   /** Aplicado com confiança entre 0,6 e 0,8: mostrar "conferir". */
   needsReview: boolean
-  createdAt: string
-  updatedAt: string
 }
 
-export interface IdeaLink {
+export interface IdeaLink extends Owned {
   id: string
   fromIdeaId: string
   toIdeaId: string
@@ -79,6 +89,49 @@ export interface IdeaLink {
   reason: string
   origin: Origin
   state: LinkState
+}
+
+export type CaptureSource = 'TEXTO' | 'VOZ'
+export type CaptureStatus = 'PENDENTE' | 'ORGANIZADA' | 'CAIXA'
+
+/** O que a pessoa soltou de uma vez. O texto nunca muda. */
+export interface IdeaCapture extends Owned {
+  id: string
+  text: string
+  source: CaptureSource
+  status: CaptureStatus
+}
+
+/** Trecho literal de uma captura. ideaId null = Caixa de entrada. */
+export interface IdeaNote extends Owned {
+  id: string
+  captureId: string
+  ideaId: string | null
+  text: string
+  /** Posição na captura normalizada (null quando a pessoa escreveu a anotação à mão). */
+  startPos: number | null
+  endPos: number | null
+  needsReview: boolean
+  inboxReason: string | null
+}
+
+/** A ideia virou tarefa ou compromisso (ADR-0001). */
+export interface IdeaAction extends Owned {
+  id: string
+  ideaId: string
+  targetType: 'TASK' | 'EVENT'
+  targetId: string
+}
+
+/** Registro de uma organização feita pela IA: auditoria, "Por que aqui?" e Desfazer. */
+export interface IdeaAiLog extends Owned {
+  id: string
+  captureId: string
+  provider: string
+  model: string
+  promptVersion: string
+  result: unknown
+  undone: boolean
 }
 
 /** O que o validador precisa saber do mapa atual da pessoa. */
@@ -89,17 +142,24 @@ export interface IdeaMap {
   links: IdeaLink[]
 }
 
-/** Catálogo inicial de Áreas. Ids estáveis: renomear não quebra nada. */
-export const DEFAULT_AREAS: readonly IdeaArea[] = [
-  { id: 'trabalho', name: 'Trabalho', hidden: false, order: 1 },
-  { id: 'estudos', name: 'Estudos', hidden: false, order: 2 },
-  { id: 'saude', name: 'Saúde', hidden: false, order: 3 },
-  { id: 'casa', name: 'Casa', hidden: false, order: 4 },
-  { id: 'dinheiro', name: 'Dinheiro', hidden: false, order: 5 },
-  { id: 'relacoes', name: 'Relações', hidden: false, order: 6 },
-  { id: 'projetos', name: 'Projetos pessoais', hidden: false, order: 7 },
-  { id: 'lazer', name: 'Lazer e criatividade', hidden: false, order: 8 },
+/** Catálogo inicial de Áreas (chave estável: renomear não quebra nada). */
+export const DEFAULT_AREAS: readonly { key: string; name: string }[] = [
+  { key: 'trabalho', name: 'Trabalho' },
+  { key: 'estudos', name: 'Estudos' },
+  { key: 'saude', name: 'Saúde' },
+  { key: 'casa', name: 'Casa' },
+  { key: 'dinheiro', name: 'Dinheiro' },
+  { key: 'relacoes', name: 'Relações' },
+  { key: 'projetos', name: 'Projetos pessoais' },
+  { key: 'lazer', name: 'Lazer e criatividade' },
 ]
+
+export const areaId = (owner: PartnerId, key: string) => `${owner}:${key}`
+
+/** Áreas iniciais de uma pessoa. */
+export function defaultAreasFor(owner: PartnerId, iso: string): IdeaArea[] {
+  return DEFAULT_AREAS.map((a, i) => ({ id: areaId(owner, a.key), ownerId: owner, name: a.name, hidden: false, sortOrder: i + 1, createdAt: iso, updatedAt: iso }))
+}
 
 /** Sem acento, minúsculo e com espaços simples. Para comparar nomes e buscar. */
 export function foldText(text: string): string {

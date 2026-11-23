@@ -585,4 +585,17 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   ligações, confiança 0,6/0,8, sem apagar nem mover). 35 testes, incluindo uma propriedade com 200 rodadas
   aleatórias de que nenhuma palavra da captura se perde. Validação: lint, typecheck e 538 testes verdes.
   Ainda não ligado a telas, banco ou IA.
+- **Feito (2026-11-23), banco e dados:** 8 tabelas `idea_*` no `schema.sql` (iteração 24), privadas por pessoa,
+  com políticas por comando, `synced_at` e `keep_newest`; espelho em `e2e/fake-supabase.ts`; seção 6g no
+  `validate.sql` (par e conta de fora não veem nem alteram, ids forjados, vocabulários, limites, "mais nova vence",
+  worker sem acesso, conversão Solo preserva as linhas). No aparelho: 8 coleções no cofre e na fila,
+  `enqueueAll` e `purgeUnauthorized` só com as ideias de quem está usando, `src/store/ideaActions.ts`
+  (capturar, Caixa de entrada, aplicar organização validada com registro, desfazer) com 12 testes.
+  Validação: schema aplicado 2 vezes, `db:check` verde, lint, typecheck, 550 testes, `e2e:quick` 144 verdes.
+- **Pendências encontradas:**
+  - `e2e:local` no perfil iPhone falha em "requisições em 5 s ocioso" (28 > 20). **Já falhava antes** desta mudança
+    (conferido rodando o código anterior duas vezes); no computador passa. As 8 tabelas novas somam 8 consultas por
+    ciclo de sincronização: ligar o módulo Ideias por pessoa (`enabledModules.ideas`) e só sincronizar `idea_*`
+    para quem usa, como Ciclo e Compras.
+  - Ainda sem telas e sem IA ligada.
 

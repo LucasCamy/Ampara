@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_AREAS, IDEA_LIMITS, foldText, sentenceCount, type Idea, type IdeaLink, type IdeaMap, type IdeaTopic } from './ideas'
+import { defaultAreasFor, IDEA_LIMITS, foldText, sentenceCount, type Idea, type IdeaLink, type IdeaMap, type IdeaTopic } from './ideas'
 import { validateOrganization, type ValidationResult } from './ideasValidate'
 
 const NOW = '2026-11-23T12:00:00.000Z'
 const topic = (id: string, areaId: string, name: string, extra: Partial<IdeaTopic> = {}): IdeaTopic =>
-  ({ id, areaId, name, firm: true, archived: false, origin: 'PESSOA', ...extra })
+  ({ id, areaId: `A:${areaId}`, name, firm: true, archived: false, origin: 'PESSOA', ownerId: 'A', createdAt: NOW, updatedAt: NOW, ...extra })
 const idea = (id: string, topicId: string, title: string, extra: Partial<Idea> = {}): Idea =>
-  ({ id, topicId, title, summary: '', nature: 'PLANO', state: 'SOLTA', needsReview: false, createdAt: NOW, updatedAt: NOW, ...extra })
+  ({ id, topicId, title, summary: '', nature: 'PLANO', state: 'SOLTA', needsReview: false, ownerId: 'A', createdAt: NOW, updatedAt: NOW, ...extra })
 const link = (fromIdeaId: string, toIdeaId: string, extra: Partial<IdeaLink> = {}): IdeaLink =>
-  ({ id: `${fromIdeaId}-${toIdeaId}`, fromIdeaId, toIdeaId, type: 'RELACIONA', reason: 'r', origin: 'IA', state: 'CONFIRMADA', ...extra })
+  ({ id: `${fromIdeaId}-${toIdeaId}`, fromIdeaId, toIdeaId, type: 'RELACIONA', reason: 'r', origin: 'IA', state: 'CONFIRMADA', ownerId: 'A', createdAt: NOW, updatedAt: NOW, ...extra })
 
 function baseMap(): IdeaMap {
   return {
-    areas: DEFAULT_AREAS.map((a) => ({ ...a })),
+    areas: defaultAreasFor('A', NOW),
     topics: [topic('t-viagem', 'lazer', 'Viagem para o Sul'), topic('t-corrida', 'saude', 'Corrida')],
     ideas: [idea('i-viagem', 't-viagem', 'Viajar para Floripa'), idea('i-correr', 't-corrida', 'Correr de manhã')],
     links: [],
@@ -27,7 +27,7 @@ describe('organizar uma captura (caminho feliz)', () => {
   it('anexa, cria assunto provisório e ideia nova, sugere ligação e resumo', () => {
     const r = run(CAPTURE, [
       { tipo: 'ANEXAR', trecho: 'quero ir para Floripa em janeiro', ideia_id: 'i-viagem', confianca: 0.93 },
-      { tipo: 'CRIAR_ASSUNTO', ref: 'novo-dinheiro', area_id: 'dinheiro', nome: 'Reserva para viagem', motivo: 'meta de dinheiro' },
+      { tipo: 'CRIAR_ASSUNTO', ref: 'novo-dinheiro', area_id: 'A:dinheiro', nome: 'Reserva para viagem', motivo: 'meta de dinheiro' },
       { tipo: 'CRIAR_IDEIA', ref: 'juntar', trecho: 'preciso juntar 3 mil.', assunto_ref: 'novo-dinheiro', titulo: 'Juntar 3 mil', natureza: 'PLANO', confianca: 0.85 },
       { tipo: 'CRIAR_IDEIA', trecho: 'também quero aprender violão', assunto_id: 't-viagem', titulo: 'Aprender violão', natureza: 'DESEJO', confianca: 0.7 },
       { tipo: 'SUGERIR_LIGACAO', de_ideia: 'i-viagem', para_ideia: 'juntar', tipo_ligacao: 'DEPENDE_DE', motivo: 'a viagem precisa do dinheiro', confianca: 0.9 },
@@ -171,10 +171,10 @@ describe('estrutura fixa (ADR-0002)', () => {
 
   it('a IA não cria Área e não usa Área escondida', () => {
     const map = baseMap()
-    map.areas = map.areas.map((a) => (a.id === 'lazer' ? { ...a, hidden: true } : a))
+    map.areas = map.areas.map((a) => (a.id === 'A:lazer' ? { ...a, hidden: true } : a))
     const r = run('aprender violão', [
-      { tipo: 'CRIAR_ASSUNTO', ref: 'm', area_id: 'musica', nome: 'Música', motivo: 'novo' },
-      { tipo: 'CRIAR_ASSUNTO', ref: 'n', area_id: 'lazer', nome: 'Música', motivo: 'novo' },
+      { tipo: 'CRIAR_ASSUNTO', ref: 'm', area_id: 'A:musica', nome: 'Música', motivo: 'novo' },
+      { tipo: 'CRIAR_ASSUNTO', ref: 'n', area_id: 'A:lazer', nome: 'Música', motivo: 'novo' },
       create({ assunto_ref: 'm' }),
     ], map)
     expect(r.rejected.map((x) => x.reason)).toEqual(['área não existe', 'área escondida pela pessoa', 'assunto_ref não foi criado (ou foi recusado) nesta captura'])
@@ -183,7 +183,7 @@ describe('estrutura fixa (ADR-0002)', () => {
 
   it('nome de assunto repetido na área é recusado (sem acento e maiúscula)', () => {
     const r = run('aprender violão', [
-      { tipo: 'CRIAR_ASSUNTO', ref: 'v', area_id: 'lazer', nome: 'VIAGEM para o sul', motivo: 'x' },
+      { tipo: 'CRIAR_ASSUNTO', ref: 'v', area_id: 'A:lazer', nome: 'VIAGEM para o sul', motivo: 'x' },
       create({ assunto_ref: 'v' }),
     ])
     expect(r.rejected[0]?.reason).toBe('já existe assunto com esse nome nesta área; use o id dele')
@@ -195,7 +195,7 @@ describe('estrutura fixa (ADR-0002)', () => {
     map.topics.push(topic('t-arq', 'lazer', 'Arquivado', { archived: true }))
     // lazer já tem 12 ativos (t-viagem + 11)
     const r = run('aprender violão', [
-      { tipo: 'CRIAR_ASSUNTO', ref: 'm', area_id: 'lazer', nome: 'Música', motivo: 'novo' },
+      { tipo: 'CRIAR_ASSUNTO', ref: 'm', area_id: 'A:lazer', nome: 'Música', motivo: 'novo' },
       create({ assunto_ref: 'm' }),
     ], map)
     expect(r.rejected[0]?.reason).toBe('área já tem o máximo de assuntos; proponha juntar na revisão')
@@ -203,7 +203,7 @@ describe('estrutura fixa (ADR-0002)', () => {
 
   it('assunto novo sem ideia válida não é criado', () => {
     const r = run('aprender violão', [
-      { tipo: 'CRIAR_ASSUNTO', ref: 'm', area_id: 'lazer', nome: 'Música', motivo: 'novo' },
+      { tipo: 'CRIAR_ASSUNTO', ref: 'm', area_id: 'A:lazer', nome: 'Música', motivo: 'novo' },
       create({ assunto_ref: 'm', confianca: 0.3 }),
     ])
     expect(kinds(r)).toEqual([])

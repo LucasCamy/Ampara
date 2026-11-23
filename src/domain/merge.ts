@@ -1,6 +1,7 @@
 import { canViewCycleLog } from './cycle'
 import { canViewRule } from './ledger'
 import { canViewFocusSession } from './together'
+import { IDEA_COLLECTIONS } from './types'
 import type { CalendarEvent, CollectionName, CycleLog, CycleSettings, DataState, FocusSession, Medication, MedicationLog, PartnerId, Task, Transaction } from './types'
 
 export interface RemoteRow<T = unknown> {
@@ -119,9 +120,16 @@ export function purgeUnauthorized(state: DataState, owner: PartnerId, opts: Purg
   const cycleSettings = Object.values(state.cycleSettings).every(keepCycleSettings)
     ? state.cycleSettings
     : Object.fromEntries(Object.values(state.cycleSettings).filter(keepCycleSettings).map((s) => [s.id, s]))
+  // ideias do par nunca ficam neste aparelho (privadas de quem escreveu, ADR-0009)
+  const ideaParts: Partial<DataState> = {}
+  for (const c of IDEA_COLLECTIONS) {
+    const map = state[c] as Record<string, { id: string; ownerId: PartnerId }>
+    const kept = filter(map, (x) => x.ownerId === owner)
+    if (kept !== map) Object.assign(ideaParts, { [c]: kept })
+  }
   if (!removed.size && cycleSettings === state.cycleSettings) return state
   const logIds = Object.keys(state.medLogs).filter((id) => !medLogs[id])
   for (const id of logIds) removed.add(id)
   const outbox = state.outbox.filter((e) => !removed.has(e.entityId))
-  return { ...state, transactions, tasks, focusSessions, events, meds, medLogs, cycleLogs, cycleSettings, giftIdeas, recurrences, outbox }
+  return { ...state, ...ideaParts, transactions, tasks, focusSessions, events, meds, medLogs, cycleLogs, cycleSettings, giftIdeas, recurrences, outbox }
 }

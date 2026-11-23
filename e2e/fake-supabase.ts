@@ -8,6 +8,9 @@ import type { BrowserContext, Route } from '@playwright/test'
  */
 export const FAKE_URL = 'http://fake-supabase.test'
 
+/** Tabelas do módulo Ideias: privadas de quem escreveu (espelho de ideas_* no schema.sql) */
+const IDEA_TABLES = new Set(['idea_areas', 'idea_topics', 'ideas', 'idea_captures', 'idea_notes', 'idea_links', 'idea_actions', 'idea_ai_log'])
+
 type Row = Record<string, unknown>
 interface User {
   id: string
@@ -116,6 +119,8 @@ export class FakeSupabase {
     if (table === 'cycle_settings') return true
     // gift_ideas_read: presente é surpresa, só quem anotou
     if (table === 'gift_ideas') return row.owner_id === m.partner_id
+    // ideas_*_read: ideias são privadas de quem escreveu, inclusive no Casal (ADR-0009)
+    if (IDEA_TABLES.has(table)) return row.owner_id === m.partner_id
     if (table === 'cycle_logs') {
       if (row.owner_id === m.partner_id) return true
       return this.table('cycle_settings').get(`${m.couple_id}|${String(row.owner_id)}`)?.share === 'FULL'
@@ -141,6 +146,7 @@ export class FakeSupabase {
     if (table === 'cycle_settings') return row.id === m.partner_id
     if (table === 'cycle_logs') return row.owner_id === m.partner_id
     if (table === 'gift_ideas' || table === 'mood_checkins' || table === 'comfort_items') return row.owner_id === m.partner_id
+    if (IDEA_TABLES.has(table)) return row.owner_id === m.partner_id
     return true
   }
 
@@ -276,7 +282,7 @@ export class FakeSupabase {
     const tableName = path.replace('/rest/v1/', '')
     const t = this.table(tableName)
     // chave (couple_id, id): perfis, ajustes do ciclo e check-in ("A@data" se repete entre casais)
-    const composite = tableName === 'profiles' || tableName === 'cycle_settings' || tableName === 'mood_checkins'
+    const composite = tableName === 'profiles' || tableName === 'cycle_settings' || tableName === 'mood_checkins' || tableName === 'idea_areas'
     const keyOf = (row: Row) => (composite ? `${String(row.couple_id)}|${String(row.id)}` : String(row.id))
     if (!me) return json(403, { message: 'not a member' })
 

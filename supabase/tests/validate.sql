@@ -14,7 +14,8 @@ declare missing text;
 begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
-                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','push_subscriptions','push_config','push_sent','recurrences']) t
+                      'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','push_subscriptions','push_config','push_sent','recurrences',
+                      'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -38,10 +39,11 @@ begin
   select string_agg(tablename || '.' || policyname, ', ') into missing
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
-     and tablename in ('couples','profiles','help_requests','nudges','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences','focus_sessions');
+     and tablename in ('couples','profiles','help_requests','nudges','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences','focus_sessions',
+                       'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 24 tabelas, RLS ligado em todas, 11 funções'
+\echo 'ok  estrutura: 32 tabelas, RLS ligado em todas, 11 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -567,6 +569,110 @@ do $$ begin
 end $$;
 \echo 'ok  fazer junto e caixinhas: os dois editam, sem saldo negativo; conta de fora não vê'
 
+-- ---------------------------------------------------------------- 6g. ideias (segundo cérebro): privadas de quem escreveu
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true) as _ \gset
+insert into idea_areas (id, couple_id, owner_id, name, sort_order) values ('A:saude', 'space-teste', 'A', 'Saúde', 3);
+insert into idea_topics (id, couple_id, owner_id, area_id, name, origin) values
+  ('88880000-0000-4000-8000-000000000001', 'space-teste', 'A', 'A:saude', 'Corrida', 'IA');
+insert into ideas (id, couple_id, owner_id, topic_id, title, nature) values
+  ('88880000-0000-4000-8000-000000000002', 'space-teste', 'A', '88880000-0000-4000-8000-000000000001', 'Correr de manhã', 'PLANO'),
+  ('88880000-0000-4000-8000-000000000003', 'space-teste', 'A', '88880000-0000-4000-8000-000000000001', 'Dormir cedo', 'DESEJO');
+insert into idea_captures (id, couple_id, owner_id, text, source) values
+  ('88880000-0000-4000-8000-000000000004', 'space-teste', 'A', 'quero correr de manhã e dormir cedo', 'VOZ');
+insert into idea_notes (id, couple_id, owner_id, capture_id, idea_id, text, start_pos, end_pos) values
+  ('88880000-0000-4000-8000-000000000005', 'space-teste', 'A', '88880000-0000-4000-8000-000000000004', '88880000-0000-4000-8000-000000000002', 'quero correr de manhã', 0, 21),
+  ('88880000-0000-4000-8000-000000000009', 'space-teste', 'A', '88880000-0000-4000-8000-000000000004', null, 'e dormir cedo', 22, 35);
+insert into idea_links (id, couple_id, owner_id, from_idea_id, to_idea_id, type, reason, origin) values
+  ('88880000-0000-4000-8000-000000000006', 'space-teste', 'A', '88880000-0000-4000-8000-000000000002', '88880000-0000-4000-8000-000000000003', 'DEPENDE_DE', 'acordar cedo pede dormir cedo', 'IA');
+insert into idea_actions (id, couple_id, owner_id, idea_id, target_type, target_id) values
+  ('88880000-0000-4000-8000-000000000007', 'space-teste', 'A', '88880000-0000-4000-8000-000000000002', 'TASK', '88880000-0000-4000-8000-0000000000aa');
+insert into idea_ai_log (id, couple_id, owner_id, capture_id, provider, model, prompt_version, result) values
+  ('88880000-0000-4000-8000-000000000008', 'space-teste', 'A', '88880000-0000-4000-8000-000000000004', 'claude-assinatura', 'claude-opus-5-5', 'organizador@1', '{"aplicadas": 2}');
+
+do $$ begin
+  begin
+    insert into ideas (id, couple_id, owner_id, topic_id, title, nature) values
+      ('88880000-0000-4000-8000-0000000000b1', 'space-teste', 'B', '88880000-0000-4000-8000-000000000001', 'forjada', 'PLANO');
+    raise exception 'FALHOU: Lucas gravou ideia em nome dela';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into idea_captures (id, couple_id, owner_id, text, source) values ('88880000-0000-4000-8000-0000000000b2', 'space-teste', 'B', 'forjada', 'TEXTO');
+    raise exception 'FALHOU: Lucas gravou captura em nome dela';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into idea_areas (id, couple_id, owner_id, name) values ('B:saude', 'space-teste', 'A', 'Saúde');
+    raise exception 'FALHOU: área com id de outra pessoa';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into idea_topics (id, couple_id, owner_id, area_id, name, origin) values ('88880000-0000-4000-8000-0000000000b3', 'space-teste', 'A', 'B:saude', 'x', 'IA');
+    raise exception 'FALHOU: assunto numa área de outra pessoa';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into ideas (id, couple_id, owner_id, topic_id, title, nature) values ('88880000-0000-4000-8000-0000000000b4', 'space-teste', 'A', '88880000-0000-4000-8000-000000000001', 'x', 'SONHO');
+    raise exception 'FALHOU: natureza fora do vocabulário';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into idea_notes (id, couple_id, owner_id, capture_id, text) values ('88880000-0000-4000-8000-0000000000b5', 'space-teste', 'A', '88880000-0000-4000-8000-000000000004', repeat('x', 4001));
+    raise exception 'FALHOU: anotação maior que 4000 caracteres';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into idea_links (id, couple_id, owner_id, from_idea_id, to_idea_id, type, reason, origin) values
+      ('88880000-0000-4000-8000-0000000000b6', 'space-teste', 'A', '88880000-0000-4000-8000-000000000002', '88880000-0000-4000-8000-000000000002', 'RELACIONA', 'x', 'IA');
+    raise exception 'FALHOU: ligação de uma ideia com ela mesma';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into idea_ai_log (id, couple_id, owner_id, capture_id, provider, prompt_version) values
+      ('88880000-0000-4000-8000-0000000000b7', 'space-teste', 'A', '88880000-0000-4000-8000-000000000004', 'x', 'livre');
+    raise exception 'FALHOU: registro da IA sem versão do contrato';
+  exception when check_violation then null;
+  end;
+end $$;
+
+-- "a versão mais nova vence": um aparelho atrasado não desfaz o que o outro gravou
+update ideas set title = 'antigo', updated_at = '2000-01-01' where id = '88880000-0000-4000-8000-000000000002';
+update ideas set state = 'AMADURECENDO', updated_at = now() + interval '1 second' where id = '88880000-0000-4000-8000-000000000003';
+
+-- ela (mesmo espaço) não vê, não altera e não apaga nada das ideias do Lucas
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true) as _ \gset
+update ideas set title = 'invadido';
+update idea_areas set name = 'invadido';
+delete from idea_notes;
+delete from idea_links;
+do $$ begin
+  assert (select count(*) from idea_areas) + (select count(*) from idea_topics) + (select count(*) from ideas) + (select count(*) from idea_captures)
+       + (select count(*) from idea_notes) + (select count(*) from idea_links) + (select count(*) from idea_actions) + (select count(*) from idea_ai_log) = 0,
+    'FALHOU: ela viu ideias do Lucas';
+end $$;
+
+-- alguém de fora também não
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"cccccccc-0000-4000-8000-00000000000c","role":"authenticated"}', true) as _ \gset
+do $$ begin
+  assert (select count(*) from ideas) + (select count(*) from idea_captures) + (select count(*) from idea_notes) = 0, 'FALHOU: conta de fora viu ideias';
+end $$;
+
+reset role;
+do $$ begin
+  assert (select title from ideas where id = '88880000-0000-4000-8000-000000000002') = 'Correr de manhã', 'FALHOU: versão antiga desfez a ideia (ou ela alterou)';
+  assert (select state from ideas where id = '88880000-0000-4000-8000-000000000003') = 'AMADURECENDO', 'FALHOU: atualização nova não entrou';
+  assert (select name from idea_areas where id = 'A:saude' and couple_id = 'space-teste') = 'Saúde', 'FALHOU: ela alterou a área do Lucas';
+  assert (select count(*) from idea_notes where couple_id = 'space-teste') = 2, 'FALHOU: ela apagou anotações do Lucas';
+  assert (select count(*) from idea_links where couple_id = 'space-teste') = 1, 'FALHOU: ela apagou a ligação do Lucas';
+end $$;
+\echo 'ok  ideias: só quem escreveu vê, altera ou apaga; vocabulários, limites e "mais nova vence" no banco'
+
 -- ---------------------------------------------------------------- 6g. Web Push
 reset role;
 insert into push_config (id, public_key, private_key) values (1, 'chave-publica-teste', 'chave-privada-teste') on conflict (id) do nothing;
@@ -717,6 +823,16 @@ do $$ begin
   exception when insufficient_privilege then null;
   end;
   begin
+    perform 1 from ideas;
+    raise exception 'FALHOU: worker leu ideias';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from idea_captures;
+    raise exception 'FALHOU: worker leu capturas';
+  exception when insufficient_privilege then null;
+  end;
+  begin
     update medications set name = 'invadido';
     raise exception 'FALHOU: worker alterou remédio';
   exception when insufficient_privilege then null;
@@ -817,7 +933,8 @@ values (encode(digest('STALESOLO', 'sha256'), 'hex'), 'space-teste', 'A');
 create temporary table solo_entity_snapshot (table_name text primary key, payload jsonb not null) on commit drop;
 do $$ declare v_table text; v_payload jsonb; begin
   foreach v_table in array array['profiles','tasks','events','medications','medication_logs','transactions','help_requests','nudges',
-    'cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','recurrences'] loop
+    'cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','recurrences',
+    'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log'] loop
     execute format('select coalesce(jsonb_agg(to_jsonb(t) order by t.id), ''[]''::jsonb) from %I t where t.couple_id = %L', v_table, 'space-teste') into v_payload;
     insert into solo_entity_snapshot values (v_table, v_payload);
   end loop;
