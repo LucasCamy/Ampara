@@ -4,7 +4,7 @@ import { Button, cx, FieldError } from '../../components/ui'
 import { IDEA_LIMITS } from '../../domain/ideas'
 import { captureThought, deletePendingCapture, undoOrganization } from '../../store/ideaActions'
 import { describeAiResult, organizeWithAi } from '../../store/ideaAi'
-import { currentProvider } from '../../ai/provider'
+import { currentProvider, desktopBridge } from '../../ai/provider'
 import { ui } from '../../store/ui'
 import { canDictate, startDictation, type DictationSession } from '../voice/speech'
 
@@ -35,6 +35,14 @@ export function CaptureBox() {
   }
 
   const dictate = () => {
+    // no PC (exe), a voz do Windows escreve direto no campo
+    const bridge = desktopBridge()
+    if (bridge?.dictate) {
+      document.querySelector<HTMLTextAreaElement>(`#${CSS.escape(`${id}-input`)}`)?.focus()
+      setUsedVoice(true)
+      void bridge.dictate().then((ok) => { if (!ok && mounted.current) setError('Não consegui abrir a voz do Windows. Aperte Win + H.') })
+      return
+    }
     if (listening) {
       recognition.current?.stop()
       setListening(false)
@@ -110,7 +118,7 @@ export function CaptureBox() {
       )}
       {organizing ? <p role="status" className="flex items-center gap-2 text-[14px] font-semibold text-ink" data-testid="idea-organizing"><Sparkles size={16} aria-hidden className="text-action" />Organizando com a IA…</p> : null}
       <div className="flex flex-col gap-2 sm:flex-row">
-        {canDictate() ? (
+        {canDictate() || desktopBridge()?.dictate ? (
           <Button type="button" variant="quiet" icon={listening ? Square : Mic} onClick={dictate} aria-pressed={listening} data-testid="idea-capture-mic" className="sm:w-auto">
             {listening ? 'Parar' : 'Falar'}
           </Button>

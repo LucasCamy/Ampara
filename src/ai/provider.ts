@@ -31,6 +31,12 @@ export interface AmparaDesktopBridge {
   status(): Promise<{ claude: boolean; model: string }>
   runStructured(req: StructuredRequest): Promise<{ json: unknown; model: string }>
   onShortcut?(cb: () => void): () => void
+  /** Painel da bolinha (true) ou janela completa (false) */
+  onCompact?(cb: (compact: boolean) => void): () => void
+  openFull?(): void
+  isCompact?(): Promise<boolean>
+  /** Abre a digitação por voz do Windows no campo em foco */
+  dictate?(): Promise<boolean>
 }
 
 declare global {

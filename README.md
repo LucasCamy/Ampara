@@ -62,14 +62,16 @@ Exporte um backup `.ampara` em Ajustes para ter uma cópia fora do aparelho. Det
 ## Ampara no PC (com IA)
 
 O app do PC (`desktop/`) é o próprio Ampara num programa do Windows, com a IA pela **sua assinatura do Claude**
-(o Claude Code instalado e com login) e o atalho `Ctrl + Shift + Espaço` para soltar um pensamento.
+(o Claude Code instalado e com login), uma **bolinha flutuante** sempre por cima e o atalho `Ctrl + Shift + Espaço`.
+Clicar na bolinha abre um painel pequeno só com o campo para soltar; arraste a bolinha para onde quiser.
 
 1. Crie `.env.desktop` na raiz (veja `.env.desktop.example`) com o endereço e a chave anônima da sua nuvem.
    Sem ele, o app do PC guarda os dados só no PC.
 2. `cd desktop && npm install && npm run dist` gera o instalador em `desktop/release/`.
 3. Abra o Ampara no PC e entre com a sua conta da nuvem (Ajustes > Nuvem > Já tenho conta).
 
-Testes reais (gastam um pouco da assinatura): `cd desktop && npm run test:live` e `desktop/test/live-cloud.cjs`.
+Testes: `cd desktop && npm run test:bubble` (bolinha e painel, sem IA) e, gastando um pouco da assinatura,
+`npm run test:live` e `desktop/test/live-cloud.cjs`.
 
 ## Scripts
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Toaster } from './components/Toaster'
 import { ScreenSkeleton } from './components/Skeleton'
 import { BottomNav, Dock, Sidebar } from './features/shell/Nav'
@@ -17,6 +17,7 @@ import { toDateKey } from './domain/dates'
 import { materializeRecurrences } from './store/financeActions'
 import { useAlertWatch } from './features/alerts/watch'
 import { desktopBridge } from './ai/provider'
+import { CompactCapture } from './features/ideas/CompactCapture'
 
 /** Entrar no lugar certo: /?quick=task|expense|med|sos, #/aba, ou o destino de uma notificação que esperou o login */
 function useQuickLaunch() {
@@ -115,13 +116,34 @@ function useDesktopShortcut() {
   }, [])
 }
 
+/** No PC, a bolinha abre a janela como painel compacto: só o campo para soltar. */
+function useDesktopCompact(): boolean {
+  const [compact, setCompact] = useState(false)
+  useEffect(() => {
+    const bridge = desktopBridge()
+    void bridge?.isCompact?.().then(setCompact)
+    return bridge?.onCompact?.(setCompact)
+  }, [])
+  return compact
+}
+
 function AppShell() {
+  const compact = useDesktopCompact()
   useQuickLaunch()
   useDesktopShortcut()
   useRecurrences()
   usePrefetchTabs()
   useTour()
   useAlertWatch()
+  if (compact) {
+    return (
+      <div data-testid="app">
+        <CompactCapture />
+        <SheetHost />
+        <Toaster />
+      </div>
+    )
+  }
   return (
     <div className="flex min-h-dvh" data-testid="app">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:rounded-[12px] focus:bg-surface focus:p-3">

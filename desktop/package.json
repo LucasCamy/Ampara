@@ -9,6 +9,7 @@
     "app": "cd .. && npm run typecheck && npx vite build --mode desktop && node desktop/scripts/copy-dist.cjs",
     "start": "electron .",
     "test:live": "node test/live.cjs",
+    "test:bubble": "node test/bubble.cjs",
     "dist": "npm run app && electron-builder --win nsis"
   },
   "build": {
@@ -21,6 +22,10 @@
       "main.cjs",
       "preload.cjs",
       "claude.cjs",
+      "bubble.html",
+      "bubble.css",
+      "bubble.js",
+      "bubble-preload.cjs",
       "icon.png",
       "package.json"
     ],

@@ -619,3 +619,7 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   simulada), teste real do exe com a assinatura, com e sem o Supabase local.
 - **Pendente da IA:** perguntas com citação, revisão semanal, concretizar, chave de API na web (ADR-0006), Codex,
   bolinha flutuante no PC e importação das ideias `.md` do AjudaMental.
+- **Feito (2026-11-23), bolinha no PC:** bolinha flutuante, painel compacto só com o campo (`CompactCapture`), bandeja,
+  fechar esconde, posição salva, voz do Windows no "Falar". O protótipo AjudaMental foi desinstalado (sem ideias para
+  importar). Validação: `desktop/test/bubble.cjs`, lint, typecheck, 587 testes, `e2e:quick` 152 verdes.
+

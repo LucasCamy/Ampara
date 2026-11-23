@@ -50,7 +50,12 @@ e na web, e "adicionar um exe" que converse com o Ampara.
   apenas nas respostas do endereço da nuvem gravado no build (`desktop.json`, a partir de `.env.desktop`),
   inclusive o preflight. Navegadores comuns continuam bloqueados pelo servidor.
 - **Diferenças do plano:** sem service worker em `app://` (lembretes Web Push ficam no celular: `pushSupport`
-  devolve `unsupported` fora de http/https). A bolinha flutuante e a importação dos `.md` do protótipo ainda não
-  foram feitas.
+  devolve `unsupported` fora de http/https). Não havia ideias `.md` no protótipo para importar; o AjudaMental foi
+  desinstalado do PC da pessoa em 2026-11-23.
+- **Bolinha (2026-11-23):** janela separada, transparente, sempre por cima e sem roubar o foco (`bubble.html`,
+  ponte própria só com mover/abrir/menu). Clique ou `Ctrl+Shift+Espaço` abre o **painel compacto** (440 px, por cima,
+  só "O que está na sua cabeça?" e "Abrir o Ampara completo"); de novo, esconde. Arrastar move e a posição fica
+  salva. Fechar a janela só esconde; Sair fica no menu da bolinha e da bandeja. "Falar" usa a digitação por voz
+  do Windows (Win + H). Verificado em `desktop/test/bubble.cjs`.
 - **Verificado:** `desktop/test/live.cjs` (sem nuvem) e `desktop/test/live-cloud.cjs` (Supabase do Docker),
   ambos com a assinatura real.
