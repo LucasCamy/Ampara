@@ -580,4 +580,9 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   as sugestões "não usam API paga de IA". O módulo mantém a IA opcional e o app funcional sem ela.
 - **Estado:** em andamento. Primeiro passo: vocabulários e validador do contrato da IA (`src/domain/ideas.ts`, `src/domain/ideasValidate.ts`) com testes,
   depois schema/RLS, telas (esboço e mapa) e, por fim, provedores e a casca desktop.
+- **Feito (2026-11-23):** `src/domain/ideas.ts` (vocabulários, limites, Áreas iniciais) e `src/domain/ideasValidate.ts`
+  (contrato `organizador@N`: trecho literal sem sobreposição, nada se perde, ids, vocabulários, limites de assuntos e
+  ligações, confiança 0,6/0,8, sem apagar nem mover). 35 testes, incluindo uma propriedade com 200 rodadas
+  aleatórias de que nenhuma palavra da captura se perde. Validação: lint, typecheck e 538 testes verdes.
+  Ainda não ligado a telas, banco ou IA.
 
