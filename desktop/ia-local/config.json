@@ -1,5 +1,9 @@
 {
-  "model": "qwen/qwen3.5-9b",
+  "model": "google/gemma-4-e4b",
   "context": 8192,
-  "origins": ["https://ampara.cloudlane.com.br", "app://ampara"]
+  "parallel": 1,
+  "origins": [
+    "https://ampara.cloudlane.com.br",
+    "app://ampara"
+  ]
 }

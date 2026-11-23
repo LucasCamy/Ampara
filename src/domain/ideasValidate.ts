@@ -194,8 +194,13 @@ export function validateOrganization(rawCapture: string, response: unknown, map:
       if (summary.length > IDEA_LIMITS.summaryMaxChars) refuse('resumo longo demais')
       if (summary && sentenceCount(summary) > IDEA_LIMITS.summaryMaxSentences) refuse(`resumo com mais de ${IDEA_LIMITS.summaryMaxSentences} frases`)
       let topic: TopicRef
-      const topicId = str(op.assunto_id)
-      const topicRef = str(op.assunto_ref)
+      let topicId = str(op.assunto_id)
+      let topicRef = str(op.assunto_ref)
+      // modelos pequenos às vezes põem o "ref" do assunto novo em assunto_id: é o mesmo assunto, sem ambiguidade
+      if (topicId && !topicRef && !topicById.has(topicId) && newTopics.has(topicId)) {
+        topicRef = topicId
+        topicId = null
+      }
       if (topicId && topicRef) refuse('use assunto_id ou assunto_ref, não os dois')
       if (topicId) {
         const t = topicById.get(topicId) ?? refuse('assunto não existe')

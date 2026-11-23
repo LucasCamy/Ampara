@@ -75,6 +75,18 @@ Clicar na bolinha abre um painel pequeno só com o campo para soltar; arraste a 
 Testes: `cd desktop && npm run test:bubble` (bolinha e painel, sem IA) e, gastando um pouco da assinatura,
 `npm run test:live` e `desktop/test/live-cloud.cjs`.
 
+## IA local grátis (PC e celular)
+
+Um modelo roda na placa de vídeo do seu PC (LM Studio) e fica disponível só na sua rede Tailscale.
+Detalhes e números na [ADR-0010](docs/adr/0010-ia-local-no-pc-pela-rede-tailscale.md).
+
+1. No Tailscale, ligue **MagicDNS**, **HTTPS** e **Serve**.
+2. Como administrador: `powershell -ExecutionPolicy Bypass -File desktop\ia-local\instalar-servico.ps1`
+   (cria a tarefa que liga a IA junto com o PC e publica o endereço na rede Tailscale).
+3. Coloque o endereço em `VITE_LOCAL_AI_URL` (`.env.desktop` para o app do PC; variável `LOCAL_AI_URL` do GitHub
+   Actions para o app publicado).
+4. No celular, mantenha o Tailscale ligado. Em Ajustes > Inteligência artificial, confira "Conectada e pronta".
+
 ## Scripts
 
 | Script | O que faz |

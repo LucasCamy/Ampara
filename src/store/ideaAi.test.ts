@@ -54,6 +54,27 @@ describe('organizar com IA', () => {
     expect(describeAiResult(r)).toBe('Organizei em Saúde › Corrida.')
   })
 
+  it('resposta com erro de formato tenta de novo uma vez; a segunda certa é gravada', async () => {
+    const id = captureThought('aprender violão')!
+    let calls = 0
+    const provider = fakeProvider(() => {
+      calls++
+      return calls === 1
+        ? { versao: ORGANIZER_VERSION, operacoes: [op({ tipo: 'CRIAR_IDEIA', trecho: 'aprender violão', assunto_id: 'inventado', titulo: 'Violão', natureza: 'DESEJO', confianca: 0.9 })] }
+        : { versao: ORGANIZER_VERSION, operacoes: [op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:lazer', nome: 'Música' }), op({ tipo: 'CRIAR_IDEIA', trecho: 'aprender violão', assunto_ref: 's', titulo: 'Violão', natureza: 'DESEJO', confianca: 0.9 })] }
+    })
+    const r = await organizeWithAi(id, provider)
+    expect(calls).toBe(2)
+    expect(describeAiResult(r)).toBe('Organizei em Lazer e criatividade › Música.')
+  })
+
+  it('dúvida de verdade (Caixa de entrada pedida pela IA) não repete', async () => {
+    const id = captureThought('hmm sei lá')!
+    let calls = 0
+    await organizeWithAi(id, fakeProvider(() => { calls++; return { versao: ORGANIZER_VERSION, operacoes: [op({ tipo: 'CAIXA_DE_ENTRADA', trecho: 'hmm sei lá', motivo: 'sem contexto' })] } }))
+    expect(calls).toBe(1)
+  })
+
   it('resposta fora do contrato não grava ideia: a captura vai para a Caixa de entrada', async () => {
     const id = captureThought('pensamento qualquer')!
     const r = await organizeWithAi(id, fakeProvider(() => 'não sei'))

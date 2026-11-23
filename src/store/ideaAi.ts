@@ -4,7 +4,7 @@
  */
 import { currentProvider, type AiProvider } from '../ai/provider'
 import { ORGANIZER_SCHEMA, ORGANIZER_SYSTEM, ORGANIZER_VERSION, buildOrganizerInput, selectCandidates } from '../domain/ideasPrompt'
-import { validateOrganization } from '../domain/ideasValidate'
+import { validateOrganization, type ValidationResult } from '../domain/ideasValidate'
 import { CONCRETIZE_SCHEMA, CONCRETIZE_SYSTEM, buildConcretizeInput, defaultDraft, parseProposal, type ActionDraft } from '../domain/ideasConcretize'
 import type { DateKey } from '../domain/types'
 import { ASK_SCHEMA, ASK_SYSTEM, buildAskInput, checkAnswer, searchNotes, type AskFilters, type CheckedAnswer, type FoundNote } from '../domain/ideasAsk'
@@ -18,6 +18,12 @@ export interface AiOrganizeResult {
   places: string[]
   inboxCount: number
   rejectedCount: number
+}
+
+/** Nada encaixado e houve recusa por formato (ou resposta fora do contrato): vale uma segunda tentativa. */
+export function retryWorthy(result: ValidationResult): boolean {
+  const placed = result.apply.some((o) => o.kind === 'ANEXAR' || o.kind === 'CRIAR_IDEIA')
+  return !placed && (!result.ok || result.rejected.length > 0)
 }
 
 const pending = new Set<string>()
@@ -36,11 +42,18 @@ export async function organizeWithAi(captureId: string, provider: AiProvider | n
     const map = myIdeaMap(start, owner)
     const notes = Object.values(start.ideaNotes).filter((n) => n.ownerId === owner)
     const candidates = selectCandidates(map, notes, capture.text)
-    const response = await provider.runStructured({ system: ORGANIZER_SYSTEM, schema: ORGANIZER_SCHEMA, input: buildOrganizerInput(capture.text, { ...map, ideas: candidates }, candidates) })
+    const request = { system: ORGANIZER_SYSTEM, schema: ORGANIZER_SCHEMA, input: buildOrganizerInput(capture.text, { ...map, ideas: candidates }, candidates) }
+    let response = await provider.runStructured(request)
     // valida contra o mapa ATUAL (a pessoa pode ter mexido enquanto a IA pensava)
-    const now = dataStore.get()
     if (uiStore.get().viewer !== owner) throw new Error('A pessoa usando o app mudou. Nada foi gravado.')
-    const result = validateOrganization(capture.text, response.json, myIdeaMap(now, owner))
+    let result = validateOrganization(capture.text, response.json, myIdeaMap(dataStore.get(), owner))
+    // Modelos pequenos às vezes erram o formato: se nada foi encaixado por erro de formato (não por dúvida),
+    // tenta mais uma vez. Dúvida de verdade ("CAIXA_DE_ENTRADA" ou confiança baixa) não repete.
+    if (retryWorthy(result)) {
+      response = await provider.runStructured(request)
+      if (uiStore.get().viewer !== owner) throw new Error('A pessoa usando o app mudou. Nada foi gravado.')
+      result = validateOrganization(capture.text, response.json, myIdeaMap(dataStore.get(), owner))
+    }
     const logId = applyOrganization(captureId, result, { provider: response.provider, model: response.model, promptVersion: ORGANIZER_VERSION })
     if (!logId) throw new Error('Este pensamento já foi organizado.')
 

@@ -21,7 +21,13 @@ const lit = (s) => `'${String(s).replace(/'/g, "''")}'`
   })
   const errors = []
   try {
-    const page = await app.firstWindow()
+    // a bolinha também é uma janela: o app é a que carrega app://ampara
+    let page = null
+    for (let i = 0; i < 50 && !page; i++) {
+      page = app.windows().find((w) => w.url().startsWith('app://ampara')) ?? null
+      if (!page) await new Promise((r) => setTimeout(r, 200))
+    }
+    if (!page) throw new Error('janela do app não apareceu')
     page.on('pageerror', (e) => errors.push(String(e)))
     page.setDefaultTimeout(30000)
     const run = crypto.randomBytes(4).toString('hex')

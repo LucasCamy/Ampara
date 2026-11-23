@@ -48,3 +48,25 @@ Restrições:
   mais (o que não passa pelo validador vai para a Caixa de entrada); a placa fica com parte da memória ocupada.
 - O primeiro teste, com o Qwen2.5-VL 7B que já estava no PC, levou 40 a 72 s por organização e falhou as referências
   de assunto. Por isso a escolha do modelo é por medição, não por fama.
+
+## Implementação e verificação
+
+- **Modelo escolhido (2026-11-23): Gemma 4 E4B (Q4_K_M)**, carregado com `--gpu max --parallel 1 -c 8192`:
+  ~5,6 GB na placa (sobram ~2,5 GB), modelo inteiro na VRAM. A "memória compartilhada" fica em ~0,12 GB fixos
+  (área de passagem do CUDA), igual com contexto 4096, 6144 ou 8192.
+
+  | Modelo | Cabe só na placa | Organizar (9) | Compromisso | Tempo (organizar) |
+  |---|---|---|---|---|
+  | Qwen2.5-VL 7B (já instalado) | não | 0/3 | errou | 40 a 72 s |
+  | Qwen3.5 9B | não (vazou 0,24 a 0,42 GB) | 0 (pensa até o limite) | — | 46 s |
+  | Qwen3.5 4B, sem "pensar" | sim (3,8 GB) | 4/9 | errou | 2 a 12 s |
+  | Qwen3.5 4B, com "pensar" | sim | 0/9 (não responde) | — | 32 s |
+  | **Gemma 4 E4B** | **sim** | **7/9** | **acertou** | 15 a 23 s |
+
+- Ajustes vindos da avaliação: exemplo curto no prompt `organizador@1`; o validador aceita o `ref` de um assunto
+  novo escrito em `assunto_id` (mesmo assunto, sem ambiguidade); uma segunda tentativa automática quando nada foi
+  encaixado por erro de formato (dúvida de verdade não repete). Os Qwen3.5 baixados para o teste foram apagados.
+- **Verificado:** intermediário (só Ampara, só rotas de conversa, limite de tamanho); `tailscale serve` com HTTPS
+  na rede privada; teste real do app do PC organizando pela IA local via Tailscale (3 ideias em 24 s).
+- **Pendente:** a pessoa rodar `instalar-servico.ps1` como administrador; variável `LOCAL_AI_URL` no GitHub para o
+  app publicado (celular e web); teste no celular com o Tailscale ligado.

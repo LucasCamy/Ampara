@@ -19,7 +19,8 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 
 Write-Log "Carregando o modelo $($config.model)..."
-& $lms load $config.model --identifier ampara --gpu max --context-length $config.context -y *>> $log
+# --gpu max: o modelo inteiro na placa; --parallel 1: uma conversa por vez (menos memória, nada vai para a RAM)
+& $lms load $config.model --identifier ampara --gpu max --context-length $config.context --parallel $config.parallel -y *>> $log
 
 $env:AMPARA_AI_PORT = '1235'
 $env:LMSTUDIO_URL = 'http://127.0.0.1:1234'

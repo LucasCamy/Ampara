@@ -19,7 +19,13 @@ const OUT = process.env.AMPARA_SHOTS || path.join(os.tmpdir(), 'ampara-desktop-s
   })
   const errors = []
   try {
-    const page = await app.firstWindow()
+    // a bolinha também é uma janela: o app é a que carrega app://ampara
+    let page = null
+    for (let i = 0; i < 50 && !page; i++) {
+      page = app.windows().find((w) => w.url().startsWith('app://ampara')) ?? null
+      if (!page) await new Promise((r) => setTimeout(r, 200))
+    }
+    if (!page) throw new Error('janela do app não apareceu')
     page.on('pageerror', (e) => errors.push(String(e)))
     page.setDefaultTimeout(20000)
     await page.waitForSelector('[data-testid="setup-form"], [data-testid="app"]')
@@ -39,6 +45,7 @@ const OUT = process.env.AMPARA_SHOTS || path.join(os.tmpdir(), 'ampara-desktop-s
     await page.locator('[data-testid="side-ideias"]:visible, [data-testid="nav-ideias"]:visible').first().click()
     await page.getByTestId('ideas-screen').waitFor()
     assert.match(await page.getByTestId('idea-capture').textContent(), /A IA do PC organiza/)
+    console.log('provedor em uso:', await page.evaluate(() => localStorage.getItem('ampara:ai') || 'auto'))
 
     const t0 = Date.now()
     await page.getByTestId('idea-capture-input').fill('quero voltar a correr de manhã, mas tenho medo de não conseguir acordar cedo. talvez dormir antes das 23h ajude')

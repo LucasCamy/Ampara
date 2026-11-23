@@ -29,5 +29,7 @@ if ($ts) {
   Write-Warning 'Tailscale não encontrado. Instale e rode: tailscale serve --bg --https=443 http://127.0.0.1:1235'
 }
 
+# Para um intermediário que esteja rodando à mão (senão a porta 1235 fica ocupada)
+Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" | Where-Object { $_.CommandLine -like '*ia-local*proxy.cjs*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -Confirm:$false }
 Start-ScheduledTask -TaskName 'Ampara IA local'
 Write-Host 'Pronto. A IA local está subindo (o modelo leva ~30 s para carregar).'

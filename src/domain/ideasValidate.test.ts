@@ -319,3 +319,19 @@ describe('resposta real da assinatura (2026-11-23)', () => {
   })
 })
 
+describe('tolerância a modelos pequenos', () => {
+  it('ref de assunto novo escrito em assunto_id é entendido como o mesmo assunto', () => {
+    const r = run('aprender violão', [
+      { tipo: 'CRIAR_ASSUNTO', ref: 'm1', area_id: 'A:lazer', nome: 'Música', motivo: null },
+      { tipo: 'CRIAR_IDEIA', trecho: 'aprender violão', assunto_id: 'm1', titulo: 'Aprender violão', natureza: 'DESEJO', confianca: 0.9 },
+    ])
+    expect(r.rejected).toEqual([])
+    expect(r.apply[1]).toMatchObject({ kind: 'CRIAR_IDEIA', topic: { ref: 'm1' } })
+  })
+
+  it('id que não existe e não é ref continua recusado', () => {
+    const r = run('aprender violão', [{ tipo: 'CRIAR_IDEIA', trecho: 'aprender violão', assunto_id: 'inventado', titulo: 'X', natureza: 'DESEJO', confianca: 0.9 }])
+    expect(r.rejected[0]?.reason).toBe('assunto não existe')
+  })
+})
+

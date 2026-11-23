@@ -630,3 +630,6 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   filtros lidos na pergunta; no PC a IA responde em até 6 frases citando as anotações (fonte numerada abre a ideia;
   citação inventada vira "sem fonte"); sem IA, mostra o que a busca achou. Validação: lint, typecheck, 610 testes,
   `e2e:quick` 160 verdes, print em 360 escuro, teste real com a assinatura.
+- **Feito (2026-11-23), IA local (ADR-0010):** LM Studio + intermediário próprio + `tailscale serve`, Gemma 4 E4B
+  inteiro na placa, provedor `ia-local` no Ampara com escolha por aparelho em Ajustes, segunda tentativa automática.
+  Validação: 616+ testes, `e2e:quick`, teste do intermediário, teste real do app do PC pela IA local.
