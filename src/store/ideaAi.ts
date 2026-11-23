@@ -7,6 +7,7 @@ import { ORGANIZER_SCHEMA, ORGANIZER_SYSTEM, ORGANIZER_VERSION, buildOrganizerIn
 import { validateOrganization } from '../domain/ideasValidate'
 import { CONCRETIZE_SCHEMA, CONCRETIZE_SYSTEM, buildConcretizeInput, defaultDraft, parseProposal, type ActionDraft } from '../domain/ideasConcretize'
 import type { DateKey } from '../domain/types'
+import { ASK_SCHEMA, ASK_SYSTEM, buildAskInput, checkAnswer, searchNotes, type AskFilters, type CheckedAnswer, type FoundNote } from '../domain/ideasAsk'
 import { dataStore } from './data'
 import { applyOrganization, myIdeaMap } from './ideaActions'
 import { uiStore } from './ui'
@@ -78,5 +79,28 @@ export async function suggestAction(ideaId: string, today: DateKey, provider: Ai
   const notes = Object.values(state.ideaNotes).filter((n) => n.ownerId === owner && n.ideaId === ideaId)
   const r = await provider.runStructured({ system: CONCRETIZE_SYSTEM, schema: CONCRETIZE_SCHEMA, input: buildConcretizeInput(idea, notes, today) })
   return parseProposal(r.json, idea, today)
+}
+
+export interface AskResult {
+  /** Anotações encontradas pela busca local (aparecem mesmo sem IA) */
+  found: FoundNote[]
+  filters: AskFilters
+  /** Resposta da IA conferida; null sem IA ou quando nada foi encontrado */
+  answer: CheckedAnswer | null
+}
+
+/**
+ * Perguntar às ideias: busca local primeiro; a IA só vê as anotações encontradas e cada frase precisa citar.
+ * Nunca grava nada.
+ */
+export async function askIdeas(question: string, today: DateKey, provider: AiProvider | null = currentProvider()): Promise<AskResult> {
+  const q = question.replace(/\s+/g, ' ').trim()
+  if (!q) throw new Error('Escreva o que você quer saber.')
+  const owner = uiStore.get().viewer
+  const state = dataStore.get()
+  const { found, filters } = searchNotes(state, owner, q, today)
+  if (!provider || !found.length) return { found, filters, answer: null }
+  const r = await provider.runStructured({ system: ASK_SYSTEM, schema: ASK_SCHEMA, input: buildAskInput(q, found, today) })
+  return { found, filters, answer: checkAnswer(r.json, new Set(found.map((f) => f.note.id))) }
 }
 

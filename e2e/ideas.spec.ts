@@ -243,3 +243,67 @@ test('isso vai acontecer com a IA do PC: a sugestão preenche a gaveta e a pesso
   await expect(page.getByText('Virou compromisso: Corrida com o João')).toBeVisible()
 })
 
+test('perguntar às ideias: sem IA mostra as anotações; com a IA do PC responde citando e a fonte abre a ideia', async ({ page, errors }, info) => {
+  void errors
+  await at(page, '10:00')
+  await page.addInitScript(() => {
+    ;(window as unknown as { amparaDesktop: unknown }).amparaDesktop = {
+      version: 'teste',
+      status: async () => ({ claude: true, model: 'm' }),
+      runStructured: async (req: { system: string; input: string }) => {
+        if (req.system.includes('perguntar@1')) {
+          const ids = (JSON.parse(req.input) as { anotacoes: { id: string }[] }).anotacoes.map((n) => n.id)
+          return { model: 'm', json: { versao: 'perguntar@1', sem_resposta: false, frases: [
+            { texto: 'Você quer voltar a correr de manhã.', fontes: [ids[0]] },
+            { texto: 'Também quer nadar.', fontes: ['inventada'] },
+          ] } }
+        }
+        const { captura } = JSON.parse(req.input) as { captura: string }
+        const op = (o: Record<string, unknown>) => ({ tipo: null, trecho: null, ideia_id: null, assunto_id: null, assunto_ref: null, ref: null, area_id: null, nome: null, titulo: null, natureza: null, motivo: null, de_ideia: null, para_ideia: null, tipo_ligacao: null, resumo: null, estado: null, confianca: null, ...o })
+        return { model: 'm', json: { versao: 'organizador@1', operacoes: [
+          op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:saude', nome: 'Corrida' }),
+          op({ tipo: 'CRIAR_IDEIA', trecho: captura, assunto_ref: 's', titulo: 'Voltar a correr', natureza: 'PLANO', confianca: 0.9 }),
+        ] } }
+      },
+    }
+  })
+  await open(page)
+  await goTab(page, 'ideias')
+  await page.getByTestId('idea-capture-input').fill('quero voltar a correr de manhã')
+  await page.getByTestId('idea-capture-save').click()
+  await expect(page.getByText('Organizei em Saúde › Corrida.')).toBeVisible()
+
+  await page.getByTestId('ideas-ask').click()
+  const sheet = page.getByTestId('sheet-askIdeas')
+  await sheet.getByTestId('ask-input').fill('o que eu falei sobre corrida?')
+  await sheet.getByTestId('ask-submit').click()
+  const answer = sheet.getByTestId('ask-answer')
+  await expect(answer).toContainText('Você quer voltar a correr de manhã.')
+  // citação inventada pela IA não vira fonte
+  await expect(answer.getByTestId('ask-unsourced')).toHaveCount(1)
+  await expect(sheet.getByTestId('ask-found')).toContainText('quero voltar a correr de manhã')
+  await noHorizontalOverflow(page)
+  await shot(page, '75-ideias-perguntar', info.project.name)
+  await answer.getByTestId('ask-source').first().click()
+  await expect(page.getByTestId('sheet-idea')).toBeVisible()
+})
+
+test('perguntar às ideias sem IA: só a busca, sem resposta inventada', async ({ page, errors }) => {
+  void errors
+  await at(page, '10:00')
+  await open(page)
+  await goTab(page, 'ideias')
+  await page.getByTestId('idea-capture-input').fill('tenho medo de não pagar o cartão')
+  await page.getByTestId('idea-capture-save').click()
+  await page.getByTestId('ideas-ask').click()
+  const sheet = page.getByTestId('sheet-askIdeas')
+  await expect(sheet).toContainText('Sem IA neste aparelho')
+  await sheet.getByTestId('ask-input').fill('o que falei do cartão?')
+  await sheet.getByTestId('ask-submit').click()
+  await expect(sheet.getByTestId('ask-found')).toContainText('tenho medo de não pagar o cartão')
+  await expect(sheet.getByTestId('ask-answer')).toHaveCount(0)
+  await sheet.getByTestId('ask-input').fill('xadrez')
+  await sheet.getByTestId('ask-submit').click()
+  await expect(sheet.getByText('Nada encontrado nas suas anotações.')).toBeVisible()
+})
+

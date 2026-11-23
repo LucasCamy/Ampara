@@ -57,6 +57,7 @@ Exporte um backup `.ampara` em Ajustes para ter uma cópia fora do aparelho. Det
   Veja tudo em Esboço (lista) ou Mapa, com estados (solta, amadurecendo, guardada) e ligações. Só você vê,
   inclusive no Casal. No app do PC a IA organiza sozinha; sem IA, tudo funciona à mão. Quando uma ideia
   amadurece, "Isso vai acontecer" a transforma em tarefa com micro-passos ou compromisso, ligada à ideia.
+  "Perguntar às minhas ideias" responde com base só no que você anotou e mostra de onde tirou cada frase.
 - **Módulos conectados:** estoque baixo pode entrar na lista de compras; comprar um remédio oferece reposição;
   itens comprados podem virar um gasto. Contas pessoais vencidas ou do dia também aparecem no Hoje.
 

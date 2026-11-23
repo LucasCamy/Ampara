@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import { useIsDesktop } from '../../components/Sheet'
-import { Segmented, Title } from '../../components/ui'
+import { Button, Segmented, Title } from '../../components/ui'
+import { MessageCircleQuestion } from 'lucide-react'
+import { ui } from '../../store/ui'
 import type { IdeaNature } from '../../domain/ideas'
 import { IDEA_NATURES } from '../../domain/ideas'
 import { buildIdeaTree, DEFAULT_FILTER, inboxOf, NATURE_LABEL, type IdeaFilter, type IdeaShow } from '../../domain/ideasView'
@@ -31,7 +33,10 @@ export function IdeasScreen() {
 
   return (
     <div className="flex flex-col gap-5" data-testid="ideas-screen">
-      <Title anchor="Ideias," rest="soltas agora, com sentido depois." />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Title anchor="Ideias," rest="soltas agora, com sentido depois." />
+        <Button variant="secondary" icon={MessageCircleQuestion} onClick={() => ui.openSheet('askIdeas')} data-testid="ideas-ask" className="shrink-0">Perguntar às minhas ideias</Button>
+      </div>
       <CaptureBox />
       <Segmented<View>
         label="Como ver suas ideias"

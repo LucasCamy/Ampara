@@ -626,3 +626,7 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   padrão sem IA; tarefa com micro-passos ou compromisso ligados à ideia (`idea_actions`), estado "Virou ação",
   Desfazer; cartão da ideia lista o que ela virou e a tarefa mostra "Veio da ideia". Validação: lint, typecheck,
   595 testes, `e2e:quick` 156 verdes, print em 360 escuro, teste real com a assinatura.
+- **Feito (2026-11-23), perguntar às ideias:** botão "Perguntar às minhas ideias" abre a gaveta; busca local com
+  filtros lidos na pergunta; no PC a IA responde em até 6 frases citando as anotações (fonte numerada abre a ideia;
+  citação inventada vira "sem fonte"); sem IA, mostra o que a busca achou. Validação: lint, typecheck, 610 testes,
+  `e2e:quick` 160 verdes, print em 360 escuro, teste real com a assinatura.

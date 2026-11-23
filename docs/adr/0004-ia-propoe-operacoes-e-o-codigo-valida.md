@@ -50,3 +50,9 @@ trecho que a pessoa não disse, citar um `id` inexistente ou criar pastas demais
 Planejado: vocabulários em `src/domain/ideas.ts` e validador em `src/domain/ideasValidate.ts` (seguindo o padrão plano de `src/domain/`), com testes para cada regra; casos de borda (trecho inventado,
 `id` de outra pessoa, 13º assunto na área, sobreposição de trechos, confiança limite). Um conjunto de capturas
 reais anonimizadas vira avaliação para comparar provedores.
+
+- **Perguntas implementadas (2026-11-23):** `src/domain/ideasAsk.ts` (`perguntar@1`). Busca local nas anotações e nos
+  pensamentos ainda não organizados, com família de palavras sem dicionário e filtros lidos na pergunta (tipo,
+  período, área). A IA recebe só as até 30 encontradas; cada frase traz `fontes`, e o código descarta fonte que não
+  estava na lista (a frase aparece "sem fonte"). Sem nada encontrado, a IA nem é chamada. Perguntar não grava nada.
+  Verificado com 15 testes de unidade, 2 E2E e teste real com a assinatura.

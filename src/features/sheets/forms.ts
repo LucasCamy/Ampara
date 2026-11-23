@@ -22,6 +22,7 @@ export const SHEET_FORM = {
   idea: 'sheet-form-idea',
   organizeIdea: 'sheet-form-organize-idea',
   concretize: 'sheet-form-concretize',
+  askIdeas: 'sheet-form-ask-ideas',
 } as const satisfies Partial<Record<SheetKind, string>>
 
 export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: string }>> = {
@@ -42,4 +43,5 @@ export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: st
   idea: { label: 'Salvar ideia', testId: 'idea-save' },
   organizeIdea: { label: 'Guardar aqui', testId: 'organize-save' },
   concretize: { label: 'Criar e ligar à ideia', testId: 'concretize-save' },
+  askIdeas: { label: 'Perguntar', testId: 'ask-submit' },
 }

@@ -155,6 +155,8 @@ sequenceDiagram
 
 ## 5. Perguntar depois
 
+> Implementado em 2026-11-23. A resposta vem em frases, e cada uma traz a lista das anotações usadas (`fontes`) em vez da marca `[n:ID]` no texto. A busca também inclui os pensamentos ainda não organizados.
+
 Exemplos: "o que eu já falei sobre o curso?" ou "quais preocupações eu tive com dinheiro este mês?".
 
 1. **Busca local primeiro:** texto normalizado (sem acento, minúsculo), filtros de Área, natureza, estado e período. Ela pega até 30 anotações.
