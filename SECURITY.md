@@ -113,6 +113,15 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
 - O arquivo NÃO leva a sessão da nuvem (refresh token): quem achar o arquivo e souber a senha abre os dados daquele
   aparelho, mas não entra na conta da nuvem. Depois de restaurar, a pessoa conecta a nuvem de novo em Ajustes.
 
+## Chave do Gemini
+
+- Só a pessoa que seleciona o Gemini em Ajustes usa esse provedor. Salvar ou remover a chave pede a senha do Ampara.
+  A chave de API fica cifrada no slot pessoal e usa uma chave separada da chave de dados do casal. Ela fica fora
+  dos backups e da sincronização. A sessão lembrada pode guardar a chave criptográfica pessoal não extraível.
+- O app envia o texto e o contexto de Ideias do dono diretamente para a API Gemini por HTTPS, com a credencial em
+  um cabeçalho. Bloquear o cofre cancela as chamadas em curso. O plano gratuito do Google pode usar o conteúdo para
+  melhorar produtos e não se destina a dados pessoais, sensíveis ou confidenciais.
+
 ## Mapeamento das classes da skill
 
 | Classe (nome na skill) | Estado | Onde |

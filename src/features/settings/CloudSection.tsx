@@ -18,6 +18,7 @@ export function Field({
   autoComplete,
   testId,
   error,
+  maxLength,
 }: {
   label: string
   type: 'email' | 'password' | 'text'
@@ -26,6 +27,7 @@ export function Field({
   autoComplete: string
   testId?: string
   error?: string | null
+  maxLength?: number
 }) {
   const id = useId()
   return (
@@ -37,7 +39,7 @@ export function Field({
         id={id}
         type={type}
         value={value}
-        maxLength={type === 'email' ? 254 : 128}
+        maxLength={maxLength ?? (type === 'email' ? 254 : 128)}
         autoComplete={autoComplete}
         autoCapitalize="off"
         spellCheck={false}

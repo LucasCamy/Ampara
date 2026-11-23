@@ -633,3 +633,15 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 - **Feito (2026-11-23), IA local (ADR-0010):** LM Studio + intermediário próprio + `tailscale serve`, Gemma 4 E4B
   inteiro na placa, provedor `ia-local` no Ampara com escolha por aparelho em Ajustes, segunda tentativa automática.
   Validação: 616+ testes, `e2e:quick`, teste do intermediário, teste real do app do PC pela IA local.
+- **Feito (2026-11-23), Gemini:** Ajustes permite selecionar o Gemini 3.1 Flash-Lite. Usa chave pessoal no cofre
+  do aparelho, chamada direta com JSON Schema e os mesmos contratos e validadores de Ideias. A opção é explícita
+  por pessoa neste aparelho. O modo Automático continua escolhendo a IA local ou o Claude do PC.
+  **Divergência dos ADR-0005/0006:** Gemini entrou como primeiro adaptador com chave. O limite e o faturamento
+  aparecem no painel do projeto Google. O contador mensal local previsto no ADR-0006 ficou pendente.
+  Validação na API gratuita com 8 capturas fictícias em português: 8 respostas válidas, 11 de 13 trechos no
+  destino esperado e 6 capturas inteiramente corretas. O Gemini recusou o esquema com os limites de tamanho
+  das listas, que seguem no validador do Ampara. Houve respostas HTTP 503 durante a bateria, recuperadas com retentativas.
+  Registro e comparação com o Gemma local na [ADR-0011](docs/adr/0011-gemini-flash-lite-com-chave-pessoal.md).
+- **Feito (2026-11-23), validador:** o mesmo id de assunto existente repetido em `assunto_id` e `assunto_ref`
+  passa a valer como `assunto_id`. Na mesma bateria, o Gemma local foi de 10, 9 e 11 para 11, 10 e 10 trechos de 13.
+  As duas regras de corte sugeridas para o prompt pioraram o Gemma (10, 8 e 7) e ficaram de fora.

@@ -1,4 +1,55 @@
-import { at, expect, goSettings, goTab, noHorizontalOverflow, open, setViewer, shot, test } from './fixtures'
+import { at, expect, goSettings, goTab, noHorizontalOverflow, open, PASSWORDS, setViewer, shot, test } from './fixtures'
+
+test('Gemini em Ajustes usa a chave da pessoa e organiza uma captura com o contrato', async ({ page }) => {
+  const fakeKey = 'chave-gemini-ficticia-para-e2e'
+  const capture = 'quero cultivar manjericão na varanda'
+  await page.route('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent', async (route) => {
+    const request = route.request()
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'POST',
+        'access-control-allow-headers': 'content-type, x-goog-api-key',
+      } })
+      return
+    }
+    const payload = request.postDataJSON()
+    expect(request.headers()['x-goog-api-key']).toBe(fakeKey)
+    expect(JSON.parse(payload.contents[0].parts[0].text).captura).toBe(capture)
+    expect(payload.generationConfig.responseJsonSchema.properties.versao.enum).toEqual(['organizador@1'])
+    const json = { versao: 'organizador@1', operacoes: [
+      { tipo: 'CRIAR_ASSUNTO', ref: 'a1', area_id: 'A:casa', nome: 'Horta' },
+      { tipo: 'CRIAR_IDEIA', trecho: capture, assunto_ref: 'a1', titulo: 'Cultivar manjericão', natureza: 'PLANO', confianca: 0.95 },
+    ] }
+    await route.fulfill({
+      headers: { 'access-control-allow-origin': '*' },
+      json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(json) }] } }] },
+    })
+  })
+
+  await open(page)
+  await goSettings(page, 'aparelho')
+  await page.getByTestId('ai-gemini').click()
+  await expect(page.getByText('Chave necessária')).toBeVisible()
+  await noHorizontalOverflow(page)
+  await page.getByTestId('gemini-save').click()
+  await expect(page.getByTestId('gemini-key')).toHaveAttribute('aria-invalid', 'true')
+  await page.getByTestId('gemini-key').fill(fakeKey)
+  await page.getByTestId('gemini-password').fill(PASSWORDS.A)
+  await page.getByTestId('gemini-save').click()
+  await expect(page.getByText('Chave disponível')).toBeVisible()
+  await expect(page.getByTestId('gemini-key')).toHaveValue('')
+
+  await goTab(page, 'ideias')
+  await page.getByTestId('idea-capture-input').fill(capture)
+  await page.getByTestId('idea-capture-save').click()
+  await expect(page.getByText('Organizei em Casa › Horta')).toBeVisible()
+  await setViewer(page, 'B')
+  await goSettings(page, 'aparelho')
+  await page.getByTestId('ai-gemini').click()
+  await expect(page.getByText('Chave necessária')).toBeVisible()
+  await expect(page.getByTestId('gemini-remove')).toHaveCount(0)
+})
 
 test('ideias: soltar, organizar à mão, esboço, estado, filtros e mapa', async ({ page, errors }, info) => {
   void errors

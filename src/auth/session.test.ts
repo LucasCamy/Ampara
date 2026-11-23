@@ -59,6 +59,40 @@ async function coupleAs(who: PartnerId) {
 }
 
 describe('sessão com IndexedDB cifrado', () => {
+  it('guarda a chave Gemini por pessoa e só abre com a sessão do dono', async () => {
+    const s = await coupleAs('A')
+    const secret = 'chave-gemini-ficticia-e-privada'
+    await expect(s.writeGeminiSecret(secret, 'senha errada')).rejects.toMatchObject({ code: 'BAD_CREDENTIALS' })
+    await s.writeGeminiSecret(secret, PASSWORD)
+    const access = await s.readGeminiSecret()
+    expect(access?.secret).toBe(secret)
+    const stored = await s.storage.readStoredVault() as Vault
+    expect(stored.people.A.gemini).toBeDefined()
+    expect(stored.people.B.gemini).toBeUndefined()
+    expect(JSON.stringify(stored)).not.toContain(secret)
+    expect(JSON.parse((await s.exportBackup(PASSWORD)).content).vault.people.A.gemini).toBeUndefined()
+
+    await s.lock('B')
+    expect(access?.signal.aborted).toBe(true)
+    await expect(s.readGeminiSecret()).resolves.toBeNull()
+    await s.login('B', 'cha de hortela no jardim', true)
+    await expect(s.readGeminiSecret()).resolves.toBeNull()
+    await s.lock('A')
+    await s.login('A', PASSWORD, true)
+    expect((await s.readGeminiSecret())?.secret).toBe(secret)
+
+    const nextPassword = 'outra frase para o cofre'
+    await s.changeMyPassword(PASSWORD, nextPassword)
+    await s.lock('A')
+    await s.login('A', nextPassword, false)
+    expect((await s.readGeminiSecret())?.secret).toBe(secret)
+    await s.convertCoupleToSolo(nextPassword, () => undefined)
+    expect((await s.readGeminiSecret())?.secret).toBe(secret)
+    await s.writeGeminiSecret(null, nextPassword)
+    await expect(s.readGeminiSecret()).resolves.toBeNull()
+    expect((await s.storage.readStoredVault())?.people.A.gemini).toBeUndefined()
+  })
+
   it.each(['A', 'B'] as const)('converte o espaço inteiro para Solo de %s sem remapear registros e troca a chave do cofre', async (who) => {
     const s = await coupleAs(who)
     const password = who === 'A' ? PASSWORD : 'cha de hortela no jardim'

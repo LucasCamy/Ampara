@@ -30,7 +30,7 @@ const pending = new Set<string>()
 export const isOrganizing = (captureId: string) => pending.has(captureId)
 
 export async function organizeWithAi(captureId: string, provider: AiProvider | null = currentProvider()): Promise<AiOrganizeResult> {
-  if (!provider) throw new Error('Nenhuma IA ligada neste aparelho. Organize à mão ou use o Ampara no PC.')
+  if (!provider) throw new Error('Nenhuma IA ligada neste aparelho. Confira os Ajustes ou organize à mão.')
   if (pending.has(captureId)) throw new Error('Este pensamento já está sendo organizado.')
   const owner = uiStore.get().viewer
   const start = dataStore.get()

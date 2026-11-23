@@ -1,7 +1,5 @@
-/**
- * Provedores de IA (ADR-0005): IA local no PC pela rede Tailscale (ADR-0010, grátis, PC e celular) e a
- * assinatura do Claude pelo app do PC (ADR-0008, `window.amparaDesktop`). Mesma interface para os dois.
- */
+import { authStore, readGeminiSecret } from '../auth/session'
+import { geminiProvider } from './gemini'
 
 export interface StructuredRequest {
   /** Instruções do contrato (iguais para todos os provedores) */
@@ -55,20 +53,24 @@ export const LOCAL_AI_URL = ((import.meta.env.VITE_LOCAL_AI_URL as string | unde
 export const LOCAL_AI_MODEL = 'ampara'
 const LOCAL_TIMEOUT_MS = 150_000
 
-export type AiChoice = 'auto' | 'local' | 'claude' | 'off'
+export type AiChoice = 'auto' | 'local' | 'claude' | 'gemini' | 'off'
 const PREF_KEY = 'ampara:ai'
 
-/** Escolha da IA neste aparelho (preferência local, não sincroniza). */
+/** Preferência por pessoa neste aparelho. O valor antigo permanece como padrão de migração. */
 export function aiChoice(): AiChoice {
   try {
-    const v = localStorage.getItem(PREF_KEY)
+    const who = authStore.get().who
+    const personal = who ? localStorage.getItem(PREF_KEY + ':' + who) : null
+    if (personal === 'gemini') return personal
+    const v = personal ?? localStorage.getItem(PREF_KEY)
     return v === 'local' || v === 'claude' || v === 'off' ? v : 'auto'
   } catch {
     return 'auto'
   }
 }
 export function setAiChoice(choice: AiChoice) {
-  try { localStorage.setItem(PREF_KEY, choice) } catch { /* sem armazenamento: fica no automático */ }
+  const who = authStore.get().who
+  try { localStorage.setItem(who ? PREF_KEY + ':' + who : PREF_KEY, choice) } catch { /* sem armazenamento: fica no automático */ }
 }
 
 /** Chamada no formato OpenAI (LM Studio): esquema JSON obrigatório na resposta. */
@@ -149,6 +151,11 @@ function claudeProvider(bridge: AmparaDesktopBridge): AiProvider {
  */
 export function currentProvider(choice: AiChoice = aiChoice()): AiProvider | null {
   if (choice === 'off') return null
+  if (choice === 'gemini') {
+    const { who, geminiReady } = authStore.get()
+    if (!who || !geminiReady) return null
+    return geminiProvider(() => authStore.get().who === who && aiChoice() === 'gemini' ? readGeminiSecret() : Promise.resolve(null))
+  }
   const bridge = desktopBridge()
   const local = localProvider()
   if (choice === 'claude') return bridge ? claudeProvider(bridge) : local

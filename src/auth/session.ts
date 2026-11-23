@@ -11,16 +11,21 @@ import {
   toBackup,
   changePassword as rewrap,
   claimInvite,
+  copyGeminiToSolo,
   createSingleVault,
   createVault,
   openCloud,
+  openGemini,
   sealCloud,
+  sealGemini,
   lockoutMs,
   readData,
   reinvite,
   unlockVault,
+  unlockVaultSession,
   writeData,
   type Vault,
+  type GeminiAccess,
 } from './vault'
 import { clearLocalStorage, readStoredVault as loadVault, VAULT_KEY, writeStoredVault } from './storage'
 export { VAULT_KEY } from './storage'
@@ -44,6 +49,7 @@ export interface PersonHeader {
   status: 'active' | 'invited' | 'absent'
   /** a pessoa conectou a conta da nuvem neste aparelho */
   cloud: boolean
+  gemini: boolean
 }
 
 export type AuthStatus = 'loading' | 'setup' | 'welcome' | 'locked' | 'unlocked'
@@ -57,6 +63,7 @@ export interface AuthState {
   /** código exibido uma única vez logo após criar o espaço */
   welcomeInvite: string | null
   remembered: boolean
+  geminiReady: boolean
   hasLegacyData: boolean
 }
 
@@ -67,6 +74,7 @@ export const authStore = createStore<AuthState>({
   preselect: null,
   welcomeInvite: null,
   remembered: false,
+  geminiReady: false,
   hasLegacyData: false,
 })
 export const useAuth = <S>(sel: (s: AuthState) => S) => useStore(authStore, sel)
@@ -79,6 +87,8 @@ let saveFailed = false
 
 let key: CryptoKey | null = null
 let vault: Vault | null = null
+let geminiAccess: GeminiAccess | null = null
+let geminiRequests = new AbortController()
 let applyingRemote = false
 let writeChain: Promise<void> = Promise.resolve()
 let lastActivity = Date.now()
@@ -171,8 +181,8 @@ function removeLocal(name: string) {
 }
 
 const headerOf = (v: Vault): Record<PartnerId, PersonHeader> => ({
-  A: { name: v.people.A.name, pronoun: v.people.A.pronoun, status: v.people.A.status, cloud: !!v.people.A.cloud },
-  B: { name: v.people.B.name, pronoun: v.people.B.pronoun, status: v.people.B.status, cloud: !!v.people.B.cloud },
+  A: { name: v.people.A.name, pronoun: v.people.A.pronoun, status: v.people.A.status, cloud: !!v.people.A.cloud, gemini: !!v.people.A.gemini },
+  B: { name: v.people.B.name, pronoun: v.people.B.pronoun, status: v.people.B.status, cloud: !!v.people.B.cloud, gemini: !!v.people.B.gemini },
 })
 
 function legacyData(): DataState | null {
@@ -190,6 +200,7 @@ function legacyData(): DataState | null {
 interface RememberedSession {
   who: PartnerId
   key: CryptoKey
+  gemini?: GeminiAccess
   expiresAt: number
 }
 
@@ -233,6 +244,10 @@ function idb<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<
 }
 
 const rememberSession = (s: RememberedSession) => idb('readwrite', (st) => st.put(s, 'current'))
+const rememberKeys = (who: PartnerId, k: CryptoKey) => rememberSession({
+  who, key: k, expiresAt: Date.now() + REMEMBER_MS,
+  ...(geminiAccess ? { gemini: geminiAccess } : {}),
+})
 const forgetSession = () => idb('readwrite', (st) => st.delete('current'))
 const loadRemembered = () => idb<RememberedSession>('readonly', (st) => st.get('current'))
 
@@ -305,21 +320,75 @@ export async function setupFromCloud(input: { who: PartnerId; password: string; 
   await openSession(input.who, created.key, v, input.remember)
 }
 
+/* ---------- credencial pessoal do Gemini ---------- */
+
+function setGeminiAccess(access: GeminiAccess | null) {
+  geminiRequests.abort()
+  geminiRequests = new AbortController()
+  geminiAccess = access
+}
+
+function carryGeminiAccess(previous: Vault, next: Vault, who: PartnerId) {
+  const wrapped = next.people[who].gemini?.wrapped
+  setGeminiAccess(geminiAccess && wrapped && geminiAccess.wrapped === previous.people[who].gemini?.wrapped
+    ? { ...geminiAccess, wrapped }
+    : null)
+}
+
+export async function readGeminiSecret(): Promise<{ secret: string; signal: AbortSignal } | null> {
+  const { who, status } = authStore.get()
+  const access = geminiAccess
+  const v = vault
+  const { signal } = geminiRequests
+  if (status !== 'unlocked' || !who || !v || !access) return null
+  const secret = await openGemini(v, who, access).catch(() => null)
+  return secret && !signal.aborted ? { secret, signal } : null
+}
+
+export async function writeGeminiSecret(secret: string | null, password: string) {
+  const { who, status } = authStore.get()
+  const k = key
+  if (status !== 'unlocked' || !who || !k) throw new Error('Desbloqueie o cofre para configurar o Gemini.')
+  await queueWrite(async () => {
+    const v = await loadVault() ?? vault
+    if (!v || key !== k || authStore.get().who !== who) throw new Error('Sessão encerrada.')
+    assertNotThrottled(who)
+    let next: Awaited<ReturnType<typeof sealGemini>>
+    try {
+      next = await sealGemini(v, who, password, secret)
+      clearFailures(who)
+    } catch (error) {
+      if (error instanceof AuthError && error.code === 'BAD_CREDENTIALS') registerFailure(who)
+      throw error
+    }
+    if (key !== k) throw new Error('Sessão encerrada.')
+    await saveVault({ ...next.vault, rev: v.rev + 1 })
+    if (key !== k) throw new Error('Sessão encerrada.')
+    setGeminiAccess(next.access)
+    authStore.set((s) => ({ ...s, people: headerOf(next.vault), geminiReady: !!next.access }))
+    if (authStore.get().remembered && !await rememberKeys(who, k)) {
+      await forgetSession()
+      authStore.set((s) => ({ ...s, remembered: false }))
+    }
+  })
+}
+
 /* ---------- abrir / fechar sessão ---------- */
 
-async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boolean, welcomeInvite: string | null = null) {
+async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boolean, welcomeInvite: string | null = null, access: GeminiAccess | null = null) {
   const data = await readData(v, k)
   if (v.people[who].status !== 'active' || (data.couple.couple?.mode === 'SOLO' && (data.couple.couple.soloOwnerId ?? 'A') !== who)) {
     throw new AuthError('NOT_ACTIVATED', 'Este acesso está suspenso neste espaço.')
   }
   key = k
+  setGeminiAccess(access && access.wrapped === v.people[who].gemini?.wrapped ? access : null)
   vault = { ...v, spaceMode: data.couple.couple?.mode ?? 'COUPLE' }
   applyingRemote = true
   dataStore.set(() => data)
   applyingRemote = false
   ui.setViewer(who)
   lastActivity = Date.now()
-  const remembered = remember ? !!await rememberSession({ who, key: k, expiresAt: Date.now() + REMEMBER_MS }) : false
+  const remembered = remember ? !!await rememberKeys(who, k) : false
   if (!remember) await forgetSession()
   if (key !== k) {
     await forgetSession()
@@ -327,7 +396,7 @@ async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boo
   }
   saveFailed = false
   localSaveStore.set(() => pendingSaves > 0 ? 'saving' : 'saved')
-  authStore.set((s) => ({ ...s, status: welcomeInvite ? 'welcome' : 'unlocked', welcomeInvite, who, preselect: null, people: headerOf(v), remembered }))
+  authStore.set((s) => ({ ...s, status: welcomeInvite ? 'welcome' : 'unlocked', welcomeInvite, who, preselect: null, people: headerOf(v), remembered, geminiReady: !!geminiAccess }))
   // Pede persistência sem tornar o desbloqueio dependente dessa permissão.
   try {
     void navigator.storage?.persist?.().catch(() => false)
@@ -339,6 +408,7 @@ async function openSession(who: PartnerId, k: CryptoKey, v: Vault, remember: boo
 
 function closeSession(preselect: PartnerId | null) {
   key = null
+  setGeminiAccess(null)
   saveFailed = false
   localSaveStore.set(() => 'saved')
   dataStore.set(() => buildEmpty(new Date()))
@@ -352,6 +422,7 @@ function closeSession(preselect: PartnerId | null) {
     preselect,
     welcomeInvite: null,
     remembered: false,
+    geminiReady: false,
     people: v ? headerOf(v) : null,
   }))
   emit()
@@ -465,9 +536,9 @@ export async function login(who: PartnerId, password: string, remember: boolean)
   if (!v) throw new AuthError('BAD_CREDENTIALS', 'Nenhum espaço encontrado neste aparelho.')
   assertNotThrottled(who)
   try {
-    const k = await unlockVault(v, who, password)
+    const { key: k, gemini } = await unlockVaultSession(v, who, password)
     clearFailures(who)
-    await openSession(who, k, v, remember)
+    await openSession(who, k, v, remember, null, gemini)
   } catch (e) {
     if (e instanceof AuthError && e.code === 'BAD_CREDENTIALS') registerFailure(who)
     throw e
@@ -499,11 +570,12 @@ export async function changeMyPassword(current: string, next: string) {
     const updated = await rewrap(v, who, current, next)
     if (key !== k) throw new AuthError('BAD_CREDENTIALS', 'Sessão encerrada.')
     await saveVault({ ...updated, rev: v.rev + 1 })
+    if (key === k) carryGeminiAccess(v, updated, who)
   })
   // sessões lembradas e outras abas precisam entrar de novo
   await forgetSession()
   broadcast('lock')
-  authStore.set((s) => ({ ...s, remembered: false }))
+  authStore.set((s) => ({ ...s, remembered: false, geminiReady: !!geminiAccess }))
 }
 
 /** Apaga o espaço deste aparelho. Exige a senha de novo (confirmação forte). */
@@ -538,6 +610,9 @@ export async function wipeDevice(password: string) {
     await clearLocalStorage()
     removeLocal(ATTEMPTS_KEY)
     removeLocal('ampara:prefs')
+    removeLocal('ampara:ai')
+    removeLocal('ampara:ai:A')
+    removeLocal('ampara:ai:B')
     memoryAttempts = {}
     vault = null
     closeSession(null)
@@ -563,12 +638,16 @@ async function refreshVault() {
     authStore.set((s) => ({ ...s, status: 'locked', people: headerOf(v) }))
     return
   }
+  const who = authStore.get().who
+  if (who && geminiAccess && geminiAccess.wrapped !== v.people[who].gemini?.wrapped) {
+    setGeminiAccess(null)
+    authStore.set((s) => ({ ...s, geminiReady: false }))
+  }
   if (JSON.stringify(v) === JSON.stringify(vault)) return
   const snapshot = dataStore.get()
   try {
     const data = await readData(v, k)
     if (key !== k) return
-    const who = authStore.get().who
     if (who && (v.people[who].status !== 'active' || (data.couple.couple?.mode === 'SOLO' && (data.couple.couple.soloOwnerId ?? 'A') !== who))) {
       vault = v
       await forgetSession()
@@ -580,7 +659,7 @@ async function refreshVault() {
     // Uma edição feita enquanto o cofre era aberto continua na fila da sessão.
     dataStore.set((cur) => cur === snapshot ? data : cur)
     applyingRemote = false
-    authStore.set((s) => ({ ...s, people: headerOf(v) }))
+    authStore.set((s) => ({ ...s, people: headerOf(v), geminiReady: !!geminiAccess }))
   } catch {
     if (key === k) {
       vault = v
@@ -644,7 +723,7 @@ export async function startAuth() {
   const remembered = await loadRemembered()
   if (remembered && remembered.expiresAt > Date.now()) {
     try {
-      await openSession(remembered.who, remembered.key, v, true)
+      await openSession(remembered.who, remembered.key, v, true, null, remembered.gemini)
       return
     } catch {
       await forgetSession()
@@ -774,7 +853,7 @@ export async function convertCoupleToSolo(
     const people = { A: v.people.A, B: v.people.B }
     const created = await createSingleVault(who, people, password, dataStore.get(), v.people[who].iterations)
     const cloud = await openCloud(v, k, who)
-    const prepared = await sealCloud(created.vault, created.key, who, cloud)
+    const prepared = await sealCloud(await copyGeminiToSolo(v, created.vault, who, password), created.key, who, cloud)
     assertSession()
     const receipt = commitRemote ? await commitRemote() : { solo_owner_id: who, updated_at: now.toISOString() }
     assertSession()
@@ -796,15 +875,16 @@ export async function convertCoupleToSolo(
     await saveVault(updated)
     assertSession()
     key = created.key
+    carryGeminiAccess(v, updated, who)
     const remembered = authStore.get().remembered
     applyingRemote = true
     dataStore.set((cur) => converted(cur))
     applyingRemote = false
-    authStore.set((s) => ({ ...s, people: headerOf(updated), welcomeInvite: null }))
+    authStore.set((s) => ({ ...s, people: headerOf(updated), welcomeInvite: null, geminiReady: !!geminiAccess }))
     // Uma edição feita durante o commit também é cifrada com a chave nova.
     persistSnapshot(dataStore.get(), created.key)
     await forgetSession()
-    if (remembered && key === created.key) await rememberSession({ who, key: created.key, expiresAt: Date.now() + REMEMBER_MS })
+    if (remembered && key === created.key) await rememberKeys(who, created.key)
   })
   await writeChain
 }

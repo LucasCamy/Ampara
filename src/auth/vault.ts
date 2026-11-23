@@ -17,6 +17,8 @@ export interface PersonSlot {
   wrapped: string
   /** sessão da nuvem (refresh token) cifrada com a chave de dados; só existe se a pessoa conectou */
   cloud?: Sealed
+  /** Chave de API cifrada com uma chave própria, embrulhada pelo slot desta pessoa. */
+  gemini?: { wrapped: string; secret: Sealed }
 }
 
 export interface Vault {
@@ -105,16 +107,33 @@ async function kekFor(slot: PersonSlot, secret: string) {
   return deriveKek(secret, fromB64(slot.salt), slot.iterations)
 }
 
-/** Abre a sessão de uma pessoa. Mensagem genérica: não revela se o erro foi pessoa ou senha. */
-export async function unlockVault(vault: Vault, who: PartnerId, password: string): Promise<CryptoKey> {
+async function unlockSlot(vault: Vault, who: PartnerId, password: string) {
   const slot = vault.people[who]
   if (slot.status === 'absent') throw new AuthError('NOT_ACTIVATED', 'Esta pessoa usa o próprio aparelho.')
   if (slot.status !== 'active') throw new AuthError('NOT_ACTIVATED', 'Primeiro acesso: use o código de convite para criar a senha.')
   try {
-    return await unwrapDek(slot.wrapped, await kekFor(slot, password))
+    const kek = await kekFor(slot, password)
+    return { kek, key: await unwrapDek(slot.wrapped, kek) }
   } catch {
     throw new AuthError('BAD_CREDENTIALS', 'Senha incorreta. Confira e tente de novo.')
   }
+}
+
+/** Abre o cofre sem trazer segredos pessoais para operações que só pedem confirmação de senha. */
+export async function unlockVault(vault: Vault, who: PartnerId, password: string): Promise<CryptoKey> {
+  return (await unlockSlot(vault, who, password)).key
+}
+
+export interface GeminiAccess {
+  wrapped: string
+  key: CryptoKey
+}
+
+export async function unlockVaultSession(vault: Vault, who: PartnerId, password: string) {
+  const { key, kek } = await unlockSlot(vault, who, password)
+  const wrapped = vault.people[who].gemini?.wrapped
+  const gemini = wrapped ? await unwrapDek(wrapped, kek).then((key) => ({ wrapped, key })).catch(() => null) : null
+  return { key, gemini }
 }
 
 /** Primeiro acesso do par: troca o embrulho pelo código de convite por um embrulho com a senha */
@@ -138,12 +157,15 @@ export async function changePassword(vault: Vault, who: PartnerId, current: stri
   const weak = validatePassword(nextPassword, { name: slot.name })
   if (weak) throw new AuthError('WEAK_PASSWORD', weak)
   let dek: CryptoKey
+  let kek: CryptoKey
   try {
-    dek = await unwrapDek(slot.wrapped, await kekFor(slot, current), true)
+    kek = await kekFor(slot, current)
+    dek = await unwrapDek(slot.wrapped, kek, true)
   } catch {
     throw new AuthError('BAD_CREDENTIALS', 'Senha atual incorreta.')
   }
   const next = await slotFor(slot.name, slot.pronoun, dek, nextPassword, 'active', slot.iterations)
+  if (slot.gemini) next.gemini = await rewrapGemini(slot.gemini, kek, await kekFor(next, nextPassword))
   return { ...vault, people: { ...vault.people, [who]: next } }
 }
 
@@ -233,6 +255,41 @@ export async function openCloud(vault: Vault, key: CryptoKey, who: PartnerId): P
   return sealed ? open(key, sealed, cloudAad(who)) : null
 }
 
+const geminiAad = (who: PartnerId) => 'ampara:gemini:v1:' + who
+
+async function rewrapGemini(gemini: NonNullable<PersonSlot['gemini']>, from: CryptoKey, to: CryptoKey) {
+  const key = await unwrapDek(gemini.wrapped, from, true)
+  return { ...gemini, wrapped: await wrapDek(key, to) }
+}
+
+/** Preserva só a credencial da pessoa que conserva seu espaço num cofre novo. */
+export async function copyGeminiToSolo(from: Vault, to: Vault, who: PartnerId, password: string): Promise<Vault> {
+  const gemini = from.people[who].gemini
+  if (!gemini) return to
+  const slot = to.people[who]
+  const wrapped = await rewrapGemini(gemini, await kekFor(from.people[who], password), await kekFor(slot, password))
+  return { ...to, people: { ...to.people, [who]: { ...slot, gemini: wrapped } } }
+}
+
+export async function sealGemini(vault: Vault, who: PartnerId, password: string, secret: string | null) {
+  const { kek } = await unlockSlot(vault, who, password)
+  const slot = { ...vault.people[who] }
+  let access: GeminiAccess | null = null
+  if (secret === null) delete slot.gemini
+  else {
+    const key = await generateDek()
+    const wrapped = await wrapDek(key, kek)
+    slot.gemini = { wrapped, secret: await seal(key, secret, geminiAad(who)) }
+    access = { wrapped, key: await sessionKeyFrom(key) }
+  }
+  return { vault: { ...vault, people: { ...vault.people, [who]: slot } }, access }
+}
+
+export async function openGemini(vault: Vault, who: PartnerId, access: GeminiAccess): Promise<string | null> {
+  const gemini = vault.people[who].gemini
+  return gemini?.wrapped === access.wrapped ? open(access.key, gemini.secret, geminiAad(who)) : null
+}
+
 /* ---------- backup (o próprio cofre cifrado, num arquivo) ---------- */
 
 export const BACKUP_FORMAT = 'ampara-backup'
@@ -253,8 +310,9 @@ export interface BackupFile {
  */
 export function toBackup(vault: Vault, by: PartnerId, nowIso: string): string {
   const strip = (p: PersonSlot): PersonSlot => {
-    const { cloud: _cloud, ...rest } = p
+    const { cloud: _cloud, gemini: _gemini, ...rest } = p
     void _cloud
+    void _gemini
     return rest
   }
   const safe: Vault = { ...vault, people: { A: strip(vault.people.A), B: strip(vault.people.B) } }

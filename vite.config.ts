@@ -12,7 +12,7 @@ function csp(supabaseUrl: string | undefined, localAiUrl?: string): string {
   const extra = supabaseUrl && supabaseUrl !== 'self' ? supabaseUrl : undefined
   // IA local (ADR-0010): só a origem configurada no build, nunca um curinga
   const ai = (() => { try { return localAiUrl ? new URL(localAiUrl).origin : undefined } catch { return undefined } })()
-  const connect = ["'self'", extra, ai].filter(Boolean).join(' ')
+  const connect = ["'self'", extra, ai, 'https://generativelanguage.googleapis.com'].filter(Boolean).join(' ')
   return [
     "default-src 'self'",
     "script-src 'self'",
