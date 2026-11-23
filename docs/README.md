@@ -14,6 +14,7 @@
 | **04** | [`04-arquitetura-dados-ios-offline.md`](./04-arquitetura-dados-ios-offline.md) | **Bloco 4 — Arquitetura, Offline-First, Modelo de Dados e iOS:** Comparativo de pesquisa (PWA vs. React Native/Expo vs. Swift), diagrama de arquitetura, sincronização *offline-first* (SQLite local + Supabase), schema completo do banco (ER + SQL), notificações `Time-Sensitive` e integração com **Atalhos do iPhone (`App Intents`)**. |
 | **05** | [`05-modelo-financeiro-privacidade.md`](./05-modelo-financeiro-privacidade.md) | **Bloco 5 — Motor Financeiro do Casal:** Separação `Meu`, `Dela` e `Do Casal`, funcionamento do **Toggle de Transparência Mútua** + flag de **Presente/Surpresa**, fórmulas de divisão (`50/50`, `Proporcional à Renda`, `Adiantamento 100%`), cálculo de encontro de contas e fechamento do mês. |
 | **06** | [`06-backlog-roadmap-execucao.md`](./06-backlog-roadmap-execucao.md) | **Bloco 6 — Plano de Execução:** Backlog priorizado com User Stories e critérios de aceite, fases de entrega (MVP, v1.1 e v2.0), matriz de riscos, plano de testes e guia prático de como instalar no iPhone de vocês dois (com ou sem conta paga da Apple). |
+| **08** | [`08-ideias-segundo-cerebro.md`](./08-ideias-segundo-cerebro.md) | **Ideias (proposta):** segundo cérebro com estrutura fixa (Área, Assunto, Ideia, Anotação), malha de ligações tipadas, contrato de operações da IA com validação, perguntas com citação, mapa mental e concretização em tarefa. Decisões em [`adr/`](./adr/README.md). |
 
 ---
 

@@ -568,3 +568,16 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 - **Supabase:** conectado desde as iterações 16 a 19 (self-hosted no cluster, validado no Docker).
 - **IndexedDB vs. limpeza do Safari:** (mitigado pelo backup cifrado da iteração 15) iOS pode limpar armazenamento de sites pouco usados; instalar na Tela de
   Início reduz o risco. Sync com Supabase resolve de vez.
+
+## Ideias, segundo cérebro (aceita, 2026-11-23)
+
+- **Pedido do usuário:** um lugar para soltar pensamentos que ainda não são tarefa, com estrutura rígida,
+  mapa mental interativo por assunto, perguntas sobre o que foi dito e concretização em tarefa ou agenda.
+  IA por assinatura no PC (Claude Code, Codex) ou por chave de API, também na web.
+- **Especificação:** [`docs/08-ideias-segundo-cerebro.md`](docs/08-ideias-segundo-cerebro.md).
+- **Decisões (aceitas em 2026-11-23):** [`docs/adr/`](docs/adr/README.md), ADR-0001 a ADR-0009.
+- **Divergência com os documentos de produto:** os docs 01 a 06 não previam IA nem ideias; o README atual diz que
+  as sugestões "não usam API paga de IA". O módulo mantém a IA opcional e o app funcional sem ela.
+- **Estado:** em andamento. Primeiro passo: vocabulários e validador do contrato da IA (`src/domain/ideas.ts`, `src/domain/ideasValidate.ts`) com testes,
+  depois schema/RLS, telas (esboço e mapa) e, por fim, provedores e a casca desktop.
+
