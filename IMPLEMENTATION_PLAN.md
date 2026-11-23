@@ -610,4 +610,12 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 - **Ainda não feito:** concretizar ("Isso vai acontecer" vira tarefa/compromisso), IA ligada (provedores, ADR-0005/6),
   revisão semanal, renomear/esconder áreas na tela, pinça para zoom no mapa, sincronizar `idea_*` só para quem
   liga o módulo (o pull ainda consulta as 8 tabelas a cada ciclo).
-
+- **Feito (2026-11-23), IA ligada:** contrato `organizador@1` (`src/domain/ideasPrompt.ts`), provedor pelo app do PC
+  (`src/ai/provider.ts`), orquestração com validação (`src/store/ideaAi.ts`). No app do PC, "Soltar" já organiza:
+  aviso "Organizei em Área › Assunto" com Desfazer; na Caixa, "Organizar com IA" ou "Eu organizo". App do PC em
+  `desktop/` (Electron, `app://ampara`, atalho global, CORS só para a nuvem configurada). Ajuste vindo do teste real:
+  motivo do assunto novo passou a ser opcional (a recusa derrubava as ideias dele) e o resumo da ideia nova é
+  aproveitado. Validação: lint, typecheck, 587 testes, `e2e:quick` 152 verdes, `ideas.spec.ts` 8 verdes (com IA
+  simulada), teste real do exe com a assinatura, com e sem o Supabase local.
+- **Pendente da IA:** perguntas com citação, revisão semanal, concretizar, chave de API na web (ADR-0006), Codex,
+  bolinha flutuante no PC e importação das ideias `.md` do AjudaMental.

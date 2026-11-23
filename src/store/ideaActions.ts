@@ -119,7 +119,7 @@ export function applyOrganization(captureId: string, result: ValidationResult, m
         case 'CRIAR_IDEIA': {
           const topicId = 'id' in op.topic ? op.topic.id : topicIds.get(op.topic.ref)
           if (!topicId) break
-          const idea: Idea = { id: uuid(), ownerId: owner, topicId, title: op.title, summary: '', nature: op.nature, state: 'SOLTA', needsReview: op.needsReview, createdAt: iso, updatedAt: iso }
+          const idea: Idea = { id: uuid(), ownerId: owner, topicId, title: op.title, summary: op.summary, nature: op.nature, state: 'SOLTA', needsReview: op.needsReview, createdAt: iso, updatedAt: iso }
           if (op.ref) ideaIds.set(op.ref, idea.id)
           tx.put('ideas', idea)
           record.created.ideas.push(idea.id)

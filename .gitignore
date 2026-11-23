@@ -8,3 +8,4 @@ playwright-report
 .claude/settings.local.json
 dist-local
 dist-push
+.env.desktop

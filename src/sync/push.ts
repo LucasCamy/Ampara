@@ -31,6 +31,8 @@ export const usePush = <S>(sel: (s: PushState) => S) => useStore(pushStore, sel)
 
 export function pushSupport(): PushSupport {
   if (typeof window === 'undefined') return 'unsupported'
+  // app do PC (app://ampara): lembretes ficam com o celular, onde o Web Push funciona
+  if (typeof location !== 'undefined' && !/^https?:$/.test(location.protocol)) return 'unsupported'
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   const standalone = (typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches) || (navigator as Navigator & { standalone?: boolean }).standalone === true
   if (ios && !standalone) return 'needs-install'
@@ -50,7 +52,12 @@ export function vapidKeyBytes(b64url: string): Uint8Array<ArrayBuffer> {
 
 async function registration(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null
-  return (await navigator.serviceWorker.getRegistration()) ?? null
+  // origens sem service worker (ex.: o app do PC em app://ampara) lançam SecurityError: sem lembretes aqui
+  try {
+    return (await navigator.serviceWorker.getRegistration()) ?? null
+  } catch {
+    return null
+  }
 }
 
 export async function refreshPushState() {

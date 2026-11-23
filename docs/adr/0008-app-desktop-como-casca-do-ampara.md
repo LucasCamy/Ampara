@@ -39,3 +39,18 @@ e na web, e "adicionar um exe" que converse com o Ampara.
   carregar o site.
 - Negativas: cada versão do Ampara precisa de um novo build do exe (atualização automática fica como evolução);
   o build do exe passa a depender do build do Ampara; Electron pesa cerca de 100 MB.
+
+## Implementação e verificação
+
+- **Implementado (2026-11-23) em `desktop/`:** Electron servindo o build web por `app://ampara` (origem padrão
+  e segura: IndexedDB e WebCrypto funcionam), ponte `amparaDesktop` com `status`, `runStructured` e atalho
+  `Ctrl+Shift+Espaço` que abre o campo das Ideias. Só páginas de `app://ampara` chamam a IA; o pedido tem limite
+  de tamanho; o Claude Code roda sem ferramentas, plugins, MCP ou histórico (`--safe-mode --tools ""`).
+- **Nuvem sem abrir o servidor:** o gateway de produção continua sem CORS. O exe acrescenta os cabeçalhos de CORS
+  apenas nas respostas do endereço da nuvem gravado no build (`desktop.json`, a partir de `.env.desktop`),
+  inclusive o preflight. Navegadores comuns continuam bloqueados pelo servidor.
+- **Diferenças do plano:** sem service worker em `app://` (lembretes Web Push ficam no celular: `pushSupport`
+  devolve `unsupported` fora de http/https). A bolinha flutuante e a importação dos `.md` do protótipo ainda não
+  foram feitas.
+- **Verificado:** `desktop/test/live.cjs` (sem nuvem) e `desktop/test/live-cloud.cjs` (Supabase do Docker),
+  ambos com a assinatura real.

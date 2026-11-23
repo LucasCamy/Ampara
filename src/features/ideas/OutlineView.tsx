@@ -8,8 +8,8 @@ import { IdeaStateBadge, NatureTag, toastResult } from './ideaUi'
 
 /** Esboço: a mesma estrutura do mapa em lista recolhível (celular estreito, teclado e leitor de tela). */
 export function OutlineView({ tree }: { tree: AreaNode[] }) {
-  // começa aberto onde já tem ideia
-  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(tree.map((a) => [a.area.id, a.ideaCount > 0])))
+  // aberto onde tem ideia (inclusive a que a IA acabou de criar), a não ser que a pessoa tenha fechado
+  const [open, setOpen] = useState<Record<string, boolean>>({})
   const total = tree.reduce((n, a) => n + a.ideaCount, 0)
   if (!total && tree.every((a) => !a.topics.length)) {
     return <EmptyState icon={Lightbulb} title="Nenhuma ideia organizada ainda." text="Solte um pensamento acima. Depois, organize pela Caixa de entrada." />
@@ -17,7 +17,7 @@ export function OutlineView({ tree }: { tree: AreaNode[] }) {
   return (
     <ul className="flex flex-col gap-3" data-testid="ideas-outline">
       {tree.map(({ area, topics, ideaCount }) => {
-        const expanded = open[area.id] ?? false
+        const expanded = open[area.id] ?? ideaCount > 0
         return (
           <li key={area.id} className="module overflow-hidden">
             <button

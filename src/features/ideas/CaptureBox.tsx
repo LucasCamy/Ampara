@@ -1,8 +1,10 @@
-import { Mic, Send, Square } from 'lucide-react'
+import { Mic, Send, Sparkles, Square } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, cx, FieldError } from '../../components/ui'
 import { IDEA_LIMITS } from '../../domain/ideas'
-import { captureThought, deletePendingCapture } from '../../store/ideaActions'
+import { captureThought, deletePendingCapture, undoOrganization } from '../../store/ideaActions'
+import { describeAiResult, organizeWithAi } from '../../store/ideaAi'
+import { currentProvider } from '../../ai/provider'
 import { ui } from '../../store/ui'
 import { canDictate, startDictation, type DictationSession } from '../voice/speech'
 
@@ -13,6 +15,8 @@ export function CaptureBox() {
   const [error, setError] = useState<string | null>(null)
   const [listening, setListening] = useState(false)
   const [usedVoice, setUsedVoice] = useState(false)
+  const [organizing, setOrganizing] = useState(false)
+  const provider = currentProvider()
   const recognition = useRef<DictationSession | null>(null)
   const mounted = useRef(true)
 
@@ -60,6 +64,15 @@ export function CaptureBox() {
     }
     setText('')
     setUsedVoice(false)
+    if (provider) {
+      // a captura já está salva; a IA organiza em seguida (e o validador confere antes de gravar)
+      setOrganizing(true)
+      organizeWithAi(captureId, provider)
+        .then((r) => ui.toast(describeAiResult(r), { undo: () => { undoOrganization(r.logId) }, action: { label: 'Ver', onClick: () => document.querySelector<HTMLButtonElement>('[data-testid="ideas-view-esboco"]')?.click() } }))
+        .catch((e: unknown) => ui.toast(`${e instanceof Error ? e.message : 'A IA não respondeu.'} Ficou na Caixa de entrada.`, { tone: 'warn' }))
+        .finally(() => { if (mounted.current) setOrganizing(false) })
+      return
+    }
     ui.toast('Guardado na Caixa de entrada. Organize quando quiser.', {
       undo: () => {
         const r = deletePendingCapture(captureId)
@@ -90,7 +103,12 @@ export function CaptureBox() {
         placeholder="Do jeito que vier. Não precisa estar certo."
         className={cx('min-h-24 w-full resize-y rounded-[16px] border bg-bg px-4 py-3 text-[16px] leading-relaxed text-ink placeholder:text-muted', error ? 'border-err' : 'border-line-strong')}
       />
-      {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : <p id={`${id}-hint`} className="text-[13px] text-muted">Fica guardado na hora, só para você. Nada vira tarefa sozinho.</p>}
+      {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : (
+        <p id={`${id}-hint`} className="text-[13px] text-muted">
+          {provider ? 'Fica guardado na hora. A IA do PC organiza em seguida, e você pode desfazer. Nada vira tarefa sozinho.' : 'Fica guardado na hora, só para você. Nada vira tarefa sozinho.'}
+        </p>
+      )}
+      {organizing ? <p role="status" className="flex items-center gap-2 text-[14px] font-semibold text-ink" data-testid="idea-organizing"><Sparkles size={16} aria-hidden className="text-action" />Organizando com a IA…</p> : null}
       <div className="flex flex-col gap-2 sm:flex-row">
         {canDictate() ? (
           <Button type="button" variant="quiet" icon={listening ? Square : Mic} onClick={dictate} aria-pressed={listening} data-testid="idea-capture-mic" className="sm:w-auto">

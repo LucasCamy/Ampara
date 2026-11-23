@@ -16,6 +16,7 @@ import { useNow } from './store/clock'
 import { toDateKey } from './domain/dates'
 import { materializeRecurrences } from './store/financeActions'
 import { useAlertWatch } from './features/alerts/watch'
+import { desktopBridge } from './ai/provider'
 
 /** Entrar no lugar certo: /?quick=task|expense|med|sos, #/aba, ou o destino de uma notificação que esperou o login */
 function useQuickLaunch() {
@@ -102,8 +103,21 @@ function useTour() {
   }, [viewer])
 }
 
+/** App do PC (exe): o atalho global abre direto o campo das Ideias. */
+function useDesktopShortcut() {
+  useEffect(() => {
+    const off = desktopBridge()?.onShortcut?.(() => {
+      ui.closeSheet()
+      ui.setTab('ideias')
+      window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('[data-testid="idea-capture-input"]')?.focus(), 80)
+    })
+    return () => off?.()
+  }, [])
+}
+
 function AppShell() {
   useQuickLaunch()
+  useDesktopShortcut()
   useRecurrences()
   usePrefetchTabs()
   useTour()

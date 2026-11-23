@@ -59,6 +59,18 @@ Exporte um backup `.ampara` em Ajustes para ter uma cópia fora do aparelho. Det
 - **Módulos conectados:** estoque baixo pode entrar na lista de compras; comprar um remédio oferece reposição;
   itens comprados podem virar um gasto. Contas pessoais vencidas ou do dia também aparecem no Hoje.
 
+## Ampara no PC (com IA)
+
+O app do PC (`desktop/`) é o próprio Ampara num programa do Windows, com a IA pela **sua assinatura do Claude**
+(o Claude Code instalado e com login) e o atalho `Ctrl + Shift + Espaço` para soltar um pensamento.
+
+1. Crie `.env.desktop` na raiz (veja `.env.desktop.example`) com o endereço e a chave anônima da sua nuvem.
+   Sem ele, o app do PC guarda os dados só no PC.
+2. `cd desktop && npm install && npm run dist` gera o instalador em `desktop/release/`.
+3. Abra o Ampara no PC e entre com a sua conta da nuvem (Ajustes > Nuvem > Já tenho conta).
+
+Testes reais (gastam um pouco da assinatura): `cd desktop && npm run test:live` e `desktop/test/live-cloud.cjs`.
+
 ## Scripts
 
 | Script | O que faz |

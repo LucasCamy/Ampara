@@ -202,3 +202,7 @@ independentes e sandbox). Uso a classificação da skill: `confirmado` (controle
   ponta**: quem opera o servidor consegue ler o texto. A criptografia de ponta a ponta das ideias está registrada
   como evolução na [ADR-0009](docs/adr/0009-dados-das-ideias-privados-no-supabase.md). No mesmo aparelho com duas
   pessoas vale a limitação do primeiro item.
+- **App do PC (`desktop/`):** a IA roda pelo Claude Code da pessoa, sem ferramentas nem acesso a arquivos, e só a
+  origem `app://ampara` pode chamá-la. Para sincronizar, o exe libera CORS apenas para o endereço da nuvem gravado no
+  build; o servidor de produção continua sem CORS para navegadores. O texto organizado vai para a Anthropic pela
+  assinatura da pessoa.

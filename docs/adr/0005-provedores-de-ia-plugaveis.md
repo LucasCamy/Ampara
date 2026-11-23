@@ -48,3 +48,13 @@ Restrições:
 - Positivas: liberdade de escolha; usa o que a pessoa já paga; web e celular ganham IA por chave ou repasse.
 - Negativas: vários adaptadores para manter e testar; qualidade varia entre modelos (mitigado pelo validador e
   por uma avaliação comum); o repasse só responde com o PC ligado.
+
+## Implementação e verificação
+
+- **Implementado (2026-11-23):** interface `AiProvider` em `src/ai/provider.ts` e o adaptador `claude-assinatura`
+  pela ponte do app do PC (`window.amparaDesktop`). Contrato único em `src/domain/ideasPrompt.ts`
+  (`organizador@1`, esquema com operação "plana" e campos nulos). Orquestração em `src/store/ideaAi.ts`:
+  candidatas por busca local, chamada, validação contra o mapa atual e `applyOrganization`.
+- **Verificado:** teste real com a assinatura (Claude Code) criando 3 ideias de uma captura; teste real com o
+  Supabase local recebendo as ideias e o registro `claude-assinatura / claude-opus-5-5`; E2E com a ponte simulada.
+- **Pendente:** `codex-assinatura`, chaves de API (ADR-0006) e `repasse-pc`.

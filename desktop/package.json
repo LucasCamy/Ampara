@@ -1,0 +1,53 @@
+{
+  "name": "ampara-desktop",
+  "productName": "Ampara",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ampara no PC: o app com IA pela assinatura do Claude e atalho global para soltar pensamentos.",
+  "main": "main.cjs",
+  "scripts": {
+    "app": "cd .. && npm run typecheck && npx vite build --mode desktop && node desktop/scripts/copy-dist.cjs",
+    "start": "electron .",
+    "test:live": "node test/live.cjs",
+    "dist": "npm run app && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "br.com.cloudlane.ampara",
+    "productName": "Ampara",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "claude.cjs",
+      "icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "app-dist",
+        "to": "app-dist"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ampara"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "playwright-core": "^1.65.1"
+  },
+  "allowScripts": {
+    "electron@45.4.1": true
+  }
+}

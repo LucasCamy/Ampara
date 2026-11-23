@@ -1,12 +1,24 @@
-import { FolderInput, Inbox, Mic, Trash2 } from 'lucide-react'
+import { FolderInput, Inbox, Mic, Sparkles, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { Button, EmptyState } from '../../components/ui'
 import type { InboxView as Inbox_ } from '../../domain/ideasView'
-import { deletePendingCapture, discardInboxNote } from '../../store/ideaActions'
+import { deletePendingCapture, discardInboxNote, undoOrganization } from '../../store/ideaActions'
+import { describeAiResult, organizeWithAi } from '../../store/ideaAi'
+import { currentProvider } from '../../ai/provider'
 import { ui } from '../../store/ui'
 import { shortDateTime, toastResult } from './ideaUi'
 
 /** Caixa de entrada: o que ainda não tem lugar. Organizar é sempre escolha da pessoa (ou da IA, depois). */
 export function InboxView({ inbox }: { inbox: Inbox_ }) {
+  const provider = currentProvider()
+  const [busy, setBusy] = useState<string | null>(null)
+  const withAi = (captureId: string) => {
+    setBusy(captureId)
+    organizeWithAi(captureId, provider)
+      .then((r) => ui.toast(describeAiResult(r), { undo: () => { undoOrganization(r.logId) } }))
+      .catch((e: unknown) => ui.toast(e instanceof Error ? e.message : 'A IA não respondeu.', { tone: 'warn' }))
+      .finally(() => setBusy(null))
+  }
   if (!inbox.count) {
     return <EmptyState icon={Inbox} title="Caixa de entrada vazia." text="Tudo o que você soltou já tem lugar." />
   }
@@ -20,7 +32,8 @@ export function InboxView({ inbox }: { inbox: Inbox_ }) {
             <span className="font-data">{shortDateTime(c.createdAt)}</span> · Aguardando organizar
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="primary" icon={FolderInput} className="flex-1" onClick={() => ui.openSheet('organizeIdea', { captureId: c.id })} data-testid="inbox-organize">Organizar</Button>
+            {provider ? <Button variant="primary" icon={Sparkles} className="flex-1" busy={busy === c.id} disabled={!!busy && busy !== c.id} onClick={() => withAi(c.id)} data-testid="inbox-organize-ai">Organizar com IA</Button> : null}
+            <Button variant={provider ? 'secondary' : 'primary'} icon={FolderInput} className="flex-1" onClick={() => ui.openSheet('organizeIdea', { captureId: c.id })} data-testid="inbox-organize">{provider ? 'Eu organizo' : 'Organizar'}</Button>
             <Button variant="quiet" icon={Trash2} onClick={() => toastResult(deletePendingCapture(c.id), 'Pensamento apagado')}>Apagar</Button>
           </div>
         </article>

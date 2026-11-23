@@ -26,7 +26,7 @@ interface Span { text: string; start: number; end: number }
 
 export type ValidatedOp =
   | ({ kind: 'ANEXAR'; ideaId: string; needsReview: boolean } & Span)
-  | ({ kind: 'CRIAR_IDEIA'; ref: string | null; topic: TopicRef; title: string; nature: IdeaNature; needsReview: boolean } & Span)
+  | ({ kind: 'CRIAR_IDEIA'; ref: string | null; topic: TopicRef; title: string; nature: IdeaNature; summary: string; needsReview: boolean } & Span)
   | { kind: 'CRIAR_ASSUNTO'; ref: string; areaId: string; name: string; reason: string }
   | { kind: 'SUGERIR_LIGACAO'; from: IdeaRef; to: IdeaRef; type: LinkType; reason: string }
   | { kind: 'ATUALIZAR_RESUMO'; idea: IdeaRef; summary: string }
@@ -65,8 +65,8 @@ function confidenceOf(op: Raw): number {
   return c as number
 }
 
-function reasonOf(op: Raw, field = 'motivo'): string {
-  const r = str(op[field]) ?? refuse(`${field} vazio`)
+function reasonOf(op: Raw, field = 'motivo', optional = false): string {
+  const r = str(op[field]) ?? (optional ? '' : refuse(`${field} vazio`))
   if (r.length > IDEA_LIMITS.reasonMaxChars) refuse(`${field} com mais de ${IDEA_LIMITS.reasonMaxChars} caracteres`)
   return r
 }
@@ -146,7 +146,8 @@ export function validateOrganization(rawCapture: string, response: unknown, map:
       if ((activeTopicsPerArea.get(areaId) ?? 0) + pending + 1 > IDEA_LIMITS.maxActiveTopicsPerArea) {
         refuse('área já tem o máximo de assuntos; proponha juntar na revisão')
       }
-      newTopics.set(ref, { index, op: { kind: 'CRIAR_ASSUNTO', ref, areaId, name, reason: reasonOf(op) } })
+      // motivo do assunto novo é só para o registro: opcional (recusar derrubaria as ideias dele)
+      newTopics.set(ref, { index, op: { kind: 'CRIAR_ASSUNTO', ref, areaId, name, reason: reasonOf(op, 'motivo', true) } })
     } catch (e) {
       if (!(e instanceof Refusal)) throw e
       reject(index, 'CRIAR_ASSUNTO', e.message)
@@ -189,6 +190,9 @@ export function validateOrganization(rawCapture: string, response: unknown, map:
       if (wordCount(title) > IDEA_LIMITS.titleMaxWords) refuse(`título com mais de ${IDEA_LIMITS.titleMaxWords} palavras`)
       if (!isNature(op.natureza)) refuse('natureza fora do vocabulário')
       const nature = op.natureza as IdeaNature
+      const summary = str(op.resumo) ?? ''
+      if (summary.length > IDEA_LIMITS.summaryMaxChars) refuse('resumo longo demais')
+      if (summary && sentenceCount(summary) > IDEA_LIMITS.summaryMaxSentences) refuse(`resumo com mais de ${IDEA_LIMITS.summaryMaxSentences} frases`)
       let topic: TopicRef
       const topicId = str(op.assunto_id)
       const topicRef = str(op.assunto_ref)
@@ -220,7 +224,7 @@ export function validateOrganization(rawCapture: string, response: unknown, map:
       if (ref) newIdeaRefs.add(ref)
       pendingTitles.set(titleKey, ref ?? '')
       if ('ref' in topic) usedTopicRefs.add(topic.ref)
-      result.apply.push({ kind: 'CRIAR_IDEIA', ref, topic, title, nature, needsReview, ...span })
+      result.apply.push({ kind: 'CRIAR_IDEIA', ref, topic, title, nature, summary, needsReview, ...span })
     } catch (e) {
       if (!(e instanceof Refusal)) throw e
       reject(index, kind, e.message)

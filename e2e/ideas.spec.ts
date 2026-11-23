@@ -116,3 +116,44 @@ test('ideias são privadas no mesmo aparelho e o módulo pode ser desligado', as
   await page.getByTestId('settings-module-ideas').click()
   await expect(page.locator('[data-testid="nav-ideias"]:visible, [data-testid="side-ideias"]:visible')).toHaveCount(0)
 })
+
+test('com a IA do PC: soltar organiza sozinho, mostra onde ficou e Desfazer volta para a Caixa', async ({ page, errors }) => {
+  void errors
+  await at(page, '10:00')
+  // simula a ponte do exe (window.amparaDesktop) sem gastar a assinatura
+  await page.addInitScript(() => {
+    const op = (o: Record<string, unknown>) => ({ tipo: null, trecho: null, ideia_id: null, assunto_id: null, assunto_ref: null, ref: null, area_id: null, nome: null, titulo: null, natureza: null, motivo: null, de_ideia: null, para_ideia: null, tipo_ligacao: null, resumo: null, estado: null, confianca: null, ...o })
+    ;(window as unknown as { amparaDesktop: unknown }).amparaDesktop = {
+      version: 'teste',
+      status: async () => ({ claude: true, model: 'modelo-teste' }),
+      runStructured: async (req: { input: string }) => {
+        const { captura } = JSON.parse(req.input) as { captura: string }
+        await new Promise((r) => setTimeout(r, 300))
+        return {
+          model: 'modelo-teste',
+          json: { versao: 'organizador@1', operacoes: [
+            op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:estudos', nome: 'Idiomas' }),
+            op({ tipo: 'CRIAR_IDEIA', trecho: captura, assunto_ref: 's', titulo: 'Aprender inglês', natureza: 'PLANO', confianca: 0.9 }),
+          ] },
+        }
+      },
+    }
+  })
+  await open(page)
+  await goTab(page, 'ideias')
+  await expect(page.getByTestId('idea-capture')).toContainText('A IA do PC organiza')
+  await page.getByTestId('idea-capture-input').fill('quero aprender inglês')
+  await page.getByTestId('idea-capture-save').click()
+  await expect(page.getByTestId('idea-organizing')).toBeVisible()
+  await expect(page.getByText('Organizei em Estudos › Idiomas.')).toBeVisible()
+  await page.getByTestId('ideas-view-esboco').click()
+  await expect(page.getByTestId('ideas-outline').getByRole('button', { name: /Aprender inglês/ })).toBeVisible()
+  // Desfazer: a ideia some e o pensamento volta para a Caixa, pronto para organizar de novo
+  await page.getByRole('button', { name: 'Desfazer' }).first().click()
+  await expect(page.getByTestId('ideas-outline').getByRole('button', { name: /Aprender inglês/ })).toHaveCount(0)
+  await page.getByTestId('ideas-view-caixa').click()
+  await expect(page.getByTestId('inbox-organize-ai')).toBeVisible()
+  await page.getByTestId('inbox-organize-ai').click()
+  await expect(page.getByText('Organizei em Estudos › Idiomas.')).toBeVisible()
+})
+

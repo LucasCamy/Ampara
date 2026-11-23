@@ -299,3 +299,23 @@ describe('ajudantes de texto', () => {
     expect(foldText('  Saúde  E   Ânimo ')).toBe('saude e animo')
   })
 })
+
+describe('resposta real da assinatura (2026-11-23)', () => {
+  it('assunto novo sem motivo não derruba as ideias; resumo da ideia nova é aproveitado', () => {
+    const capture = 'quero voltar a correr de manhã, mas tenho medo de não conseguir acordar cedo. talvez dormir antes das 23h ajude'
+    const r = run(capture, [
+      { tipo: 'CRIAR_ASSUNTO', ref: 'S1', area_id: 'A:saude', nome: 'Exercício e sono', motivo: null },
+      { tipo: 'CRIAR_IDEIA', ref: 'I1', trecho: 'quero voltar a correr de manhã', assunto_ref: 'S1', titulo: 'Voltar a correr de manhã', natureza: 'PLANO', resumo: 'Quer voltar a correr pela manhã.', confianca: 0.9 },
+      { tipo: 'CRIAR_IDEIA', ref: 'I2', trecho: 'tenho medo de não conseguir acordar cedo', assunto_ref: 'S1', titulo: 'Medo de não conseguir acordar cedo', natureza: 'PREOCUPACAO', resumo: null, confianca: 0.85 },
+      { tipo: 'CRIAR_IDEIA', ref: 'I3', trecho: 'talvez dormir antes das 23h ajude', assunto_ref: 'S1', titulo: 'Dormir antes das 23h', natureza: 'PLANO', confianca: 0.8 },
+      { tipo: 'SUGERIR_LIGACAO', de_ideia: 'I1', para_ideia: 'I3', tipo_ligacao: 'RELACIONA', motivo: 'Correr de manhã depende de dormir cedo.', confianca: 0.8 },
+    ])
+    expect(r.rejected).toEqual([])
+    expect(kinds(r)).toEqual(['CRIAR_ASSUNTO', 'CRIAR_IDEIA', 'CRIAR_IDEIA', 'CRIAR_IDEIA', 'SUGERIR_LIGACAO'])
+    expect(r.apply[1]).toMatchObject({ summary: 'Quer voltar a correr pela manhã.' })
+    expect(r.apply[2]).toMatchObject({ summary: '' })
+    // "mas" e a pontuação entre os trechos são conectivos: nada vai para a Caixa de entrada
+    expect(r.inbox).toEqual([])
+  })
+})
+
