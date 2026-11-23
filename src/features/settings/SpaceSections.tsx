@@ -17,12 +17,13 @@ const MODULES: { key: keyof EnabledModules; label: string; description: string }
   { key: 'cycle', label: 'Ciclo menstrual', description: 'Acompanhar seu ciclo e as janelas de cuidado.' },
   { key: 'shopping', label: 'Compras', description: 'Manter uma lista para lembrar do que falta.' },
   { key: 'goals', label: 'Caixinhas', description: 'Guardar aos poucos para seus objetivos.' },
+  { key: 'ideas', label: 'Ideias', description: 'Soltar pensamentos e ver o mapa do que você pensa. Só você vê.' },
 ]
 
 export function ModulesSection() {
   const { me } = usePeople()
   const isSolo = useIsSolo()
-  const modules = me.enabledModules ?? { cycle: !isSolo, shopping: true, goals: true }
+  const modules = me.enabledModules ?? { cycle: !isSolo, shopping: true, goals: true, ideas: true }
   return (
     <section className="module p-4 sm:p-5" aria-labelledby="modulos">
       <SectionHeader id="modulos" title="Módulos opcionais" />
@@ -31,7 +32,7 @@ export function ModulesSection() {
         {MODULES.map(({ key, label, description }) => (
           <Switch
             key={key}
-            checked={modules[key]}
+            checked={modules[key] !== false}
             onChange={(enabled) => setEnabledModule(key, enabled)}
             label={label}
             description={description}

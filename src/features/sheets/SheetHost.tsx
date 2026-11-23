@@ -25,6 +25,8 @@ import { TaskSheet } from './TaskSheet'
 import { QuickCaptureSheet } from './QuickCaptureSheet'
 import { UnstuckSheet } from './UnstuckSheet'
 import { TemplatesSheet } from './TemplatesSheet'
+import { IdeaSheet } from './IdeaSheet'
+import { OrganizeIdeaSheet } from './OrganizeIdeaSheet'
 
 const TITLES: Record<SheetKind, { title: string; description: string }> = {
   quickCapture: { title: 'Captura livre', description: 'Escreva ou dite uma frase. Confira o que foi entendido antes de salvar.' },
@@ -46,6 +48,8 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
   tx: { title: 'Lançamento', description: 'Baixa, desfazer ou excluir.' },
   rule: { title: 'Conta fixa', description: 'Vale deste mês em diante.' },
   tour: { title: 'Bem-vindo ao Ampara', description: 'Um minuto para conhecer. Dá para pular.' },
+  idea: { title: 'Ideia', description: 'Só você vê. Ajuste, confira e veja como ela se liga às outras.' },
+  organizeIdea: { title: 'Organizar pensamento', description: 'Escolha a área, o assunto e a ideia. Tudo pode mudar depois.' },
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
@@ -56,18 +60,20 @@ const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: strin
   period: { title: 'Corrigir registro', description: 'Ajuste as datas ou exclua. A previsão se recalcula sozinha.' },
   specialDate: { title: 'Editar data especial', description: 'Os dois veem e recebem o lembrete.' },
   gift: { title: 'Editar ideia', description: 'Só você vê.' },
+  idea: { title: 'Ideia', description: 'Só você vê. Ajuste, confira e veja como ela se liga às outras.' },
   goal: { title: 'Editar caixinha', description: 'O valor guardado não muda aqui.' },
 }
 
 /** Assina o uiStore.sheet e, só em modo edição, se o item ainda existe (pode ter sido excluído no outro aparelho) */
 export function SheetHost() {
   const isSolo = useIsSolo()
+  const viewer = useUi((s) => s.viewer)
   const sheet = useUi((s) => s.sheet)
   const unstuckStep = useUi((s) => s.unstuckStep ?? 1)
   const close = useCallback(() => ui.closeSheet(), [])
   const editId = sheet?.params.id
   const exists = useData(
-    (d) => !editId || (sheet?.kind === 'task' ? !!d.tasks[editId] : sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : sheet?.kind === 'goal' ? !!d.savingsGoals[editId] : sheet?.kind === 'pay' || sheet?.kind === 'tx' ? !!d.transactions[editId] : sheet?.kind === 'rule' ? !!d.recurrences[editId] : !!d.meds[editId]),
+    (d) => !editId || (sheet?.kind === 'task' ? !!d.tasks[editId] : sheet?.kind === 'event' ? !!d.events[editId] : sheet?.kind === 'period' ? !!d.cycleLogs[editId] : sheet?.kind === 'specialDate' ? !!d.specialDates[editId] : sheet?.kind === 'gift' ? !!d.giftIdeas[editId] : sheet?.kind === 'goal' ? !!d.savingsGoals[editId] : sheet?.kind === 'pay' || sheet?.kind === 'tx' ? !!d.transactions[editId] : sheet?.kind === 'rule' ? !!d.recurrences[editId] : sheet?.kind === 'idea' ? !!d.ideas[editId] && d.ideas[editId].ownerId === viewer : !!d.meds[editId]),
   )
   const editing = !!editId
   const soloMeta: Partial<typeof TITLES> = {
@@ -130,6 +136,8 @@ export function SheetHost() {
       {sheet?.kind === 'tx' && exists && editId ? <TxSheet id={editId} onDone={close} /> : null}
       {sheet?.kind === 'rule' && exists ? <RuleSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'goal' && exists ? <GoalSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'idea' && exists && editId ? <IdeaSheet key={editId} id={editId} onDone={close} /> : null}
+      {sheet?.kind === 'organizeIdea' ? <OrganizeIdeaSheet key={sheet.params.captureId ?? sheet.params.noteId} params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'gift' && exists ? <GiftSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}
     </Sheet>
   )

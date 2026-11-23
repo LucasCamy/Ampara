@@ -66,7 +66,7 @@ describe('sessão com IndexedDB cifrado', () => {
     const oldPassword = other === 'A' ? PASSWORD : 'cha de hortela no jardim'
     s.transact((tx) => {
       tx.put('comfortItems', { id: 'calma-par', ownerId: other, text: 'Registro original do par', createdAt: '2026-11-20T10:00:00Z', updatedAt: '2026-11-20T10:00:00Z' })
-      tx.put('profiles', { ...tx.get('profiles', who)!, monthlyBudgetCents: 81234, enabledModules: { cycle: true, shopping: false, goals: true } })
+      tx.put('profiles', { ...tx.get('profiles', who)!, monthlyBudgetCents: 81234, enabledModules: { cycle: true, shopping: false, goals: true, ideas: true } })
     })
     await s.flushSaves()
     const oldVault = await s.storage.readStoredVault() as Vault
@@ -279,7 +279,7 @@ describe('sessão com IndexedDB cifrado', () => {
     expect(s.authStore.get()).toMatchObject({ status: 'unlocked', who: 'A', welcomeInvite: null, remembered: false })
     expect(s.authStore.get().people?.B.status).toBe('absent')
     expect(s.dataStore.get().couple.couple).toMatchObject({ mode: 'SOLO', inviteCode: '' })
-    expect(s.dataStore.get().profiles.A?.enabledModules).toEqual({ cycle: false, shopping: true, goals: true })
+    expect(s.dataStore.get().profiles.A?.enabledModules).toEqual({ cycle: false, shopping: true, goals: true, ideas: true })
     expect(Object.keys(s.dataStore.get().tasks)).toHaveLength(0)
     expect(persist).toHaveBeenCalledOnce()
     const vault = await s.storage.readStoredVault()
@@ -334,7 +334,7 @@ describe('sessão com IndexedDB cifrado', () => {
   it('upgrade exige a senha e preserva registros, orçamento e preferências pessoais', async () => {
     const s = await solo()
     s.transact((tx) => {
-      tx.put('profiles', { ...tx.get('profiles', 'A')!, monthlyBudgetCents: 50000, enabledModules: { cycle: true, shopping: false, goals: true } })
+      tx.put('profiles', { ...tx.get('profiles', 'A')!, monthlyBudgetCents: 50000, enabledModules: { cycle: true, shopping: false, goals: true, ideas: true } })
       tx.put('comfortItems', { id: 'calma', ownerId: 'A', text: 'Um copo de água', createdAt: '2026-11-20T10:00:00Z', updatedAt: '2026-11-20T10:00:00Z' })
     })
     await expect(s.upgradeSoloToCouple('senha errada', { name: 'Marina', pronoun: 'ela' })).rejects.toMatchObject({ code: 'BAD_CREDENTIALS' })
@@ -346,7 +346,7 @@ describe('sessão com IndexedDB cifrado', () => {
     expect(after.couple.couple).toMatchObject({ mode: 'COUPLE', inviteCode: invite })
     expect(after.profiles.A).toEqual(before.profiles.A)
     expect(after.comfortItems).toEqual(before.comfortItems)
-    expect(after.profiles.B).toMatchObject({ displayName: 'Marina', pronoun: 'ela', enabledModules: { cycle: true, shopping: true, goals: true } })
+    expect(after.profiles.B).toMatchObject({ displayName: 'Marina', pronoun: 'ela', enabledModules: { cycle: true, shopping: true, goals: true, ideas: true } })
     expect(s.authStore.get().people?.B.status).toBe('invited')
     await s.lock('B')
     await s.activate('B', invite, 'cha de hortela no jardim', false)
@@ -432,7 +432,7 @@ describe('sessão com IndexedDB cifrado', () => {
     expect(values.has('ampara:vault:v1')).toBe(false)
     await s.login('A', PASSWORD, false)
     expect(dataStore.get().couple.couple?.mode).toBe('COUPLE')
-    expect(dataStore.get().profiles.A?.enabledModules).toEqual({ cycle: true, shopping: true, goals: true })
+    expect(dataStore.get().profiles.A?.enabledModules).toEqual({ cycle: true, shopping: true, goals: true, ideas: true })
   })
 
   it('sem IndexedDB usa apenas o cofre cifrado no fallback e não finge lembrar a sessão', async () => {

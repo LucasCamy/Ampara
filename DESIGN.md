@@ -114,7 +114,7 @@ Marcadores do calendário mensal: `●` compromisso do casal (`--couple`), `▲`
 
 | Largura | Composição |
 |---|---|
-| `< 640px` | Top bar compacta, conteúdo em pilha, Dock flutuante acima da Bottom Nav de 5 abas (Hoje, Agenda, Nós, Cuidados, Finanças) |
+| `< 640px` | Top bar compacta, conteúdo em pilha, Dock flutuante acima da Bottom Nav de 5 abas (Hoje, Agenda, Nós, Cuidados, Finanças) ou 6 com o módulo Ideias ligado (rótulos em 11px; conferido em 360px) |
 | `640-1023px` | Mesmo esquema com conteúdo centralizado em 640px e cards em 2 colunas onde couber |
 | `>= 1024px` | Sidebar 248px (navegação + captura rápida), conteúdo em 2 colunas, sem Dock |
 
@@ -145,3 +145,10 @@ Marcadores do calendário mensal: `●` compromisso do casal (`--couple`), `▲`
 - **Dados:** "Para onde foi" usa barras horizontais ranqueadas de uma série, na cor de quem gastou (casal ou
   pessoa), com valor e % em texto; contraste de cada cor validado (≥ 3:1) em `surface` e `subtle`, claro e
   escuro.
+- **Ideias (2026-11-23, ADR-0007):** campo "O que está na sua cabeça?" no topo; seletor Esboço | Mapa | Caixa de
+  entrada (sem ícones, para caber em 360px); filtros Ativas | Guardadas | Todas e tipo em lista compacta.
+  Esboço é a alternativa completa ao mapa. Mapa em SVG com tokens (`fill-*`, `stroke-*`), zoom por nível
+  (todas as áreas > uma área), arrastar para mover e botões Aproximar, Afastar e Centralizar; só `transform` muda.
+  Assunto provisório, ideia "para conferir" e ligação sugerida usam traço tracejado; confirmados, traço sólido.
+  Estado da ideia segue `StatusBadge`: Solta (pendente), Amadurecendo (relógio), Virou ação (ok), Guardada (pulada).
+

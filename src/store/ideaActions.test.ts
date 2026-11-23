@@ -10,7 +10,7 @@ vi.mock('./ui', async () => {
 
 const { dataStore } = await import('./data')
 const { uiStore } = await import('./ui')
-const { applyOrganization, captureThought, ensureIdeaAreas, myIdeaMap, sendCaptureToInbox, undoOrganization } = await import('./ideaActions')
+const { applyOrganization, captureThought, confirmTopic, deletePendingCapture, discardInboxNote, ensureIdeaAreas, markIdeaReviewed, myIdeaMap, organizeManually, sendCaptureToInbox, setLinkState, undoOrganization, updateIdea } = await import('./ideaActions')
 
 const iso = '2026-11-23T10:00:00.000Z'
 const META = { provider: 'teste', model: 'modelo-x', promptVersion: 'organizador@1' }
@@ -174,5 +174,121 @@ describe('desfazer e privacidade', () => {
     expect(values(purged.ideaCaptures)).toEqual([])
     expect(values(purged.ideaAreas)).toEqual([])
     expect(purged.outbox.some((e) => e.entityType === 'ideaCaptures')).toBe(false)
+  })
+})
+
+describe('organizar à mão (sem IA)', () => {
+
+  it('cria assunto firme e ideia nova com a captura inteira como anotação; Desfazer volta tudo', () => {
+    const id = captureThought('quero correr de manhã')!
+    const r = organizeManually({ captureId: id, areaId: 'A:saude', newTopicName: 'Corrida', newIdea: { title: 'Correr de manhã', nature: 'PLANO' } })
+    expect(r.ok).toBe(true)
+    expect(values(state().ideaTopics)).toEqual([expect.objectContaining({ name: 'Corrida', firm: true, origin: 'PESSOA' })])
+    const idea = values(state().ideas)[0]!
+    expect(idea).toMatchObject({ title: 'Correr de manhã', nature: 'PLANO', state: 'SOLTA' })
+    expect(values(state().ideaNotes)).toEqual([expect.objectContaining({ ideaId: idea.id, text: 'quero correr de manhã', startPos: 0, endPos: 21 })])
+    expect(state().ideaCaptures[id]!.status).toBe('ORGANIZADA')
+    if (r.ok) r.undo()
+    expect(values(state().ideas)).toEqual([])
+    expect(values(state().ideaTopics)).toEqual([])
+    expect(state().ideaCaptures[id]).toMatchObject({ status: 'PENDENTE' })
+    expect(state().ideaCaptures[id]!.updatedAt > iso).toBe(true)
+  })
+
+  it('trecho da Caixa de entrada vai para uma ideia que já existe e ela amadurece', () => {
+    const first = captureThought('correr')!
+    organizeManually({ captureId: first, areaId: 'A:saude', newTopicName: 'Corrida', newIdea: { title: 'Correr', nature: 'PLANO' } })
+    const idea = values(state().ideas)[0]!
+    const topic = values(state().ideaTopics)[0]!
+    const second = captureThought('correr 3 vezes por semana')!
+    sendCaptureToInbox(second, 'sem IA')
+    const inboxNote = values(state().ideaNotes).find((n) => n.ideaId === null)!
+    const r = organizeManually({ noteId: inboxNote.id, areaId: 'A:saude', topicId: topic.id, ideaId: idea.id })
+    expect(r.ok).toBe(true)
+    expect(state().ideaNotes[inboxNote.id]).toMatchObject({ ideaId: idea.id, inboxReason: null })
+    expect(state().ideas[idea.id]!.state).toBe('AMADURECENDO')
+  })
+
+  it.each([
+    [{ areaId: 'A:nao-existe', newTopicName: 'x', newIdea: { title: 'x', nature: 'PLANO' as const } }, 'Escolha uma área.'],
+    [{ areaId: 'A:saude', newIdea: { title: 'x', nature: 'PLANO' as const } }, 'Escolha um assunto ou crie um novo.'],
+    [{ areaId: 'A:saude', newTopicName: 'x'.repeat(41), newIdea: { title: 'x', nature: 'PLANO' as const } }, 'Use até 40 letras no nome do assunto.'],
+    [{ areaId: 'A:saude', newTopicName: 'Corrida' }, 'Escreva o nome da ideia.'],
+  ])('recusa escolhas inválidas sem gravar nada (%#)', (input, error) => {
+    const id = captureThought('pensamento')!
+    expect(organizeManually({ captureId: id, ...input })).toEqual({ ok: false, error })
+    expect(values(state().ideas)).toEqual([])
+    expect(state().ideaCaptures[id]!.status).toBe('PENDENTE')
+  })
+
+  it('não repete nome de assunto na área e respeita 12 assuntos', () => {
+    for (let i = 0; i < 12; i++) {
+      const c = captureThought(`pensamento ${i}`)!
+      expect(organizeManually({ captureId: c, areaId: 'A:lazer', newTopicName: `Assunto ${i}`, newIdea: { title: `Ideia ${i}`, nature: 'DESEJO' } }).ok).toBe(true)
+    }
+    const c = captureThought('mais um')!
+    expect(organizeManually({ captureId: c, areaId: 'A:lazer', newTopicName: 'ASSUNTO 3', newIdea: { title: 'x', nature: 'DESEJO' } })).toEqual({ ok: false, error: 'Já existe um assunto com esse nome nesta área.' })
+    expect(organizeManually({ captureId: c, areaId: 'A:lazer', newTopicName: 'Décimo terceiro', newIdea: { title: 'x', nature: 'DESEJO' } })).toEqual({ ok: false, error: 'Esta área já tem 12 assuntos. Junte ou arquive algum antes.' })
+  })
+
+  it('editar ideia: nome, tipo, estado e assunto; "virou ação" não é editável aqui', () => {
+    const c = captureThought('violão')!
+    organizeManually({ captureId: c, areaId: 'A:lazer', newTopicName: 'Música', newIdea: { title: 'Violão', nature: 'DESEJO' } })
+    const idea = values(state().ideas)[0]!
+    const r = updateIdea(idea.id, { title: 'Aprender violão', state: 'GUARDADA', summary: 'Um dia.' })
+    expect(r.ok).toBe(true)
+    expect(state().ideas[idea.id]).toMatchObject({ title: 'Aprender violão', state: 'GUARDADA', summary: 'Um dia.' })
+    expect(updateIdea(idea.id, { title: '  ' })).toEqual({ ok: false, error: 'Escreva um nome com até 80 letras.' })
+    if (r.ok) r.undo()
+    expect(state().ideas[idea.id]).toMatchObject({ title: 'Violão', state: 'SOLTA' })
+  })
+
+  it('ligações: aceitar fica sólida, recusar some; conferir limpa as marcas; confirmar assunto provisório', () => {
+    const id = captureThought('correr e dormir cedo')!
+    organize(id, [
+      { tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:saude', nome: 'Sono', motivo: 'x' },
+      { tipo: 'CRIAR_IDEIA', ref: 'a', trecho: 'correr', assunto_ref: 's', titulo: 'Correr', natureza: 'PLANO', confianca: 0.7 },
+      { tipo: 'CRIAR_IDEIA', ref: 'b', trecho: 'dormir cedo', assunto_ref: 's', titulo: 'Dormir cedo', natureza: 'PLANO', confianca: 0.9 },
+      { tipo: 'SUGERIR_LIGACAO', de_ideia: 'a', para_ideia: 'b', tipo_ligacao: 'DEPENDE_DE', motivo: 'acordar cedo', confianca: 0.9 },
+    ])
+    const link = values(state().ideaLinks)[0]!
+    expect(setLinkState(link.id, 'CONFIRMADA').ok).toBe(true)
+    expect(state().ideaLinks[link.id]!.state).toBe('CONFIRMADA')
+    expect(setLinkState(link.id, 'RECUSADA').ok).toBe(true)
+    expect(state().ideaLinks[link.id]!.state).toBe('RECUSADA')
+
+    const correr = values(state().ideas).find((i) => i.title === 'Correr')!
+    expect(correr.needsReview).toBe(true)
+    markIdeaReviewed(correr.id)
+    expect(state().ideas[correr.id]!.needsReview).toBe(false)
+    expect(values(state().ideaNotes).filter((n) => n.ideaId === correr.id).every((n) => !n.needsReview)).toBe(true)
+
+    const topic = values(state().ideaTopics)[0]!
+    expect(topic.firm).toBe(false)
+    confirmTopic(topic.id)
+    expect(state().ideaTopics[topic.id]!.firm).toBe(true)
+  })
+
+  it('apagar pensamento pendente e tirar trecho da Caixa de entrada, com Desfazer', () => {
+    const id = captureThought('bobagem')!
+    const r = deletePendingCapture(id)
+    expect(state().ideaCaptures[id]).toBeUndefined()
+    if (r.ok) r.undo()
+    expect(state().ideaCaptures[id]!.text).toBe('bobagem')
+    sendCaptureToInbox(id, 'x')
+    const n = values(state().ideaNotes)[0]!
+    expect(discardInboxNote(n.id).ok).toBe(true)
+    expect(state().ideaNotes[n.id]).toBeUndefined()
+    expect(deletePendingCapture(id)).toEqual({ ok: false, error: 'Este pensamento já foi organizado.' })
+  })
+
+  it('o par não mexe em nada da pessoa', () => {
+    const id = captureThought('meu')!
+    organizeManually({ captureId: id, areaId: 'A:saude', newTopicName: 'T', newIdea: { title: 'Minha', nature: 'PLANO' } })
+    const idea = values(state().ideas)[0]!
+    uiStore.set((s) => ({ ...s, viewer: 'B' }))
+    expect(updateIdea(idea.id, { title: 'invadido' }).ok).toBe(false)
+    expect(markIdeaReviewed(idea.id).ok).toBe(false)
+    expect(state().ideas[idea.id]!.title).toBe('Minha')
   })
 })

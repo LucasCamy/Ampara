@@ -42,7 +42,7 @@ export function uuid(): string {
 
 const byId = <T extends { id: string }>(xs: T[]): Record<string, T> => Object.fromEntries(xs.map((x) => [x.id, x]))
 
-export const defaultEnabledModules = (mode: SpaceMode): EnabledModules => ({ cycle: mode === 'COUPLE', shopping: true, goals: true })
+export const defaultEnabledModules = (mode: SpaceMode): EnabledModules => ({ cycle: mode === 'COUPLE', shopping: true, goals: true, ideas: true })
 
 /** Dia do mês corrente, limitado ao mês */
 function dayInMonth(today: DateKey, offset: number): DateKey {
@@ -338,8 +338,9 @@ export function normalizeState(state: DataState): DataState {
       cycle: typeof p.enabledModules?.cycle === 'boolean' ? p.enabledModules.cycle : defaults.cycle,
       shopping: typeof p.enabledModules?.shopping === 'boolean' ? p.enabledModules.shopping : defaults.shopping,
       goals: typeof p.enabledModules?.goals === 'boolean' ? p.enabledModules.goals : defaults.goals,
+      ideas: typeof p.enabledModules?.ideas === 'boolean' ? p.enabledModules.ideas : defaults.ideas,
     }
-    if (p.monthlyBudgetCents !== budget || p.enabledModules?.cycle !== modules.cycle || p.enabledModules.shopping !== modules.shopping || p.enabledModules.goals !== modules.goals) {
+    if (p.monthlyBudgetCents !== budget || p.enabledModules?.cycle !== modules.cycle || p.enabledModules.shopping !== modules.shopping || p.enabledModules.goals !== modules.goals || p.enabledModules.ideas !== modules.ideas) {
       if (profiles === next.profiles) profiles = { ...profiles }
       profiles[p.id] = { ...p, monthlyBudgetCents: budget, enabledModules: modules }
     }

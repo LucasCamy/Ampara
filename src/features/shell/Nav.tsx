@@ -1,8 +1,8 @@
-import { CalendarDays, CircleCheck, Heart, HeartPulse, LifeBuoy, ListPlus, Mic, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
+import { CalendarDays, CircleCheck, Heart, HeartPulse, LifeBuoy, Lightbulb, ListPlus, Mic, ReceiptText, Settings, Sun, Wallet, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/ui'
 import { ui, useUi, type SheetKind, type Tab } from '../../store/ui'
 import { BatterySelector, LockButton, PerspectiveSwitch, SyncPill, ThemeToggle } from './TopBar'
-import { useIsSolo } from '../../store/hooks'
+import { useIsSolo, usePeople } from '../../store/hooks'
 
 export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'hoje', label: 'Hoje', icon: Sun },
@@ -10,7 +10,15 @@ export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'nos', label: 'Nós', icon: Heart },
   { id: 'rotinas', label: 'Cuidados', icon: HeartPulse },
   { id: 'financas', label: 'Finanças', icon: Wallet },
+  { id: 'ideias', label: 'Ideias', icon: Lightbulb },
 ]
+
+/** Abas visíveis: Ideias some quando a pessoa desliga o módulo (os dados ficam guardados). */
+export function useTabs() {
+  const { me } = usePeople()
+  const ideas = me.enabledModules?.ideas !== false
+  return TABS.filter((t) => t.id !== 'ideias' || ideas)
+}
 
 export const QUICK: { kind: SheetKind; label: string; short: string; icon: LucideIcon }[] = [
   { kind: 'task', label: 'Tarefa rápida', short: 'Tarefa', icon: ListPlus },
@@ -22,10 +30,11 @@ export const QUICK: { kind: SheetKind; label: string; short: string; icon: Lucid
 export function BottomNav() {
   const isSolo = useIsSolo()
   const tab = useUi((s) => s.tab)
+  const tabs = useTabs()
   return (
     <nav aria-label="Navegação principal" className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface lg:hidden">
-      <ul className="mx-auto grid max-w-[720px] grid-cols-5">
-        {TABS.map((t) => {
+      <ul className={cx('mx-auto grid max-w-[720px]', tabs.length > 5 ? 'grid-cols-6' : 'grid-cols-5')}>
+        {tabs.map((t) => {
           const active = tab === t.id
           return (
             <li key={t.id}>
@@ -34,7 +43,7 @@ export function BottomNav() {
                 onClick={() => ui.setTab(t.id)}
                 aria-current={active ? 'page' : undefined}
                 data-testid={`nav-${t.id}`}
-                className={cx('press flex min-h-[60px] w-full flex-col items-center justify-center gap-0.5 text-[12px] font-semibold', active ? 'text-action' : 'text-muted')}
+                className={cx('press flex min-h-[60px] w-full flex-col items-center justify-center gap-0.5 font-semibold', tabs.length > 5 ? 'text-[11px]' : 'text-[12px]', active ? 'text-action' : 'text-muted')}
               >
                 <t.icon size={22} aria-hidden strokeWidth={active ? 2.4 : 2} />
                 {isSolo && t.id === 'nos' ? 'Espaço' : t.label}
@@ -82,6 +91,7 @@ export function Dock() {
 export function Sidebar() {
   const isSolo = useIsSolo()
   const tab = useUi((s) => s.tab)
+  const tabs = useTabs()
   return (
     <aside className="sticky top-0 hidden h-dvh w-[288px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-surface px-4 py-5 lg:flex">
       <div className="flex items-center justify-between px-1">
@@ -100,7 +110,7 @@ export function Sidebar() {
       </div>
       <nav aria-label="Navegação principal">
         <ul className="flex flex-col gap-1">
-          {[...TABS, { id: 'ajustes' as Tab, label: 'Ajustes e atalhos', icon: Settings }].map((t) => {
+          {[...tabs, { id: 'ajustes' as Tab, label: 'Ajustes e atalhos', icon: Settings }].map((t) => {
             const active = tab === t.id
             return (
               <li key={t.id}>

@@ -179,3 +179,15 @@ export function sentenceCount(text: string): number {
 export const isNature = (v: unknown): v is IdeaNature => typeof v === 'string' && (IDEA_NATURES as readonly string[]).includes(v)
 export const isIdeaState = (v: unknown): v is IdeaState => typeof v === 'string' && (IDEA_STATES as readonly string[]).includes(v)
 export const isLinkType = (v: unknown): v is LinkType => typeof v === 'string' && (LINK_TYPES as readonly string[]).includes(v)
+
+const THOUGHT_START = /^(?:sera que|acho que|e se\b|talvez|pensei|pensando|tive uma ideia|ideia\b|queria|quero|seria bom|seria legal|tenho medo|me preocupa|estou preocupad|percebi|sinto que|preciso pensar|nao sei se)/
+/**
+ * Captura livre (ADR-0001): a frase parece um pensamento, não uma tarefa? Pergunta ou começo típico de
+ * reflexão ("será que", "acho que", "e se", "quero"...). Na dúvida, a pessoa troca com um toque.
+ */
+export function looksLikeThought(text: string): boolean {
+  const t = foldText(text)
+  if (!t) return false
+  return t.includes('?') || THOUGHT_START.test(t)
+}
+

@@ -1,4 +1,4 @@
-import { CalendarDays, ListTodo, Mic, Package, ReceiptText, ShoppingCart, Square } from 'lucide-react'
+import { CalendarDays, Lightbulb, ListTodo, Mic, Package, ReceiptText, ShoppingCart, Square } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import { CATEGORIES } from '../../components/categories'
 import { Button, ChoiceChips, cx, FieldError, StatusBadge, TextField } from '../../components/ui'
@@ -13,12 +13,17 @@ import { useNow } from '../../store/clock'
 import { saveEntry } from '../../store/financeActions'
 import { useCouple, useIsSolo, usePeople } from '../../store/hooks'
 import { addShoppingItem } from '../../store/shoppingActions'
+import { captureThought, deletePendingCapture } from '../../store/ideaActions'
+import { looksLikeThought } from '../../domain/ideas'
 import { ui } from '../../store/ui'
 import { canDictate, startDictation, type DictationSession } from '../voice/speech'
 import { SHEET_FORM } from './forms'
 
 export function QuickCaptureSheet({ params, onDone }: { params: Record<string, string>; onDone: () => void }) {
-  const { viewer } = usePeople()
+  const { viewer, me } = usePeople()
+  const ideasOn = me.enabledModules?.ideas !== false
+  const [usedVoice, setUsedVoice] = useState(false)
+  const [asTask, setAsTask] = useState(false)
   const isSolo = useIsSolo()
   const couple = useCouple()
   const today = toDateKey(useNow())
@@ -32,7 +37,8 @@ export function QuickCaptureSheet({ params, onDone }: { params: Record<string, s
   const mounted = useRef(true)
   const id = useId()
   const parsed = useMemo(() => parseQuickInput(raw, today), [raw, today])
-  const preview = parsed?.kind === 'shopping' && shoppingDraft ? { ...parsed, ...shoppingDraft } : parsed
+  const thought = ideasOn && !asTask && (!parsed || (parsed.kind === 'task' && !parsed.dueDate && looksLikeThought(raw)))
+  const preview = thought ? null : parsed?.kind === 'shopping' && shoppingDraft ? { ...parsed, ...shoppingDraft } : parsed
   const scope = isSolo ? 'PERSONAL' : 'COUPLE'
 
   useEffect(() => {
@@ -67,15 +73,32 @@ export function QuickCaptureSheet({ params, onDone }: { params: Record<string, s
         if (!mounted.current) return
         setRaw(prefix ? `${prefix} ${text}` : text)
         setShoppingDraft(null)
+        setUsedVoice(true)
       },
       onListeningChange: (active) => { if (mounted.current) setListening(active) },
       onError: (message) => { if (mounted.current) setVoiceError(message) },
     })
   }
 
+  /** Campo único (ADR-0001): o que não é gasto, compra ou tarefa vira pensamento para organizar depois. */
+  const saveAsIdea = () => {
+    stopDictation()
+    const id = captureThought(raw, usedVoice ? 'VOZ' : 'TEXTO')
+    if (!id) {
+      setError('Escreva ou dite o que você quer guardar.')
+      return
+    }
+    ui.toast('Guardado em Ideias, na Caixa de entrada', { undo: () => { deletePendingCapture(id) }, action: { label: 'Ver', onClick: () => ui.setTab('ideias') } })
+    onDone()
+  }
+
   const submit = (event: FormEvent) => {
     event.preventDefault()
     stopDictation()
+    if (thought && raw.trim()) {
+      saveAsIdea()
+      return
+    }
     if (!preview) {
       setError(raw.trim() ? 'Confira a frase e o valor, ou escreva uma tarefa para começar.' : 'Escreva ou dite o que você quer guardar.')
       return
@@ -135,6 +158,7 @@ export function QuickCaptureSheet({ params, onDone }: { params: Record<string, s
             setError(null)
             setShoppingDraft(null)
             setShoppingError(undefined)
+            setAsTask(false)
           }}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : `${id}-hint`}
@@ -180,9 +204,20 @@ export function QuickCaptureSheet({ params, onDone }: { params: Record<string, s
           )}
           <Button type="button" variant="quiet" className="mt-4 w-full" onClick={edit} data-testid="quick-edit" aria-expanded={preview.kind === 'shopping' ? !!shoppingDraft : undefined}>Editar detalhes</Button>
         </section>
+      ) : thought && raw.trim() ? (
+        <section className="ledger-dashed rounded-[20px] p-4" data-testid="quick-idea-preview">
+          <h2 className="mb-3 text-[15px] font-bold text-ink">Entendi assim</h2>
+          <StatusBadge kind="pending">Pensamento para organizar</StatusBadge>
+          <p className="mt-3 flex items-start gap-2 text-[16px] font-semibold break-words text-ink"><Lightbulb size={19} aria-hidden className="mt-0.5 shrink-0" />Vai para Ideias, na Caixa de entrada</p>
+          <p className="mt-2 text-[14px] text-muted">Parece um pensamento, não uma tarefa. Fica guardado só para você.</p>
+          {parsed ? <Button type="button" variant="quiet" className="mt-4 w-full" onClick={() => setAsTask(true)} data-testid="quick-as-task">É uma tarefa</Button> : null}
+        </section>
       ) : (
         <p className="rounded-[18px] bg-subtle p-4 text-[14px] text-muted">Escreva uma frase para ver a prévia antes de salvar.</p>
       )}
+      {preview && ideasOn ? (
+        <Button type="button" variant="quiet" icon={Lightbulb} onClick={saveAsIdea} data-testid="quick-as-idea" className="w-full">Guardar como ideia</Button>
+      ) : null}
 
       {preview?.kind === 'shopping' && shoppingDraft ? (
         <div className="flex flex-col gap-4 rounded-[20px] border border-line p-4" data-testid="quick-shopping-details">

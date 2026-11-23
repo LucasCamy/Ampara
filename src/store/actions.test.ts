@@ -70,7 +70,7 @@ describe('actions de cadastro', () => {
   it('muda somente o módulo do viewer atual e permite Desfazer', () => {
     const original = dataStore.get().profiles.B!
     setEnabledModule('cycle', false)
-    expect(dataStore.get().profiles.B!.enabledModules).toEqual({ cycle: false, shopping: true, goals: true })
+    expect(dataStore.get().profiles.B!.enabledModules).toEqual({ cycle: false, shopping: true, goals: true, ideas: true })
     expect(dataStore.get().profiles.A!.enabledModules!.cycle).toBe(true)
     expect(dataStore.get().outbox.some((e) => e.entityType === 'profiles' && e.entityId === 'B')).toBe(true)
     lastToast()[1].undo!()

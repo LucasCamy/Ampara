@@ -19,7 +19,7 @@ describe('modo do espaço e compatibilidade dos dados', () => {
     const taskBefore = Object.values(previous.tasks)[0]!
     const migrated = normalizeState(previous)
     expect(migrated.couple.couple).toMatchObject({ mode: 'COUPLE', inviteCode: previous.couple.couple!.inviteCode })
-    expect(migrated.profiles.A).toMatchObject({ displayName: 'Lucas', monthlyBudgetCents: null, enabledModules: { cycle: true, shopping: true, goals: true } })
+    expect(migrated.profiles.A).toMatchObject({ displayName: 'Lucas', monthlyBudgetCents: null, enabledModules: { cycle: true, shopping: true, goals: true, ideas: true } })
     expect(migrated.tasks[taskBefore.id]).toEqual({ ...taskBefore, steps: [], postponeCount: 0 })
     expect(migrated.transactions).toBe(previous.transactions)
     expect(migrated.cycleLogs).toBe(previous.cycleLogs)
@@ -30,7 +30,7 @@ describe('modo do espaço e compatibilidade dos dados', () => {
   it('cria espaço vazio Solo com módulos padrão adequados e mantém o padrão Casal', () => {
     const solo = buildEmpty(now, 'SOLO')
     expect(solo.couple.couple).toMatchObject({ mode: 'SOLO', soloOwnerId: 'A' })
-    expect(solo.profiles.A!.enabledModules).toEqual({ cycle: false, shopping: true, goals: true })
+    expect(solo.profiles.A!.enabledModules).toEqual({ cycle: false, shopping: true, goals: true, ideas: true })
     expect(solo.profiles.A!.monthlyBudgetCents).toBeNull()
     expect(solo.tasks).toEqual({})
     expect(solo.transactions).toEqual({})
@@ -43,7 +43,7 @@ describe('modo do espaço e compatibilidade dos dados', () => {
     const task = Object.values(state.tasks)[0]!
     state.couple.couple!.mode = 'SOLO'
     state.couple.couple!.soloOwnerId = 'A'
-    state.profiles.A = { ...state.profiles.A!, monthlyBudgetCents: 125000, enabledModules: { cycle: true, shopping: false, goals: false } }
+    state.profiles.A = { ...state.profiles.A!, monthlyBudgetCents: 125000, enabledModules: { cycle: true, shopping: false, goals: false, ideas: true } }
     state.tasks[task.id] = { ...task, steps: [{ id: 'passo', text: 'Abrir a lista', done: true }], postponeCount: 3 }
     expect(normalizeState(state)).toBe(state)
     expect(normalizeState(normalizeState(state))).toBe(state)
@@ -56,7 +56,7 @@ describe('modo do espaço e compatibilidade dos dados', () => {
     const migrated = normalizeState(old)
     expect(migrated.shoppingItems).toEqual({})
     expect(migrated.recurrences).toEqual({})
-    expect(migrated.profiles.A!.enabledModules).toEqual({ cycle: false, shopping: true, goals: true })
+    expect(migrated.profiles.A!.enabledModules).toEqual({ cycle: false, shopping: true, goals: true, ideas: true })
     expect(normalizeState(migrated)).toBe(migrated)
   })
 

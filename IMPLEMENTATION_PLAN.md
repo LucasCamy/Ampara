@@ -598,4 +598,16 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
     ciclo de sincronização: ligar o módulo Ideias por pessoa (`enabledModules.ideas`) e só sincronizar `idea_*`
     para quem usa, como Ciclo e Compras.
   - Ainda sem telas e sem IA ligada.
+- **Feito (2026-11-23), telas:** aba Ideias (6ª aba no celular quando o módulo está ligado; Ajustes > Módulos
+  desliga e preserva os dados). Campo "O que está na sua cabeça?" (texto ou ditado do navegador) grava na hora;
+  Caixa de entrada com Organizar à mão (Área > Assunto novo ou existente > Ideia nova ou existente), Apagar e Tirar;
+  Esboço recolhível; Mapa em SVG com `d3-hierarchy` (todas as áreas > uma área, malha ligável, arrastar e zoom por
+  botões); cartão da Ideia (nome, tipo, estado, assunto, resumo, anotações, ligações com Aceitar/Recusar, "Está certo").
+  Captura livre manda para Ideias o que parece pensamento (pergunta, "será que", "acho que"...) com "É uma tarefa"
+  para voltar. Desfazer de Ideias regrava com `updatedAt` novo (`transactFresh`).
+  Validação: typecheck, lint, 580 testes unitários; `e2e:quick` 150 verdes; `e2e/ideas.spec.ts` (3 cenários) em
+  360 claro/escuro, 390, 1280 e 1440, com `app.spec.ts` (45 verdes); prints conferidos em 360 e 1440.
+- **Ainda não feito:** concretizar ("Isso vai acontecer" vira tarefa/compromisso), IA ligada (provedores, ADR-0005/6),
+  revisão semanal, renomear/esconder áreas na tela, pinça para zoom no mapa, sincronizar `idea_*` só para quem
+  liga o módulo (o pull ainda consulta as 8 tabelas a cada ciclo).
 

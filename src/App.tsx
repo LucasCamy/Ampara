@@ -33,15 +33,17 @@ const loadUs = () => import('./features/us/UsScreen').then((m) => ({ default: m.
 const loadRoutines = () => import('./features/routines/RoutinesScreen').then((m) => ({ default: m.RoutinesScreen }))
 const loadFinance = () => import('./features/finance/FinanceScreen').then((m) => ({ default: m.FinanceScreen }))
 const loadSettings = () => import('./features/settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen }))
+const loadIdeas = () => import('./features/ideas/IdeasScreen').then((m) => ({ default: m.IdeasScreen }))
 const AgendaScreen = lazy(loadAgenda)
 const UsScreen = lazy(loadUs)
 const RoutinesScreen = lazy(loadRoutines)
 const FinanceScreen = lazy(loadFinance)
 const SettingsScreen = lazy(loadSettings)
+const IdeasScreen = lazy(loadIdeas)
 
 function usePrefetchTabs() {
   useEffect(() => {
-    const run = () => void Promise.all([loadAgenda(), loadUs(), loadRoutines(), loadFinance(), loadSettings()]).catch(() => undefined)
+    const run = () => void Promise.all([loadAgenda(), loadUs(), loadRoutines(), loadFinance(), loadSettings(), loadIdeas()]).catch(() => undefined)
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
     const id = idle ? idle(run) : window.setTimeout(run, 1500)
     return () => {
@@ -71,6 +73,8 @@ function TabScreen({ tab }: { tab: Tab }) {
       return <RoutinesScreen />
     case 'financas':
       return <FinanceScreen />
+    case 'ideias':
+      return <IdeasScreen />
     case 'ajustes':
       return <SettingsScreen />
   }

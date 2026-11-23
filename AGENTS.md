@@ -49,7 +49,7 @@ src/
                e inscrição de lembretes (push.ts)
 server/push/   backend: migrate.ts (aplica o schema.sql ao subir), plan.ts (decide os lembretes, puro e testado) e worker.ts (banco + envio)
   components/  primitivas de UI (Sheet, Toast, StatusBadge, Chip, Field...)
-  features/    telas: today, agenda, us (aba Nós), routines, cycle, finance, settings, sheets, shell; alerts (avisos com som por categoria)
+  features/    telas: today, agenda, us (aba Nós), routines, cycle, finance, ideas (segundo cérebro), settings, sheets, shell; alerts (avisos com som por categoria)
   styles/      tokens.css (fonte única de cor, raio, sombra e motion)
 supabase/      schema.sql (idempotente, RLS da privacidade) e tests/validate.sql
 docker/       roles do Postgres e gateway nginx do docker-compose.yml
@@ -96,3 +96,12 @@ public/        manifest.webmanifest, ícones, sw.js
 ## Git
 
 Remoto: `https://github.com/LucasCamy/Ampara.git`. Commits só quando o usuário pedir.
+
+## Ideias (segundo cérebro)
+
+Especificação em `docs/08-ideias-segundo-cerebro.md`; decisões em `docs/adr/` (0001 a 0009). Regras que não mudam
+sem nova ADR: estrutura fixa Área > Assunto > Ideia > Anotação; a IA só grava pelo validador
+(`src/domain/ideasValidate.ts`); tudo em `idea_*` é privado de quem escreveu (`owner_id`), inclusive no Casal,
+e a privacidade é aplicada no domínio (`myIdeaMap`, `buildIdeaTree`, `purgeUnauthorized`), nunca só na tela.
+Desfazer nas ações de Ideias regrava com `updatedAt` novo (`transactFresh`), porque o servidor mantém a versão mais nova.
+

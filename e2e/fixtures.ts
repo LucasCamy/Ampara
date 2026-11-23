@@ -55,7 +55,7 @@ export const inviteOf = (page: Page) => invites.get(page) ?? ''
 
 export const quick = (page: Page, kind: 'task' | 'expense' | 'med' | 'sos') => visible(page, `dock-${kind}`, `side-quick-${kind}`).click()
 
-export const goTab = (page: Page, tab: 'hoje' | 'agenda' | 'nos' | 'rotinas' | 'financas' | 'ajustes') =>
+export const goTab = (page: Page, tab: 'hoje' | 'agenda' | 'nos' | 'rotinas' | 'financas' | 'ideias' | 'ajustes') =>
   tab === 'ajustes'
     ? page.locator('[data-testid="side-ajustes"]:visible, button[aria-label="Ajustes e atalhos do iPhone"]:visible').first().click()
     : visible(page, `nav-${tab}`, `side-${tab}`).click()

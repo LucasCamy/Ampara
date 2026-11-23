@@ -19,6 +19,8 @@ export const SHEET_FORM = {
   goal: 'sheet-form-goal',
   pay: 'sheet-form-pay',
   rule: 'sheet-form-rule',
+  idea: 'sheet-form-idea',
+  organizeIdea: 'sheet-form-organize-idea',
 } as const satisfies Partial<Record<SheetKind, string>>
 
 export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: string }>> = {
@@ -36,4 +38,6 @@ export const SHEET_SUBMIT: Partial<Record<SheetKind, { label: string; testId: st
   goal: { label: 'Salvar caixinha', testId: 'goal-save' },
   pay: { label: 'Dar baixa', testId: 'pay-save' },
   rule: { label: 'Salvar conta fixa', testId: 'rule-save' },
+  idea: { label: 'Salvar ideia', testId: 'idea-save' },
+  organizeIdea: { label: 'Guardar aqui', testId: 'organize-save' },
 }

@@ -73,7 +73,7 @@ export function setEnabledModule(module: keyof EnabledModules, enabled: boolean)
   const enabledModules = { ...defaultEnabledModules(state.couple.couple?.mode ?? 'COUPLE'), ...profile.enabledModules }
   if (enabledModules[module] === enabled) return
   const undo = transact((tx) => tx.put('profiles', { ...profile, enabledModules: { ...enabledModules, [module]: enabled }, updatedAt: nowIso() }))
-  const label = { cycle: 'Ciclo', shopping: 'Compras', goals: 'Caixinhas' }[module]
+  const label = { cycle: 'Ciclo', shopping: 'Compras', goals: 'Caixinhas', ideas: 'Ideias' }[module]
   ui.toast(`${label}: ${enabled ? 'ativado' : 'desativado'}`, { undo })
 }
 

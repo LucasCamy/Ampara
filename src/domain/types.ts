@@ -31,6 +31,8 @@ export interface EnabledModules {
   cycle: boolean
   shopping: boolean
   goals: boolean
+  /** Ideias (segundo cérebro). Ausente em perfis antigos: ligado. */
+  ideas?: boolean
 }
 
 export interface Profile {
