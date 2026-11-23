@@ -14,5 +14,6 @@ Formato: `NNNN-titulo-curto.md`, em português. Status possíveis: Proposta, Ace
 | [0007](0007-mapa-mental-interativo-com-zoom-por-nivel.md) | Mapa mental interativo com zoom por nível e esboço equivalente | Aceita |
 | [0008](0008-app-desktop-como-casca-do-ampara.md) | O app desktop (exe) vira uma casca Electron do próprio Ampara | Aceita |
 | [0009](0009-dados-das-ideias-privados-no-supabase.md) | Dados das ideias privados por pessoa, no mesmo modelo de sincronização | Aceita |
+| [0010](0010-ia-local-no-pc-pela-rede-tailscale.md) | IA local no PC, servida pela rede Tailscale, para PC e celular | Aceita |
 
 Especificação de referência: [08-ideias-segundo-cerebro.md](../08-ideias-segundo-cerebro.md).

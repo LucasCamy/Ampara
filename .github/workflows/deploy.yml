@@ -39,6 +39,9 @@ jobs:
             ghcr.io/lucascamy/ampara:latest
             ghcr.io/lucascamy/ampara:${{ github.sha }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
+          # endereço da IA local vem de uma variável do repositório, fora do código (ADR-0010)
+          build-args: |
+            VITE_LOCAL_AI_URL=${{ vars.LOCAL_AI_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

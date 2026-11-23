@@ -1,0 +1,5 @@
+{
+  "model": "qwen/qwen3.5-9b",
+  "context": 8192,
+  "origins": ["https://ampara.cloudlane.com.br", "app://ampara"]
+}

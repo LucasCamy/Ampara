@@ -8,9 +8,11 @@ import tailwindcss from '@tailwindcss/vite'
  * Só no build: o dev server do Vite injeta scripts inline para o hot reload.
  * style-src permite 'unsafe-inline' porque o Motion anima via atributo style.
  */
-function csp(supabaseUrl: string | undefined): string {
+function csp(supabaseUrl: string | undefined, localAiUrl?: string): string {
   const extra = supabaseUrl && supabaseUrl !== 'self' ? supabaseUrl : undefined
-  const connect = ["'self'", extra].filter(Boolean).join(' ')
+  // IA local (ADR-0010): só a origem configurada no build, nunca um curinga
+  const ai = (() => { try { return localAiUrl ? new URL(localAiUrl).origin : undefined } catch { return undefined } })()
+  const connect = ["'self'", extra, ai].filter(Boolean).join(' ')
   return [
     "default-src 'self'",
     "script-src 'self'",
@@ -28,11 +30,11 @@ function csp(supabaseUrl: string | undefined): string {
 
 // A URL vem do .env* do modo (loadEnv), não só do process.env: senão um build com a URL no .env
 // sairia com connect-src sem o Supabase e toda chamada à nuvem seria bloqueada.
-const cspMeta = (supabaseUrl: string | undefined): Plugin => ({
+const cspMeta = (supabaseUrl: string | undefined, localAiUrl?: string): Plugin => ({
   name: 'ampara-csp',
   apply: 'build',
   transformIndexHtml(html) {
-    return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp(supabaseUrl)}" />`)
+    return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp(supabaseUrl, localAiUrl)}" />`)
   },
 })
 
@@ -60,7 +62,7 @@ const securityHeaders = {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), versionFile(), cspMeta(loadEnv(mode, process.cwd(), 'VITE_').VITE_SUPABASE_URL?.replace(/\/+$/, ''))],
+  plugins: [react(), tailwindcss(), versionFile(), cspMeta(loadEnv(mode, process.cwd(), 'VITE_').VITE_SUPABASE_URL?.replace(/\/+$/, ''), loadEnv(mode, process.cwd(), 'VITE_').VITE_LOCAL_AI_URL)],
   define: { __APP_VERSION__: JSON.stringify(mode === 'test' ? 'test' : APP_VERSION) },
   server: { headers: securityHeaders },
   preview: { headers: securityHeaders },
