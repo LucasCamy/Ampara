@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultAreasFor, type Idea, type IdeaNote } from './ideas'
+import { defaultAreasFor, focusSense, type Idea, type IdeaNote } from './ideas'
 import { buildOrganizerInput, pickExamples, selectCandidates } from './ideasPrompt'
 
 const iso = '2026-11-25T10:00:00.000Z'
@@ -34,5 +34,16 @@ describe('sentido no contexto da IA (ADR-0012)', () => {
     const full = JSON.parse(buildOrganizerInput('e o tênis também', map([]), [], { contextoAnterior: ['quero voltar a correr'], exemplos: [{ trecho: 'x', ideia_id: 'run', quem: 'PESSOA' }] }))
     expect(full.dito_pouco_antes_so_para_entender).toEqual(['quero voltar a correr'])
     expect(full.onde_a_pessoa_guardou_coisas_parecidas).toHaveLength(1)
+  })
+})
+
+describe('corte relativo do sentido', () => {
+  it('fica só o que está perto do melhor e acima do mínimo (valores medidos em português)', () => {
+    // "o que eu pensei sobre exercício?" contra: correr, tênis, manjericão, trotar, app de música, inglês
+    const exercise = new Map([['correr', 0.54], ['tenis', 0.49], ['manjericao', 0.3], ['trotar', 0.44], ['app', 0.35], ['ingles', 0.34]])
+    expect([...focusSense(exercise)!.keys()].sort()).toEqual(['correr', 'tenis', 'trotar'])
+    const plants = new Map([['correr', 0.34], ['manjericao', 0.53], ['trotar', 0.38]])
+    expect([...focusSense(plants)!.keys()]).toEqual(['manjericao'])
+    expect(focusSense(null)).toBeNull()
   })
 })

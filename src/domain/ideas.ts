@@ -43,8 +43,18 @@ export const IDEA_LIMITS = {
 /** Destino de uma operação conforme a confiança (ADR-0004). */
 export const CONFIDENCE = { apply: 0.8, review: 0.6 } as const
 
-/** Parecença mínima de sentido (ADR-0012): abaixo disso o texto não é do mesmo assunto. */
-export const SENSE_MIN = 0.4
+/** Parecença mínima de sentido (ADR-0012). Calibrado em português com o EmbeddingGemma 300M. */
+export const SENSE_MIN = 0.36
+/** Só vale o que está perto do mais parecido: os valores variam, mas o assunto certo fica na frente. */
+export const SENSE_BAND = 0.1
+
+/** Mantém só os itens de sentido forte: acima do mínimo e perto do melhor. */
+export function focusSense(sense: ReadonlyMap<string, number> | null): Map<string, number> | null {
+  if (!sense) return null
+  let best = 0
+  for (const v of sense.values()) best = Math.max(best, v)
+  return new Map([...sense].filter(([, v]) => v >= SENSE_MIN && v >= best - SENSE_BAND - 1e-9))
+}
 /** Pensamentos soltos com até este intervalo entram como contexto do seguinte (ADR-0012). */
 export const SEQUENCE_WINDOW_MS = 3 * 60_000
 

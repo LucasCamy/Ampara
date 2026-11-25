@@ -7,7 +7,7 @@ import { SENSE_MIN } from '../domain/ideas'
 import { LOCAL_AI_URL, localReady } from './provider'
 
 export const SENSE_MODEL = 'ampara-sentido'
-/** Calibrado em português: mesmo assunto ~0,45+, outro ~0,3. */
+/** Ver focusSense: vale o que está perto do mais parecido. */
 export { SENSE_MIN }
 const TIMEOUT_MS = 8000
 const BATCH = 64

@@ -58,6 +58,18 @@ Dois problemas técnicos:
 - O ganho medido do sentido está na **escolha do contexto**: com mais de 40 ideias, a ideia certa só chega até a IA
   se a busca a encontrar. Na busca por sentido em português, o modelo acertou 6 de 6.
 
+## Teste real no app do PC (2026-11-25)
+
+Espaço de teste, só IA local:
+- 3 pensamentos soltos em sequência em 0,2 s; a fila organizou tudo em 38 a 71 s.
+- "e comprar um tênis melhor pra isso" entrou na ideia da corrida (o contexto da sequência funcionou).
+- "hoje fui trotar na praça" ganhou o palpite "Saúde › Rotina de exercícios e corrida" em 0,2 s.
+- "o que eu pensei sobre exercício?" achou as 3 anotações de corrida sem nenhuma palavra em comum.
+
+**Calibração:** um corte fixo falhou ("trotar" ficou em 0,36 contra "correr"). Os valores variam, mas o assunto
+certo fica na frente. Por isso vale o que está acima de 0,36 **e** a até 0,1 do mais parecido (`focusSense`). O
+palpite só aparece com um vencedor claro (pelo menos 0,03 à frente do segundo).
+
 ## Alternativas consideradas
 
 - **Mandar o mesmo pensamento para a IA local e para o Gemini ao mesmo tempo:** tudo iria para o Google, e a

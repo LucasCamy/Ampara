@@ -4,7 +4,7 @@
  */
 import { currentProvider, type AiProvider } from '../ai/provider'
 import { ORGANIZER_SCHEMA, ORGANIZER_SYSTEM, ORGANIZER_VERSION, buildOrganizerInput, ideaSenseText, pickExamples, selectCandidates } from '../domain/ideasPrompt'
-import { SENSE_MIN, SEQUENCE_WINDOW_MS, type IdeaCapture } from '../domain/ideas'
+import { SENSE_MIN, SEQUENCE_WINDOW_MS, focusSense, type IdeaCapture } from '../domain/ideas'
 import { senseScores } from '../ai/sense'
 import { createStore, useStore } from './createStore'
 import type { DataState, PartnerId } from '../domain/types'
@@ -88,7 +88,7 @@ async function senseFor(state: DataState, owner: PartnerId, text: string): Promi
     ...ideas.map((i) => ({ id: i.id, text: ideaSenseText(i, notes) })),
     ...notes.map((n) => ({ id: n.id, text: n.text })),
   ]
-  return senseScores(text, items).catch(() => null)
+  return focusSense(await senseScores(text, items).catch(() => null))
 }
 
 /** Capturas que a própria pessoa organizou (sem registro da IA valendo): são o "jeito dela". */
@@ -122,9 +122,12 @@ export async function guessPlace(text: string): Promise<string | null> {
   const notes = Object.values(state.ideaNotes).filter((n) => n.ownerId === owner && n.ideaId)
   const sense = await senseScores(text, ideas.map((i) => ({ id: i.id, text: ideaSenseText(i, notes) }))).catch(() => null)
   if (!sense) return null
-  let best: { id: string; s: number } | null = null
-  for (const [id, s] of sense) if (!best || s > best.s) best = { id, s }
-  if (!best || best.s < SENSE_MIN + 0.05) return null
+  // palpite só com um vencedor claro: perto do mínimo e à frente do segundo
+  const ranked = [...sense].sort((a, b) => b[1] - a[1])
+  const [first, second] = ranked
+  if (!first || first[1] < SENSE_MIN - 0.02) return null
+  if (second ? first[1] - second[1] < 0.03 : first[1] < SENSE_MIN + 0.06) return null
+  const best = { id: first[0] }
   const topic = state.ideaTopics[state.ideas[best.id]!.topicId]
   const area = topic ? state.ideaAreas[topic.areaId] : undefined
   return area && topic ? `${area.name} › ${topic.name}` : null
@@ -132,20 +135,22 @@ export async function guessPlace(text: string): Promise<string | null> {
 
 /* ------------------------------------------------ fila por trás (ADR-0012): um por vez, sem a pessoa esperar */
 
-export const organizerStore = createStore({ waiting: 0 })
+export const organizerStore = createStore<{ waiting: number; ids: readonly string[] }>({ waiting: 0, ids: [] })
 export const useOrganizerWaiting = () => useStore(organizerStore, (s) => s.waiting)
+export const useQueuedIds = () => useStore(organizerStore, (s) => s.ids)
 const queued = new Set<string>()
 let chain: Promise<unknown> = Promise.resolve()
 
-/** Põe a captura na fila. A placa atende um pedido por vez, então a fila também. */
+/** Põe a captura na fila. A placa atende um pedido por vez, então a fila também. Já na fila: mesma espera. */
 export function queueOrganize(captureId: string, provider: AiProvider | null = currentProvider()): Promise<AiOrganizeResult> {
+  if (queued.has(captureId)) return Promise.reject(new Error('Este pensamento já está na fila.'))
   queued.add(captureId)
-  organizerStore.set((s) => ({ waiting: s.waiting + 1 }))
+  organizerStore.set((s) => ({ waiting: s.waiting + 1, ids: [...s.ids, captureId] }))
   const job = chain.then(() => organizeWithAi(captureId, provider))
   chain = job.catch(() => undefined)
   return job.finally(() => {
     queued.delete(captureId)
-    organizerStore.set((s) => ({ waiting: Math.max(0, s.waiting - 1) }))
+    organizerStore.set((s) => ({ waiting: Math.max(0, s.waiting - 1), ids: s.ids.filter((id) => id !== captureId) }))
   })
 }
 
@@ -216,7 +221,7 @@ export async function askIdeas(question: string, today: DateKey, provider: AiPro
   const owner = uiStore.get().viewer
   const state = dataStore.get()
   // sentido (ADR-0012): acha "fui correr" quando a pergunta é sobre exercício; sem IA local, só palavras
-  const sense = provider ? await senseScores(q, searchableNotes(state, owner).map((n) => ({ id: n.id, text: n.text }))).catch(() => null) : null
+  const sense = provider ? focusSense(await senseScores(q, searchableNotes(state, owner).map((n) => ({ id: n.id, text: n.text }))).catch(() => null)) : null
   const { found, filters } = searchNotes(state, owner, q, today, undefined, sense)
   if (!provider || !found.length) return { found, filters, answer: null }
   const r = await provider.runStructured({ system: ASK_SYSTEM, schema: ASK_SCHEMA, input: buildAskInput(q, found, today) })

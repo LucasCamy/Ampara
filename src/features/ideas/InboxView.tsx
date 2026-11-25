@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Button, EmptyState } from '../../components/ui'
 import type { InboxView as Inbox_ } from '../../domain/ideasView'
 import { deletePendingCapture, discardInboxNote, undoOrganization } from '../../store/ideaActions'
-import { describeAiResult, queueOrganize } from '../../store/ideaAi'
+import { describeAiResult, queueOrganize, useQueuedIds } from '../../store/ideaAi'
 import { currentProvider } from '../../ai/provider'
 import { ui } from '../../store/ui'
 import { shortDateTime, toastResult } from './ideaUi'
@@ -12,6 +12,7 @@ import { shortDateTime, toastResult } from './ideaUi'
 export function InboxView({ inbox }: { inbox: Inbox_ }) {
   const provider = currentProvider()
   const [busy, setBusy] = useState<string | null>(null)
+  const queuedIds = useQueuedIds()
   const withAi = (captureId: string) => {
     setBusy(captureId)
     queueOrganize(captureId, provider)
@@ -29,13 +30,13 @@ export function InboxView({ inbox }: { inbox: Inbox_ }) {
           <p className="text-[16px] leading-relaxed break-words whitespace-pre-wrap text-ink">{c.text}</p>
           <p className="flex items-center gap-1.5 text-[13px] text-muted">
             {c.source === 'VOZ' ? <Mic size={15} aria-hidden /> : null}
-            <span className="font-data">{shortDateTime(c.createdAt)}</span> · Aguardando organizar
+            <span className="font-data">{shortDateTime(c.createdAt)}</span> · {queuedIds.includes(c.id) && busy !== c.id ? 'Organizando por trás…' : 'Aguardando organizar'}
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          {queuedIds.includes(c.id) && busy !== c.id ? null : <div className="flex flex-col gap-2 sm:flex-row">
             {provider ? <Button variant="primary" icon={Sparkles} className="flex-1" busy={busy === c.id} disabled={!!busy && busy !== c.id} onClick={() => withAi(c.id)} data-testid="inbox-organize-ai">Organizar com IA</Button> : null}
             <Button variant={provider ? 'secondary' : 'primary'} icon={FolderInput} className="flex-1" onClick={() => ui.openSheet('organizeIdea', { captureId: c.id })} data-testid="inbox-organize">{provider ? 'Eu organizo' : 'Organizar'}</Button>
             <Button variant="quiet" icon={Trash2} onClick={() => toastResult(deletePendingCapture(c.id), 'Pensamento apagado')}>Apagar</Button>
-          </div>
+          </div>}
         </article>
       ))}
       {inbox.notes.map((n) => (
