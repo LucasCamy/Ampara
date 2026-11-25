@@ -1,4 +1,4 @@
-import type { Idea, IdeaAction, IdeaAiLog, IdeaArea, IdeaCapture, IdeaLink, IdeaNote, IdeaTopic } from './ideas'
+import type { Idea, IdeaAction, IdeaAiLog, IdeaArea, IdeaCapture, IdeaConversation, IdeaLink, IdeaNote, IdeaTopic } from './ideas'
 
 export type PartnerId = 'A' | 'B'
 export type Pronoun = 'ele' | 'ela'
@@ -401,6 +401,7 @@ export interface Collections {
   ideaLinks: Record<string, IdeaLink>
   ideaActions: Record<string, IdeaAction>
   ideaAiLog: Record<string, IdeaAiLog>
+  ideaConversations: Record<string, IdeaConversation>
 }
 
 export type CollectionName = keyof Collections
@@ -435,10 +436,11 @@ export const COLLECTIONS: CollectionName[] = [
   'ideaLinks',
   'ideaActions',
   'ideaAiLog',
+  'ideaConversations',
 ]
 
 /** Coleções do módulo Ideias: sempre privadas de quem escreveu, inclusive no Casal. */
-export const IDEA_COLLECTIONS: readonly CollectionName[] = ['ideaAreas', 'ideaTopics', 'ideas', 'ideaCaptures', 'ideaNotes', 'ideaLinks', 'ideaActions', 'ideaAiLog']
+export const IDEA_COLLECTIONS: readonly CollectionName[] = ['ideaAreas', 'ideaTopics', 'ideas', 'ideaCaptures', 'ideaNotes', 'ideaLinks', 'ideaActions', 'ideaAiLog', 'ideaConversations']
 
 export interface DataState extends Collections {
   schemaVersion: 1

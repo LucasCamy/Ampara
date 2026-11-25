@@ -29,12 +29,19 @@ export interface AmparaDesktopBridge {
   status(): Promise<{ claude: boolean; model: string }>
   runStructured(req: StructuredRequest): Promise<{ json: unknown; model: string }>
   onShortcut?(cb: () => void): () => void
-  /** Painel da bolinha (true) ou janela completa (false) */
+  /** Painel da barra (true) ou janela completa (false) */
   onCompact?(cb: (compact: boolean) => void): () => void
   openFull?(): void
   isCompact?(): Promise<boolean>
   /** Abre a digitação por voz do Windows no campo em foco */
   dictate?(): Promise<boolean>
+  /** Barra do PC (ADR-0013): o texto que a pessoa mandou espera no exe até a tela estar pronta */
+  onBarSubmit?(cb: () => void): () => void
+  takeBarSubmit?(): Promise<{ text: string; mode: 'capture' | 'chat' } | null>
+  /** A barra pediu uma aba do painel */
+  onPanelTab?(cb: (tab: 'capture' | 'chat' | 'talks') => void): () => void
+  /** Esc no painel: esconde o painel e a barra */
+  hidePanel?(): void
 }
 
 declare global {

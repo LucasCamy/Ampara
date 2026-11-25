@@ -31,8 +31,8 @@ import type {
 } from './types'
 
 /** Coleções do módulo Ideias vazias (começa sem nada: nenhum exemplo de pensamento de ninguém). */
-export function emptyIdeas(): Pick<Collections, 'ideaAreas' | 'ideaTopics' | 'ideas' | 'ideaCaptures' | 'ideaNotes' | 'ideaLinks' | 'ideaActions' | 'ideaAiLog'> {
-  return { ideaAreas: {}, ideaTopics: {}, ideas: {}, ideaCaptures: {}, ideaNotes: {}, ideaLinks: {}, ideaActions: {}, ideaAiLog: {} }
+export function emptyIdeas(): Pick<Collections, 'ideaAreas' | 'ideaTopics' | 'ideas' | 'ideaCaptures' | 'ideaNotes' | 'ideaLinks' | 'ideaActions' | 'ideaAiLog' | 'ideaConversations'> {
+  return { ideaAreas: {}, ideaTopics: {}, ideas: {}, ideaCaptures: {}, ideaNotes: {}, ideaLinks: {}, ideaActions: {}, ideaAiLog: {}, ideaConversations: {} }
 }
 
 export function uuid(): string {

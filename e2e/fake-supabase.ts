@@ -9,7 +9,7 @@ import type { BrowserContext, Route } from '@playwright/test'
 export const FAKE_URL = 'http://fake-supabase.test'
 
 /** Tabelas do módulo Ideias: privadas de quem escreveu (espelho de ideas_* no schema.sql) */
-const IDEA_TABLES = new Set(['idea_areas', 'idea_topics', 'ideas', 'idea_captures', 'idea_notes', 'idea_links', 'idea_actions', 'idea_ai_log'])
+const IDEA_TABLES = new Set(['idea_areas', 'idea_topics', 'ideas', 'idea_captures', 'idea_notes', 'idea_links', 'idea_actions', 'idea_ai_log', 'idea_conversations'])
 
 type Row = Record<string, unknown>
 interface User {

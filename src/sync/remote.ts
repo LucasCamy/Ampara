@@ -152,6 +152,7 @@ export const TABLES: Record<CollectionName, string> = {
   ideaLinks: 'idea_links',
   ideaActions: 'idea_actions',
   ideaAiLog: 'idea_ai_log',
+  ideaConversations: 'idea_conversations',
 }
 
 /** Tabelas com chave (couple_id, id): um registro por pessoa */

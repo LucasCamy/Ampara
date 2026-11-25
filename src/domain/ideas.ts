@@ -206,3 +206,30 @@ export function looksLikeThought(text: string): boolean {
   return t.includes('?') || THOUGHT_START.test(t)
 }
 
+
+/* ---------------------------------------------------------------- conversas (ADR-0013) */
+
+export type ConversationRole = 'PESSOA' | 'IA'
+
+export interface ConversationMessage {
+  role: ConversationRole
+  text: string
+}
+
+/**
+ * Conversa com a IA no PC (barra do exe). Privada de quem conversou, como tudo em Ideias (ADR-0009).
+ * "Extrair" não grava ideias por conta própria: transforma a conversa numa captura e ela passa pelo
+ * organizador e pelo validador de sempre (ADR-0004). extractedCaptureId guarda de onde saiu.
+ */
+export interface IdeaConversation extends Owned {
+  id: string
+  title: string
+  messages: ConversationMessage[]
+  extractedCaptureId: string | null
+}
+
+export const CONVERSATION_LIMITS = {
+  titleMaxChars: 60,
+  messageMaxChars: 4000,
+  messages: 80,
+} as const

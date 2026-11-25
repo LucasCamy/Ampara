@@ -2,10 +2,10 @@ import { Mic, Send, Sparkles, Square } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, cx, FieldError } from '../../components/ui'
 import { IDEA_LIMITS } from '../../domain/ideas'
-import { captureThought, deletePendingCapture, undoOrganization } from '../../store/ideaActions'
-import { describeAiResult, guessPlace, queueOrganize, useOrganizerWaiting } from '../../store/ideaAi'
+import { captureThought } from '../../store/ideaActions'
+import { useOrganizerWaiting } from '../../store/ideaAi'
+import { afterCapture } from './releaseThought'
 import { currentProvider, desktopBridge } from '../../ai/provider'
-import { ui } from '../../store/ui'
 import { canDictate, startDictation, type DictationSession } from '../voice/speech'
 
 /** Soltar um pensamento: grava na hora, do jeito que veio. Organizar fica para depois. */
@@ -73,21 +73,11 @@ export function CaptureBox() {
     }
     setText('')
     setUsedVoice(false)
-    if (provider) {
-      // já está salvo; o campo fica livre para o próximo. A IA organiza por trás, um por vez (ADR-0012).
-      const thought = text
-      setSaved('Guardado.')
-      void guessPlace(thought).then((place) => { if (mounted.current && place) setSaved(`Guardado. Parece ser de ${place}.`) })
-      queueOrganize(captureId, provider)
-        .then((r) => ui.toast(describeAiResult(r), { undo: () => { undoOrganization(r.logId) }, action: { label: 'Ver', onClick: () => document.querySelector<HTMLButtonElement>('[data-testid="ideas-view-esboco"]')?.click() } }))
-        .catch((e: unknown) => ui.toast(`${e instanceof Error ? e.message : 'A IA não respondeu.'} Está guardado, e eu organizo quando a IA voltar.`, { tone: 'warn' }))
-      return
-    }
-    ui.toast('Guardado na Caixa de entrada. Organize quando quiser.', {
-      undo: () => {
-        const r = deletePendingCapture(captureId)
-        if (r.ok) setText((cur) => cur || text)
-      },
+    if (provider) setSaved('Guardado.')
+    afterCapture(captureId, text, provider, {
+      onPlace: (place) => { if (mounted.current) setSaved(`Guardado. Parece ser de ${place}.`) },
+      restoreText: () => setText((cur) => cur || text),
+      view: () => document.querySelector<HTMLButtonElement>('[data-testid="ideas-view-esboco"]')?.click(),
     })
   }
 

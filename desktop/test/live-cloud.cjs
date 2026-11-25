@@ -21,7 +21,7 @@ const lit = (s) => `'${String(s).replace(/'/g, "''")}'`
   })
   const errors = []
   try {
-    // a bolinha também é uma janela: o app é a que carrega app://ampara
+    // a barra também é uma janela: o app é a que carrega app://ampara
     let page = null
     for (let i = 0; i < 50 && !page; i++) {
       page = app.windows().find((w) => w.url().startsWith('app://ampara')) ?? null

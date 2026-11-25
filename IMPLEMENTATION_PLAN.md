@@ -654,3 +654,30 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   sequência como contexto; exemplos tirados do mapa da pessoa; "Mover para outra ideia". Validação: 642 testes,
   E2E de Ideias, bateria do Gemma (prompt sem mudança). **Pendente:** a pessoa reinstalar a tarefa da IA local
   (carrega o modelo de sentido) e medir exemplos e contexto com Gemini e Claude.
+
+## Barra do PC no lugar da bolinha, conversas e Extrair (2026-11-25)
+
+- **Pedido:** o AjudaMental sai do PC; o Ampara fica com o que foi aprovado nele: barra de escrita escondida,
+  layout enxuto, conversas salvas com Extrair. Decisão em [ADR-0013](docs/adr/0013-barra-do-pc-e-conversas-no-cofre.md).
+- **Feito:** `desktop/bar.*` e `bar-preload.cjs` substituem a bolinha (removida); `main.cjs` com barra escondida,
+  `Ctrl+Shift+Espaço`, some ao clicar fora e com Esc (não some enquanto a voz do Windows dita), posição salva,
+  painel de 480 x até 580 px abaixo da barra, bandeja só com Soltar, Abrir e Sair. `CompactCapture` virou painel
+  de três abas de texto (Soltar, Conversa, Conversas). Conversas: coleção `ideaConversations` e tabela
+  `idea_conversations` (schema, espelho em `e2e/fake-supabase.ts`, casos em `validate.sql`), regras puras em
+  `src/domain/ideaConversations.ts`, ações em `src/store/conversationActions.ts`. Extrair cria uma captura que passa
+  pelo organizador e pelo validador; nada vira tarefa sozinho (ADR-0001).
+- **Divergência do AGENTS.md (alvos de 44 px):** o painel usa 44 px nos botões e filtros (`size="sm"`, abas, lixeira)
+  e 48 px na lista de conversas; **o campo da barra tem 44 px de altura e a barra, 56 px**. Letra de 17 px nos
+  textos principais (AGENTS pede 16 px no mínimo). O campo de resposta da conversa tem 2 linhas, não 3.
+  A barra (`bar.css`) é um arquivo local fora do build do app, então repete os valores dos tokens em vez de importar
+  `tokens.css` (claro e escuro pelo tema do Windows, não pela preferência do app).
+- **Pendências:**
+  - Agente de arquivos do PC (`fstools`, `claudecode` do AjudaMental): **não trazido**. Pede diálogo de confirmação no
+    processo principal e revisão de segurança própria (ADR-0008, item 3).
+  - Teste com a IA real (resposta da conversa pelo Claude/Gemini/local): só testado com IA falsa
+    (`conversationActions.test.ts`) e sem IA (`desktop/test/bar.cjs`).
+  - `schema.sql` novo precisa ser aplicado no Supabase de produção antes de usar o exe novo com a nuvem
+    (até lá, o ciclo trata a tabela ausente pelo caminho de `isMissingTable`). `npm run db:check` não foi rodado
+    nesta sessão (Docker não verificado).
+  - Mais uma tabela `idea_*` no ciclo de sincronização (9): reforça a pendência de sincronizar Ideias só para quem usa.
+  - Digitar na barra não ganha ditado do Ampara (só Win + H), como na bolinha.

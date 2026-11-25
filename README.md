@@ -72,7 +72,7 @@ Clicar na bolinha abre um painel pequeno só com o campo para soltar; arraste a 
 2. `cd desktop && npm install && npm run dist` gera o instalador em `desktop/release/`.
 3. Abra o Ampara no PC e entre com a sua conta da nuvem (Ajustes > Nuvem > Já tenho conta).
 
-Testes: `cd desktop && npm run test:bubble` (bolinha e painel, sem IA) e, gastando um pouco da assinatura,
+Testes: `cd desktop && npm run test:bar` (barra, painel e conversas, sem IA) e, gastando um pouco da assinatura,
 `npm run test:live` e `desktop/test/live-cloud.cjs`.
 
 ## IA local grátis (PC e celular)

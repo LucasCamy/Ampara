@@ -17,5 +17,6 @@ Formato: `NNNN-titulo-curto.md`, em português. Status possíveis: Proposta, Ace
 | [0010](0010-ia-local-no-pc-pela-rede-tailscale.md) | IA local no PC, servida pela rede Tailscale, para PC e celular | Aceita |
 | [0011](0011-gemini-flash-lite-com-chave-pessoal.md) | Gemini 3.1 Flash-Lite como provedor opcional, com chave pessoal no cofre | Aceita |
 | [0012](0012-cerebro-que-organiza-sozinho-pelo-sentido.md) | Um cérebro que organiza sozinho, por trás, guiado pelo sentido e pelo jeito da pessoa | Aceita |
+| [0013](0013-barra-do-pc-e-conversas-no-cofre.md) | Barra escondida no lugar da bolinha e conversas guardadas no cofre | Aceita |
 
 Especificação de referência: [08-ideias-segundo-cerebro.md](../08-ideias-segundo-cerebro.md).

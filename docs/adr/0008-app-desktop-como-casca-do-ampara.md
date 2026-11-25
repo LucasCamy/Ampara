@@ -57,5 +57,6 @@ e na web, e "adicionar um exe" que converse com o Ampara.
   só "O que está na sua cabeça?" e "Abrir o Ampara completo"); de novo, esconde. Arrastar move e a posição fica
   salva. Fechar a janela só esconde; Sair fica no menu da bolinha e da bandeja. "Falar" usa a digitação por voz
   do Windows (Win + H). Verificado em `desktop/test/bubble.cjs`.
+- **Bolinha substituída (2026-11-25):** a bolinha foi trocada pela barra escondida e as conversas entraram no cofre, ver [ADR-0013](0013-barra-do-pc-e-conversas-no-cofre.md). O texto acima sobre a bolinha vale como histórico.
 - **Verificado:** `desktop/test/live.cjs` (sem nuvem) e `desktop/test/live-cloud.cjs` (Supabase do Docker),
   ambos com a assinatura real.

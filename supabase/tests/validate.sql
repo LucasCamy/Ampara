@@ -15,7 +15,7 @@ begin
   select string_agg(t, ', ') into missing
     from unnest(array['couples','couple_members','couple_invites','profiles','tasks','events','medications',
                       'medication_logs','transactions','help_requests','nudges','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','push_subscriptions','push_config','push_sent','recurrences',
-                      'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log']) t
+                      'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log','idea_conversations']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
 
@@ -40,10 +40,10 @@ begin
     from pg_policies
    where schemaname = 'public' and cmd = 'ALL'
      and tablename in ('couples','profiles','help_requests','nudges','tasks','events','medications','medication_logs','transactions','cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','recurrences','focus_sessions',
-                       'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log');
+                       'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log','idea_conversations');
   assert missing is null, 'FALHOU: política "for all" em tabela com privacidade: ' || coalesce(missing, '');
 end $$;
-\echo 'ok  estrutura: 32 tabelas, RLS ligado em todas, 11 funções'
+\echo 'ok  estrutura: 33 tabelas, RLS ligado em todas, 11 funções'
 
 -- ---------------------------------------------------------------- 2. três contas (Lucas, ela e alguém de fora)
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -590,6 +590,8 @@ insert into idea_actions (id, couple_id, owner_id, idea_id, target_type, target_
   ('88880000-0000-4000-8000-000000000007', 'space-teste', 'A', '88880000-0000-4000-8000-000000000002', 'TASK', '88880000-0000-4000-8000-0000000000aa');
 insert into idea_ai_log (id, couple_id, owner_id, capture_id, provider, model, prompt_version, result) values
   ('88880000-0000-4000-8000-000000000008', 'space-teste', 'A', '88880000-0000-4000-8000-000000000004', 'claude-assinatura', 'claude-opus-5-5', 'organizador@1', '{"aplicadas": 2}');
+insert into idea_conversations (id, couple_id, owner_id, title, messages) values
+  ('88880000-0000-4000-8000-00000000000c', 'space-teste', 'A', 'Mudança de casa', '[{"role":"PESSOA","text":"oi"}]');
 
 do $$ begin
   begin
@@ -630,6 +632,12 @@ do $$ begin
   exception when check_violation then null;
   end;
   begin
+    insert into idea_conversations (id, couple_id, owner_id, messages) values
+      ('88880000-0000-4000-8000-0000000000b8', 'space-teste', 'A', '{"nao":"lista"}');
+    raise exception 'FALHOU: conversa com mensagens que não são uma lista';
+  exception when check_violation then null;
+  end;
+  begin
     insert into idea_ai_log (id, couple_id, owner_id, capture_id, provider, prompt_version) values
       ('88880000-0000-4000-8000-0000000000b7', 'space-teste', 'A', '88880000-0000-4000-8000-000000000004', 'x', 'livre');
     raise exception 'FALHOU: registro da IA sem versão do contrato';
@@ -651,7 +659,7 @@ delete from idea_notes;
 delete from idea_links;
 do $$ begin
   assert (select count(*) from idea_areas) + (select count(*) from idea_topics) + (select count(*) from ideas) + (select count(*) from idea_captures)
-       + (select count(*) from idea_notes) + (select count(*) from idea_links) + (select count(*) from idea_actions) + (select count(*) from idea_ai_log) = 0,
+       + (select count(*) from idea_notes) + (select count(*) from idea_links) + (select count(*) from idea_actions) + (select count(*) from idea_ai_log) + (select count(*) from idea_conversations) = 0,
     'FALHOU: ela viu ideias do Lucas';
 end $$;
 
@@ -934,7 +942,7 @@ create temporary table solo_entity_snapshot (table_name text primary key, payloa
 do $$ declare v_table text; v_payload jsonb; begin
   foreach v_table in array array['profiles','tasks','events','medications','medication_logs','transactions','help_requests','nudges',
     'cycle_settings','cycle_logs','shopping_items','special_dates','gift_ideas','mood_checkins','comfort_items','focus_sessions','savings_goals','recurrences',
-    'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log'] loop
+    'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log','idea_conversations'] loop
     execute format('select coalesce(jsonb_agg(to_jsonb(t) order by t.id), ''[]''::jsonb) from %I t where t.couple_id = %L', v_table, 'space-teste') into v_payload;
     insert into solo_entity_snapshot values (v_table, v_payload);
   end loop;

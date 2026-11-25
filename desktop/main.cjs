@@ -1,5 +1,5 @@
 // Ampara no PC (ADR-0008): o próprio app web, empacotado e servido por app://ampara, mais o que o
-// navegador não faz: IA pela assinatura (Claude Code), bolinha flutuante e atalho global para soltar um pensamento.
+// navegador não faz: IA pela assinatura (Claude Code), barra de escrita escondida e atalho global para soltar um pensamento.
 const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, net, protocol, screen, session, shell } = require('electron')
 const fs = require('fs')
 const path = require('path')
@@ -23,15 +23,22 @@ const distDir = () => process.env.AMPARA_DIST
   || (app.isPackaged ? path.join(process.resourcesPath, 'app-dist') : path.join(__dirname, '..', 'dist'))
 
 let win = null
-let bubble = null
+let bar = null
 let tray = null
 let quitting = false
-/** Modo compacto: a janela vira um painel pequeno, por cima de tudo, perto da bolinha, só para soltar. */
+/** Modo compacto: a janela vira um painel por cima de tudo, logo abaixo da barra. */
 let compact = false
 let normalBounds = null
+/** O que a pessoa mandou pela barra espera aqui até a tela do Ampara estar pronta (cofre aberto). */
+let pendingBar = null
+/** A digitação por voz do Windows rouba o foco: não esconder enquanto ela roda. */
+let dictatingUntil = 0
+// Testes: a barra começa visível e não some ao perder o foco.
+const TEST_VISIBLE = process.env.AMPARA_BAR_VISIBLE === '1'
 
-const BUBBLE = 76
-const COMPACT = { width: 440, height: 540 }
+// A barra tem 8 px de margem em volta para a sombra: 480 de largura visível.
+const BAR = { width: 496, height: 72 }
+const PANEL = { width: 480, height: 580 }
 const prefsFile = () => path.join(app.getPath('userData'), 'desktop-prefs.json')
 function readPrefs() {
   try { return JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) } catch { return {} }
@@ -103,71 +110,119 @@ function createWindow() {
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN)) e.preventDefault() })
-  // fechar a janela só esconde: a bolinha continua por perto (Sair fica no menu da bolinha e da bandeja)
+  // fechar a janela só esconde: o atalho e a bandeja continuam (Sair fica no menu da bandeja)
   win.on('close', (e) => {
     if (quitting) return
     e.preventDefault()
     win.hide()
   })
+  // o painel compacto some ao clicar fora (quando a barra também não está em foco)
+  win.on('blur', () => { if (compact) hideIfAway() })
+  // o painel compacto some ao clicar fora (quando a barra também não está em foco)
+  win.on('blur', () => { if (compact) hideIfAway() })
   win.on('closed', () => { win = null })
 }
 
-/* ---------------------------------------------------------------- bolinha e modo compacto */
+/* ---------------------------------------------------------------- barra e painel compacto */
 
-function bubblePosition() {
+function barPosition() {
   const wa = screen.getPrimaryDisplay().workArea
-  const saved = readPrefs().bubble
-  let x = saved?.x ?? wa.x + wa.width - BUBBLE - 24
-  let y = saved?.y ?? wa.y + wa.height - BUBBLE - 24
+  const saved = readPrefs().bar
+  // primeira vez: no meio, um pouco abaixo do topo (como o PowerToys Run)
+  let x = saved?.x ?? wa.x + Math.round((wa.width - BAR.width) / 2)
+  let y = saved?.y ?? wa.y + Math.round(wa.height * 0.18)
   const d = screen.getDisplayNearestPoint({ x, y }).workArea
-  x = Math.min(Math.max(x, d.x), d.x + d.width - BUBBLE)
-  y = Math.min(Math.max(y, d.y), d.y + d.height - BUBBLE)
+  x = Math.min(Math.max(x, d.x), d.x + d.width - BAR.width)
+  y = Math.min(Math.max(y, d.y), d.y + d.height - BAR.height)
   return { x, y }
 }
 
-function createBubble() {
-  bubble = new BrowserWindow({
-    ...bubblePosition(), width: BUBBLE, height: BUBBLE,
+function createBar() {
+  bar = new BrowserWindow({
+    ...barPosition(), width: BAR.width, height: BAR.height,
     frame: false, transparent: true, resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
-    // não rouba o foco: clicar na bolinha com o painel aberto fecha o painel
-    skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, focusable: false, title: 'Ampara (bolinha)',
-    webPreferences: { preload: path.join(__dirname, 'bubble-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, title: 'Ampara (barra)',
+    webPreferences: { preload: path.join(__dirname, 'bar-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   })
-  bubble.setAlwaysOnTop(true, 'floating')
-  bubble.loadFile(path.join(__dirname, 'bubble.html'))
-  bubble.once('ready-to-show', () => { if (readPrefs().bubbleHidden !== true) bubble.showInactive() })
-  bubble.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  bubble.webContents.on('will-navigate', (e) => e.preventDefault())
-  bubble.on('closed', () => { bubble = null })
+  bar.setAlwaysOnTop(true, 'floating')
+  bar.loadFile(path.join(__dirname, 'bar.html'))
+  if (TEST_VISIBLE) bar.once('ready-to-show', () => bar.showInactive())
+  bar.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  bar.webContents.on('will-navigate', (e) => e.preventDefault())
+  // arrastar pela alça: guarda o lugar novo (e leva o painel junto, se estiver aberto)
+  let moveTimer = null
+  bar.on('move', () => {
+    clearTimeout(moveTimer)
+    moveTimer = setTimeout(() => {
+      if (!bar || bar.isDestroyed()) return
+      const { x, y } = bar.getBounds()
+      writePrefs({ bar: { x, y } })
+      if (compact && win && !win.isDestroyed() && win.isVisible()) placePanel()
+    }, 250)
+  })
+  bar.on('blur', hideIfAway)
+  bar.on('focus', () => { dictatingUntil = 0 })
+  bar.on('closed', () => { bar = null })
 }
 
-/** Painel compacto perto da bolinha (ou do canto da tela), sempre por cima, com o campo em foco. */
-function showCompact() {
+/** Some ao clicar fora: só esconde quando nem a barra nem o painel têm o foco e a voz do Windows não está ditando. */
+function hideIfAway() {
+  if (TEST_VISIBLE) return
+  setTimeout(() => {
+    if (Date.now() < dictatingUntil) return
+    const barFocused = bar && !bar.isDestroyed() && bar.isFocused()
+    const panelFocused = win && !win.isDestroyed() && compact && win.isFocused()
+    if (!barFocused && !panelFocused) hideAll()
+  }, 200)
+}
+
+/** Esconde a barra e, se estiver no modo compacto, o painel. A janela completa nunca some por aqui. */
+function hideAll() {
+  if (bar && !bar.isDestroyed()) bar.hide()
+  if (win && !win.isDestroyed() && compact) win.hide()
+}
+
+function showBar() {
+  if (!bar) createBar()
+  if (!bar.isVisible()) bar.setBounds({ ...barPosition(), width: BAR.width, height: BAR.height })
+  bar.show()
+  bar.focus()
+  bar.webContents.send('bar:focus')
+}
+
+/** Painel compacto logo abaixo da barra (se não couber embaixo, acima), sempre por cima. */
+function placePanel() {
+  const b = bar && !bar.isDestroyed() ? bar.getBounds() : { ...barPosition(), width: BAR.width, height: BAR.height }
+  const d = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).workArea
+  const width = Math.min(PANEL.width, d.width - 16)
+  const height = Math.min(PANEL.height, d.height - 16)
+  const barBottom = b.y + b.height - 8
+  let y = barBottom + 4
+  if (y + height > d.y + d.height - 8) y = Math.max(d.y + 8, b.y + 8 - height - 4)
+  const x = Math.min(Math.max(b.x + 8, d.x + 8), d.x + d.width - width - 8)
+  win.setBounds({ x: Math.round(x), y: Math.round(y), width, height })
+}
+
+function showPanel(tab) {
   if (!win) createWindow()
   if (!compact) normalBounds = win.isMaximized() ? null : win.getBounds()
   if (win.isMaximized()) win.unmaximize()
-  const anchor = bubble && bubble.isVisible() ? bubble.getBounds() : { ...bubblePosition(), width: BUBBLE, height: BUBBLE }
-  const d = screen.getDisplayNearestPoint({ x: anchor.x, y: anchor.y }).workArea
-  const width = Math.min(COMPACT.width, d.width - 16)
-  const height = Math.min(COMPACT.height, d.height - 16)
-  let x = anchor.x + anchor.width - width
-  let y = anchor.y - height - 8
-  if (y < d.y + 8) y = anchor.y + anchor.height + 8
-  x = Math.min(Math.max(x, d.x + 8), d.x + d.width - width - 8)
-  y = Math.min(Math.max(y, d.y + 8), d.y + d.height - height - 8)
-  win.setBounds({ x: Math.round(x), y: Math.round(y), width, height })
+  placePanel()
   win.setAlwaysOnTop(true, 'floating')
   compact = true
   win.webContents.send('ampara:compact', true)
+  if (tab) win.webContents.send('ampara:panel-tab', tab)
   win.show()
   win.focus()
   win.webContents.send('ampara:shortcut')
 }
 
-/** Bolinha e atalho: abre o painel; se ele já está aberto e em foco, esconde. */
-function toggleCompact(fromBubbleClick = false) {
-  if (win && compact && win.isVisible() && (fromBubbleClick || win.isFocused())) win.hide()
-  else showCompact()
+/** Atalho: mostra a barra com o cursor pronto; se ela (ou o painel) já está em foco, esconde tudo. */
+function toggleBar() {
+  const barUp = bar && bar.isVisible()
+  const focused = (bar && bar.isFocused()) || (win && compact && win.isVisible() && win.isFocused())
+  if (barUp && focused) hideAll()
+  else showBar()
 }
 
 /** Janela normal (abrir o Ampara de novo, bandeja): volta ao tamanho de antes, sem ficar por cima. */
@@ -179,18 +234,10 @@ function showNormal() {
     compact = false
     win.webContents.send('ampara:compact', false)
   }
+  if (bar && !bar.isDestroyed()) bar.hide()
   if (win.isMinimized()) win.restore()
   win.show()
   win.focus()
-}
-
-function toggleBubble() {
-  if (!bubble) createBubble()
-  const hide = bubble.isVisible()
-  if (hide) bubble.hide()
-  else bubble.showInactive()
-  writePrefs({ bubbleHidden: hide })
-  refreshMenus()
 }
 
 function quit() {
@@ -200,57 +247,57 @@ function quit() {
 
 function menuTemplate() {
   return [
-    { label: 'Soltar um pensamento', click: showCompact },
+    { label: 'Soltar um pensamento', click: showBar },
     { label: 'Abrir o Ampara', click: showNormal },
-    { label: bubble && bubble.isVisible() ? 'Esconder a bolinha' : 'Mostrar a bolinha', click: toggleBubble },
     { type: 'separator' },
     { label: 'Sair do Ampara', click: quit },
   ]
 }
 
-function refreshMenus() {
-  if (tray) tray.setContextMenu(Menu.buildFromTemplate(menuTemplate()))
-}
-
 function createTray() {
   const img = nativeImage.createFromPath(path.join(__dirname, 'icon.png'))
   tray = new Tray(img.isEmpty() ? img : img.resize({ width: 16, height: 16 }))
-  tray.setToolTip('Ampara · Ctrl+Shift+Espaço solta um pensamento')
-  tray.on('click', showCompact)
-  refreshMenus()
+  tray.setToolTip('Ampara · Ctrl+Shift+Espaço abre a barra')
+  tray.on('click', showBar)
+  tray.setContextMenu(Menu.buildFromTemplate(menuTemplate()))
 }
-
-ipcMain.on('ampara:open-full', (event) => { if (fromApp(event)) showNormal() })
-ipcMain.handle('ampara:is-compact', (event) => fromApp(event) && compact)
-
-// Digitação por voz do Windows (o mesmo que Win + H): escreve no campo que estiver com o cursor.
-const WIN_H = "Add-Type -Namespace AM -Name K -MemberDefinition '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);'; [AM.K]::keybd_event(0x5B,0,0,[UIntPtr]::Zero); [AM.K]::keybd_event(0x48,0,0,[UIntPtr]::Zero); [AM.K]::keybd_event(0x48,0,2,[UIntPtr]::Zero); [AM.K]::keybd_event(0x5B,0,2,[UIntPtr]::Zero)"
-ipcMain.handle('ampara:dictate', (event) => {
-  if (!fromApp(event) || process.platform !== 'win32') return false
-  return new Promise((resolve) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WIN_H], { windowsHide: true, timeout: 15000 }, (err) => resolve(!err))
-  })
-})
-
-const fromBubble = (event) => !!bubble && event.sender === bubble.webContents
-
-ipcMain.on('bubble:moveBy', (event, dx, dy) => {
-  if (!fromBubble(event)) return
-  const b = bubble.getBounds()
-  bubble.setBounds({ x: Math.round(b.x + dx), y: Math.round(b.y + dy), width: BUBBLE, height: BUBBLE })
-})
-ipcMain.on('bubble:dragEnd', (event) => {
-  if (!fromBubble(event)) return
-  const { x, y } = bubble.getBounds()
-  writePrefs({ bubble: { x, y } })
-})
-ipcMain.on('bubble:toggle', (event) => { if (fromBubble(event)) toggleCompact(true) })
-ipcMain.on('bubble:menu', (event) => {
-  if (fromBubble(event)) Menu.buildFromTemplate(menuTemplate()).popup({ window: bubble })
-})
 
 /** Só a página do próprio app (app://ampara) pode pedir a IA. */
 const fromApp = (event) => (event.senderFrame?.url || '').startsWith(ORIGIN)
+const fromBar = (event) => !!bar && !bar.isDestroyed() && event.sender === bar.webContents
+
+ipcMain.on('ampara:open-full', (event) => { if (fromApp(event)) showNormal() })
+ipcMain.on('ampara:hide-all', (event) => { if (fromApp(event)) hideAll() })
+ipcMain.handle('ampara:is-compact', (event) => fromApp(event) && compact)
+ipcMain.handle('ampara:take-bar-submit', (event) => {
+  if (!fromApp(event)) return null
+  const p = pendingBar
+  pendingBar = null
+  return p
+})
+
+// Digitação por voz do Windows (o mesmo que Win + H): escreve no campo que estiver com o cursor.
+const WIN_H = "Add-Type -Namespace AM -Name K -MemberDefinition '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);'; [AM.K]::keybd_event(0x5B,0,0,[UIntPtr]::Zero); [AM.K]::keybd_event(0x48,0,0,[UIntPtr]::Zero); [AM.K]::keybd_event(0x48,0,2,[UIntPtr]::Zero); [AM.K]::keybd_event(0x5B,0,2,[UIntPtr]::Zero)"
+function dictate() {
+  if (process.platform !== 'win32') return Promise.resolve(false)
+  dictatingUntil = Date.now() + 120000
+  return new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WIN_H], { windowsHide: true, timeout: 15000 }, (err) => resolve(!err))
+  })
+}
+ipcMain.handle('ampara:dictate', (event) => (fromApp(event) ? dictate() : false))
+ipcMain.on('bar:dictate', (event) => { if (fromBar(event)) void dictate() })
+
+ipcMain.on('bar:hide', (event) => { if (fromBar(event)) hideAll() })
+ipcMain.on('bar:full', (event) => { if (fromBar(event)) showNormal() })
+ipcMain.on('bar:panel', (event, tab) => { if (fromBar(event)) showPanel(tab === 'talks' ? 'talks' : 'capture') })
+// Enter guarda como ideia; Ctrl+Enter conversa. O texto vai para a tela do Ampara, que grava no cofre.
+ipcMain.on('bar:submit', (event, text, mode) => {
+  if (!fromBar(event) || typeof text !== 'string' || !text.trim()) return
+  pendingBar = { text: text.slice(0, 8000), mode: mode === 'chat' ? 'chat' : 'capture' }
+  showPanel(pendingBar.mode === 'chat' ? 'chat' : 'capture')
+  if (win) win.webContents.send('ampara:bar-submit')
+})
 
 ipcMain.handle('ampara:status', (event) => {
   if (!fromApp(event)) throw new Error('origem não autorizada')
@@ -272,10 +319,13 @@ app.whenReady().then(() => {
   serveApp()
   allowCloud()
   createWindow()
-  createBubble()
+  createBar()
   createTray()
-  if (!globalShortcut.register(SHORTCUT, () => toggleCompact())) console.warn('Atalho ocupado:', SHORTCUT)
+  if (!globalShortcut.register(SHORTCUT, toggleBar)) console.warn('Atalho ocupado:', SHORTCUT)
 })
+
+// Testes (desktop/test/bar.cjs): o atalho global do Windows não dá para apertar daqui.
+if (process.env.AMPARA_TEST_HOOKS === '1') global.__ampara = { toggleBar, showBar, hideAll }
 
 app.on('before-quit', () => { quitting = true })
 

@@ -105,3 +105,10 @@ sem nova ADR: estrutura fixa Área > Assunto > Ideia > Anotação; a IA só grav
 e a privacidade é aplicada no domínio (`myIdeaMap`, `buildIdeaTree`, `purgeUnauthorized`), nunca só na tela.
 Desfazer nas ações de Ideias regrava com `updatedAt` novo (`transactFresh`), porque o servidor mantém a versão mais nova.
 
+
+## App do PC (`desktop/`)
+
+Casca Electron do Ampara (ADR-0008). A barra de escrita (`bar.*`) fica escondida até `Ctrl+Shift+Espaço` e só envia texto
+ao processo principal; quem grava é o app, no cofre. Conversas ficam em `ideaConversations` (privadas, ADR-0013) e
+"Extrair" passa pela captura e pelo validador, sem criar tarefa sozinho. Teste: `cd desktop && npm run test:bar`
+(precisa de `npm run build` antes; com o Ampara instalado aberto o atalho global já está ocupado, o teste usa um gancho).

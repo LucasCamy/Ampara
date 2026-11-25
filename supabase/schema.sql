@@ -1258,10 +1258,23 @@ create table if not exists idea_ai_log (
   deleted boolean not null default false
 );
 
+-- Conversas com a IA na barra do PC (ADR-0013): privadas de quem conversou; "Extrair" vira uma captura
+create table if not exists idea_conversations (
+  id uuid primary key,
+  couple_id text not null references couples (id) on delete cascade,
+  owner_id text not null check (owner_id in ('A', 'B')),
+  title text not null default '' check (char_length(title) <= 80),
+  messages jsonb not null default '[]'::jsonb check (jsonb_typeof(messages) = 'array' and jsonb_array_length(messages) <= 80),
+  extracted_capture_id uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false
+);
+
 do $$
 declare t text;
 begin
-  foreach t in array array['idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log'] loop
+  foreach t in array array['idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log','idea_conversations'] loop
     execute format('alter table %I enable row level security', t);
     execute format('create index if not exists %I on %I (couple_id, updated_at)', 'idx_' || t || '_pull', t);
     -- privado de quem escreveu: política por comando, nunca "for all" (regra 11 do AGENTS.md)

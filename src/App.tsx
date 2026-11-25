@@ -150,7 +150,7 @@ function usePendingIdeas() {
   }, [viewer, ideasOn])
 }
 
-/** No PC, a bolinha abre a janela como painel compacto: só o campo para soltar. */
+/** No PC, a barra abre a janela como painel compacto (ADR-0013). */
 function useDesktopCompact(): boolean {
   const [compact, setCompact] = useState(false)
   useEffect(() => {
