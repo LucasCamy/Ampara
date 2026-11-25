@@ -59,7 +59,7 @@ export function OutlineView({ tree }: { tree: AreaNode[] }) {
                                 <IdeaStateBadge state={idea.state} />
                                 <NatureTag nature={idea.nature} />
                                 <span className="inline-flex items-center gap-1 text-[13px] text-muted"><MessageSquareText size={15} aria-hidden /><span className="font-data">{noteCount}</span> {noteCount === 1 ? 'anotação' : 'anotações'}</span>
-                                {needsReview ? <span className="text-[13px] font-semibold text-warn">Conferir</span> : null}
+                                {needsReview ? <span className="text-[13px] font-semibold text-warn">A IA teve dúvida</span> : null}
                               </span>
                             </button>
                           </li>

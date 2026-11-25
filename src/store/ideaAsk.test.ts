@@ -118,3 +118,15 @@ describe('família de palavras', () => {
   ])('%s ~ %s -> %s', (a, b, expected) => expect(sameFamily(a, b)).toBe(expected))
 })
 
+
+describe('perguntar com sentido (ADR-0012)', () => {
+  it('acha a anotação de mesmo sentido mesmo sem palavra em comum', () => {
+    const c = captureThought('trotei dez minutos na praça')!
+    const data = dataStore.get()
+    expect(searchNotes(data, 'A', 'o que eu pensei sobre exercício?', TODAY).found).toHaveLength(0)
+    const found = searchNotes(data, 'A', 'o que eu pensei sobre exercício?', TODAY, undefined, new Map([[c, 0.5]])).found
+    expect(found.map((f) => f.note.id)).toEqual([c])
+    // sentido fraco não entra
+    expect(searchNotes(data, 'A', 'o que eu pensei sobre exercício?', TODAY, undefined, new Map([[c, 0.3]])).found).toHaveLength(0)
+  })
+})

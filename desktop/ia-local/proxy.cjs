@@ -1,5 +1,5 @@
 // Intermediário da IA local (ADR-0010). Fica entre o Tailscale e o LM Studio:
-// - só repassa /v1/models e /v1/chat/completions (nada de carregar/baixar modelos de fora);
+// - só repassa /v1/models, /v1/chat/completions e /v1/embeddings (sentido, ADR-0012) (nada de carregar/baixar modelos de fora);
 // - libera CORS apenas para as origens do Ampara (o site publicado e o app do PC), nunca para "qualquer site";
 // - escuta só em 127.0.0.1: de fora, só se chega pelo `tailscale serve` (rede privada da pessoa).
 // Uso: node proxy.cjs  (variáveis: AMPARA_AI_PORT, LMSTUDIO_URL, AMPARA_ORIGINS separadas por vírgula)
@@ -8,7 +8,7 @@ const http = require('http')
 const PORT = Number(process.env.AMPARA_AI_PORT || 1235)
 const UPSTREAM = new URL(process.env.LMSTUDIO_URL || 'http://127.0.0.1:1234')
 const ORIGINS = new Set((process.env.AMPARA_ORIGINS || 'https://ampara.cloudlane.com.br,app://ampara').split(',').map((s) => s.trim()).filter(Boolean))
-const ALLOWED = new Set(['GET /v1/models', 'POST /v1/chat/completions'])
+const ALLOWED = new Set(['GET /v1/models', 'POST /v1/chat/completions', 'POST /v1/embeddings'])
 const MAX_BODY = 512 * 1024
 
 function cors(req, res) {

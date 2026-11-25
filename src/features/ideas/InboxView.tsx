@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Button, EmptyState } from '../../components/ui'
 import type { InboxView as Inbox_ } from '../../domain/ideasView'
 import { deletePendingCapture, discardInboxNote, undoOrganization } from '../../store/ideaActions'
-import { describeAiResult, organizeWithAi } from '../../store/ideaAi'
+import { describeAiResult, queueOrganize } from '../../store/ideaAi'
 import { currentProvider } from '../../ai/provider'
 import { ui } from '../../store/ui'
 import { shortDateTime, toastResult } from './ideaUi'
@@ -14,7 +14,7 @@ export function InboxView({ inbox }: { inbox: Inbox_ }) {
   const [busy, setBusy] = useState<string | null>(null)
   const withAi = (captureId: string) => {
     setBusy(captureId)
-    organizeWithAi(captureId, provider)
+    queueOrganize(captureId, provider)
       .then((r) => ui.toast(describeAiResult(r), { undo: () => { undoOrganization(r.logId) } }))
       .catch((e: unknown) => ui.toast(e instanceof Error ? e.message : 'A IA não respondeu.', { tone: 'warn' }))
       .finally(() => setBusy(null))

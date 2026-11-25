@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, cx, FieldError } from '../../components/ui'
 import { IDEA_LIMITS } from '../../domain/ideas'
 import { captureThought, deletePendingCapture, undoOrganization } from '../../store/ideaActions'
-import { describeAiResult, organizeWithAi } from '../../store/ideaAi'
+import { describeAiResult, guessPlace, queueOrganize, useOrganizerWaiting } from '../../store/ideaAi'
 import { currentProvider, desktopBridge } from '../../ai/provider'
 import { ui } from '../../store/ui'
 import { canDictate, startDictation, type DictationSession } from '../voice/speech'
@@ -15,7 +15,8 @@ export function CaptureBox() {
   const [error, setError] = useState<string | null>(null)
   const [listening, setListening] = useState(false)
   const [usedVoice, setUsedVoice] = useState(false)
-  const [organizing, setOrganizing] = useState(false)
+  const [saved, setSaved] = useState<string | null>(null)
+  const waiting = useOrganizerWaiting()
   const provider = currentProvider()
   const recognition = useRef<DictationSession | null>(null)
   const mounted = useRef(true)
@@ -73,12 +74,13 @@ export function CaptureBox() {
     setText('')
     setUsedVoice(false)
     if (provider) {
-      // a captura já está salva; a IA organiza em seguida (e o validador confere antes de gravar)
-      setOrganizing(true)
-      organizeWithAi(captureId, provider)
+      // já está salvo; o campo fica livre para o próximo. A IA organiza por trás, um por vez (ADR-0012).
+      const thought = text
+      setSaved('Guardado.')
+      void guessPlace(thought).then((place) => { if (mounted.current && place) setSaved(`Guardado. Parece ser de ${place}.`) })
+      queueOrganize(captureId, provider)
         .then((r) => ui.toast(describeAiResult(r), { undo: () => { undoOrganization(r.logId) }, action: { label: 'Ver', onClick: () => document.querySelector<HTMLButtonElement>('[data-testid="ideas-view-esboco"]')?.click() } }))
         .catch((e: unknown) => ui.toast(`${e instanceof Error ? e.message : 'A IA não respondeu.'} Está guardado, e eu organizo quando a IA voltar.`, { tone: 'warn' }))
-        .finally(() => { if (mounted.current) setOrganizing(false) })
       return
     }
     ui.toast('Guardado na Caixa de entrada. Organize quando quiser.', {
@@ -100,6 +102,7 @@ export function CaptureBox() {
         value={text}
         onChange={(e) => {
           stop()
+          setSaved(null)
           setText(e.target.value)
           setError(null)
         }}
@@ -113,10 +116,16 @@ export function CaptureBox() {
       />
       {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : (
         <p id={`${id}-hint`} className="text-[13px] text-muted">
-          {provider ? 'Fica guardado na hora. A IA organiza em seguida, e você pode desfazer. Nada vira tarefa sozinho.' : 'Fica guardado na hora, só para você. Nada vira tarefa sozinho.'}
+          {provider ? 'Fica guardado na hora. Pode soltar o próximo: a IA organiza por trás, e você pode desfazer. Nada vira tarefa sozinho.' : 'Fica guardado na hora, só para você. Nada vira tarefa sozinho.'}
         </p>
       )}
-      {organizing ? <p role="status" className="flex items-center gap-2 text-[14px] font-semibold text-ink" data-testid="idea-organizing"><Sparkles size={16} aria-hidden className="text-action" />Organizando com a IA…</p> : null}
+      {saved || waiting ? (
+        <p role="status" className="flex flex-wrap items-center gap-x-2 text-[14px] font-semibold text-ink" data-testid="idea-organizing">
+          <Sparkles size={16} aria-hidden className="text-action" />
+          {saved ? <span data-testid="idea-saved">{saved}</span> : null}
+          {waiting ? <span className="font-normal text-muted">{waiting === 1 ? '1 organizando por trás' : `${waiting} organizando por trás`}</span> : null}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-2 sm:flex-row">
         {canDictate() || desktopBridge()?.dictate ? (
           <Button type="button" variant="quiet" icon={listening ? Square : Mic} onClick={dictate} aria-pressed={listening} data-testid="idea-capture-mic" className="sm:w-auto">

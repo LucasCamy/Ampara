@@ -43,6 +43,11 @@ export const IDEA_LIMITS = {
 /** Destino de uma operação conforme a confiança (ADR-0004). */
 export const CONFIDENCE = { apply: 0.8, review: 0.6 } as const
 
+/** Parecença mínima de sentido (ADR-0012): abaixo disso o texto não é do mesmo assunto. */
+export const SENSE_MIN = 0.4
+/** Pensamentos soltos com até este intervalo entram como contexto do seguinte (ADR-0012). */
+export const SEQUENCE_WINDOW_MS = 3 * 60_000
+
 
 /** Campos comuns das entidades guardadas (cofre local e tabelas idea_* no Supabase). Sempre privadas do dono. */
 interface Owned {

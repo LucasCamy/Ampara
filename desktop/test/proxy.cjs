@@ -38,6 +38,8 @@ const call = (method, p, headers = {}, body) => fetch(`http://127.0.0.1:${PX}${p
     assert.strictEqual(chat.status, 200)
     assert.strictEqual(chat.headers.get('access-control-allow-origin'), 'app://ampara', 'cabeçalho * do LM Studio não vaza')
     assert.deepStrictEqual(await chat.json(), { path: '/v1/chat/completions', method: 'POST', body: '{"a":1}' })
+    const sense = await call('POST', '/v1/embeddings', { Origin: 'app://ampara', 'Content-Type': 'application/json' }, '{"b":2}')
+    assert.deepStrictEqual(await sense.json(), { path: '/v1/embeddings', method: 'POST', body: '{"b":2}' })
 
     assert.strictEqual((await call('GET', '/v1/models')).status, 200, 'sem Origin (curl local) funciona')
     for (const [m, p] of [['POST', '/api/v1/models/load'], ['POST', '/v1/models/download'], ['GET', '/']]) {

@@ -3,7 +3,7 @@
  * O mesmo prompt e o mesmo esquema valem para qualquer provedor (ADR-0005); quem decide o que grava
  * é o validador (ideasValidate.ts), nunca a resposta crua.
  */
-import { CONFIDENCE, IDEA_LIMITS, IDEA_NATURES, IDEA_STATES, LINK_TYPES, foldText, type Idea, type IdeaMap, type IdeaNote } from './ideas'
+import { CONFIDENCE, IDEA_LIMITS, SENSE_MIN, IDEA_NATURES, IDEA_STATES, LINK_TYPES, foldText, type Idea, type IdeaMap, type IdeaNote } from './ideas'
 
 export const ORGANIZER_VERSION = 'organizador@1'
 
@@ -81,9 +81,10 @@ const words = (text: string) => new Set(foldText(text).replace(/[^\p{L}\p{N}\s]/
 
 /**
  * Até 40 ideias candidatas para a IA ver (ADR-0004): as que têm palavras em comum com a captura
- * (título, resumo e anotações), completadas pelas mais recentes. Determinístico.
+ * (título, resumo e anotações) e, com a IA local, as de mesmo sentido (ADR-0012); completadas pelas mais
+ * recentes. Determinístico.
  */
-export function selectCandidates(map: IdeaMap, notes: IdeaNote[], capture: string, limit: number = IDEA_LIMITS.candidateIdeas): Idea[] {
+export function selectCandidates(map: IdeaMap, notes: IdeaNote[], capture: string, limit: number = IDEA_LIMITS.candidateIdeas, sense?: ReadonlyMap<string, number> | null): Idea[] {
   const target = words(capture)
   const textOf = new Map<string, string>()
   for (const n of notes) if (n.ideaId) textOf.set(n.ideaId, `${textOf.get(n.ideaId) ?? ''} ${n.text}`)
@@ -91,14 +92,49 @@ export function selectCandidates(map: IdeaMap, notes: IdeaNote[], capture: strin
     const own = words(`${idea.title} ${idea.summary} ${textOf.get(idea.id) ?? ''}`)
     let score = 0
     for (const w of target) if (own.has(w)) score += 1
+    const s = sense?.get(idea.id) ?? 0
+    if (s >= SENSE_MIN) score += 3 + 10 * (s - SENSE_MIN)
     return { idea, score }
   })
   scored.sort((a, b) => b.score - a.score || b.idea.updatedAt.localeCompare(a.idea.updatedAt) || a.idea.id.localeCompare(b.idea.id))
   return scored.slice(0, limit).map((s) => s.idea)
 }
 
+/** Texto que representa a ideia para o sentido: título, resumo e o começo das anotações. */
+export function ideaSenseText(idea: Idea, notes: IdeaNote[]): string {
+  const own = notes.filter((n) => n.ideaId === idea.id).slice(0, 6).map((n) => n.text).join(' ')
+  return `${idea.title}. ${idea.summary} ${own}`.slice(0, 1500)
+}
+
+export interface OrganizerExample {
+  trecho: string
+  ideia_id: string
+  /** PESSOA: a própria pessoa guardou ali; IA: a IA guardou e a pessoa manteve */
+  quem: 'PESSOA' | 'IA'
+}
+
+/**
+ * O jeito da pessoa (ADR-0012): anotações parecidas que já estão no mapa, com o lugar onde ficaram. As que a
+ * pessoa organizou vêm primeiro. Só entram ideias que a IA vai ver (candidatas).
+ */
+export function pickExamples(notes: IdeaNote[], byPerson: ReadonlySet<string>, sense: ReadonlyMap<string, number> | null | undefined, candidateIds: ReadonlySet<string>, limit = 4): OrganizerExample[] {
+  if (!sense) return []
+  return notes
+    .filter((n) => n.ideaId && candidateIds.has(n.ideaId) && (sense.get(n.id) ?? 0) >= SENSE_MIN + 0.05)
+    .map((n) => ({ n, person: byPerson.has(n.captureId), s: sense.get(n.id)! }))
+    .sort((a, b) => Number(b.person) - Number(a.person) || b.s - a.s || a.n.id.localeCompare(b.n.id))
+    .slice(0, limit)
+    .map(({ n, person }) => ({ trecho: n.text.slice(0, 300), ideia_id: n.ideaId!, quem: person ? 'PESSOA' : 'IA' }))
+}
+
+export interface OrganizerExtras {
+  /** Pensamentos soltos logo antes (só para entender) */
+  contextoAnterior?: string[]
+  exemplos?: OrganizerExample[]
+}
+
 /** Entrada da IA: captura + mapa compacto (áreas, assuntos e candidatas). Ids reais, nada do par. */
-export function buildOrganizerInput(capture: string, map: IdeaMap, candidates: Idea[]): string {
+export function buildOrganizerInput(capture: string, map: IdeaMap, candidates: Idea[], extras: OrganizerExtras = {}): string {
   const areas = map.areas.filter((a) => !a.hidden).map((a) => ({ id: a.id, nome: a.name }))
   const topics = map.topics.filter((t) => !t.archived).map((t) => ({ id: t.id, area_id: t.areaId, nome: t.name }))
   const ideas = candidates.map((i) => ({
@@ -109,5 +145,10 @@ export function buildOrganizerInput(capture: string, map: IdeaMap, candidates: I
     estado: i.state,
     resumo: i.summary.split(/(?<=[.!?])\s+/)[0] ?? '',
   }))
-  return JSON.stringify({ captura: capture, areas, assuntos: topics, ideias: ideas })
+  const ctx = (extras.contextoAnterior ?? []).filter(Boolean).slice(-3).map((t) => t.slice(0, 600))
+  return JSON.stringify({
+    captura: capture, areas, assuntos: topics, ideias: ideas,
+    ...(ctx.length ? { dito_pouco_antes_so_para_entender: ctx } : {}),
+    ...(extras.exemplos?.length ? { onde_a_pessoa_guardou_coisas_parecidas: extras.exemplos } : {}),
+  })
 }

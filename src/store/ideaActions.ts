@@ -373,6 +373,22 @@ export function updateIdea(id: string, patch: IdeaPatch): ActionResult {
   return { ok: true, undo }
 }
 
+/**
+ * Mudar uma anotação de ideia. É a correção mais natural da pessoa: o mapa muda e, com ele, os exemplos que a IA
+ * vê da próxima vez (ADR-0012).
+ */
+export function moveNote(noteId: string, ideaId: string): ActionResult {
+  const owner = viewer()
+  const s = dataStore.get()
+  const note = s.ideaNotes[noteId]
+  const target = s.ideas[ideaId]
+  if (!note || note.ownerId !== owner || !note.ideaId) return fail('Esta anotação não existe mais.')
+  if (!target || target.ownerId !== owner) return fail('Escolha uma ideia.')
+  if (note.ideaId === ideaId) return noop
+  const undo = transactFresh((tx) => tx.put('ideaNotes', { ...note, ideaId, needsReview: false, updatedAt: nowIso() }))
+  return { ok: true, undo }
+}
+
 /** Aceitar (fica sólida) ou recusar (some e a IA não sugere de novo) uma ligação. */
 export function setLinkState(linkId: string, state: 'CONFIRMADA' | 'RECUSADA'): ActionResult {
   const link = dataStore.get().ideaLinks[linkId]

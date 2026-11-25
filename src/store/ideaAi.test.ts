@@ -10,8 +10,8 @@ vi.mock('./ui', async () => {
 
 const { dataStore } = await import('./data')
 const { uiStore } = await import('./ui')
-const { captureThought, myIdeaMap, organizeManually, undoOrganization } = await import('./ideaActions')
-const { describeAiResult, organizePending, organizeWithAi } = await import('./ideaAi')
+const { captureThought, myIdeaMap, moveNote, organizeManually, undoOrganization } = await import('./ideaActions')
+const { describeAiResult, organizePending, organizeWithAi, queueOrganize, sequenceBefore } = await import('./ideaAi')
 
 const iso = '2026-11-23T10:00:00.000Z'
 const values = <T,>(m: Record<string, T>) => Object.values(m)
@@ -150,5 +150,65 @@ describe('organizar sozinho o que ficou esperando', () => {
     expect(broken.runStructured).toHaveBeenCalledTimes(1)
     expect(values(dataStore.get().ideaCaptures).every((c) => c.status === 'PENDENTE')).toBe(true)
     expect(await organizePending(null)).toBe(0)
+  })
+})
+
+describe('fila por trás e sequência (ADR-0012)', () => {
+  const at = (id: string, when: string) => dataStore.set((s) => ({ ...s, ideaCaptures: { ...s.ideaCaptures, [id]: { ...s.ideaCaptures[id]!, createdAt: when } } }))
+  const place = (input: string) => {
+    const captura = (JSON.parse(input) as { captura: string }).captura
+    return { versao: ORGANIZER_VERSION, operacoes: [
+      op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:saude', nome: captura.slice(0, 20), motivo: 'novo' }),
+      op({ tipo: 'CRIAR_IDEIA', trecho: captura, assunto_ref: 's', titulo: captura.slice(0, 30), natureza: 'PLANO', confianca: 0.9 }),
+    ] }
+  }
+
+  it('pensamentos em sequência vão como contexto; um intervalo longo corta a sequência', async () => {
+    const old = captureThought('pensamento antigo de ontem')!
+    const a = captureThought('quero voltar a correr')!
+    const b = captureThought('e comprar um tênis também')!
+    at(old, '2026-11-23T08:00:00.000Z')
+    at(a, '2026-11-23T10:00:00.000Z')
+    at(b, '2026-11-23T10:02:00.000Z')
+    expect(sequenceBefore(dataStore.get(), dataStore.get().ideaCaptures[b]!).map((c) => c.id)).toEqual([a])
+    const provider = fakeProvider(place)
+    await organizeWithAi(b, provider)
+    expect(JSON.parse(provider.calls[0]!.input).dito_pouco_antes_so_para_entender).toEqual(['quero voltar a correr'])
+    expect(JSON.parse(provider.calls[0]!.input).captura).toBe('e comprar um tênis também')
+  })
+
+  it('a fila atende um por vez, na ordem', async () => {
+    const order: string[] = []
+    let running = 0
+    const provider: AiProvider = {
+      id: 'lento', label: 'lento',
+      async runStructured(req) {
+        running++
+        expect(running).toBe(1)
+        order.push((JSON.parse(req.input) as { captura: string }).captura)
+        await new Promise((r) => setTimeout(r, 5))
+        running--
+        return { json: place(req.input), provider: 'lento', model: 'm' }
+      },
+    }
+    const a = captureThought('aprender violão')!
+    const b = captureThought('montar uma horta')!
+    await Promise.all([queueOrganize(a, provider), queueOrganize(b, provider)])
+    expect(order).toEqual(['aprender violão', 'montar uma horta'])
+  })
+
+  it('mover uma anotação muda o mapa (e os exemplos da IA) e pode desfazer', async () => {
+    const id = captureThought('correr no parque')!
+    await organizeWithAi(id, fakeProvider(place))
+    const other = captureThought('nadar no clube')!
+    await organizeWithAi(other, fakeProvider(place))
+    const note = values(dataStore.get().ideaNotes).find((n) => n.text === 'correr no parque')!
+    const target = values(dataStore.get().ideaNotes).find((n) => n.text === 'nadar no clube')!.ideaId!
+    const r = moveNote(note.id, target)
+    expect(r.ok).toBe(true)
+    expect(dataStore.get().ideaNotes[note.id]!.ideaId).toBe(target)
+    if (r.ok) r.undo?.()
+    expect(dataStore.get().ideaNotes[note.id]!.ideaId).toBe(note.ideaId)
+    expect(moveNote('nada', target).ok).toBe(false)
   })
 })

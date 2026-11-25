@@ -6,7 +6,7 @@ import { IDEA_LIMITS } from '../../domain/ideas'
 import { LINK_LABEL, actionsOf, linksOf, notesOf } from '../../domain/ideasView'
 import { useData } from '../../store/data'
 import { ui } from '../../store/ui'
-import { markIdeaReviewed, setLinkState, updateIdea } from '../../store/ideaActions'
+import { markIdeaReviewed, moveNote, setLinkState, updateIdea } from '../../store/ideaActions'
 import { usePeople } from '../../store/hooks'
 import { IdeaStateBadge, NATURE_OPTIONS, shortDateTime, toastResult, useIdeaData } from '../ideas/ideaUi'
 import { SHEET_FORM } from './forms'
@@ -27,6 +27,10 @@ export function IdeaSheet({ id, onDone }: { id: string; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null)
 
   const notes = useMemo(() => notesOf(data, viewer, id), [data, viewer, id])
+  const otherIdeas = useMemo(() => Object.values(data.ideas)
+    .filter((i) => i.ownerId === viewer && i.id !== id)
+    .map((i) => ({ id: i.id, label: `${data.ideaTopics[i.topicId]?.name ?? ''} › ${i.title}` }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')), [data, viewer, id])
   const links = useMemo(() => linksOf(data, viewer, id), [data, viewer, id])
   const areas = useMemo(
     () => Object.values(data.ideaAreas).filter((a) => a.ownerId === viewer && !a.hidden).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -152,8 +156,23 @@ export function IdeaSheet({ id, onDone }: { id: string; onDone: () => void }) {
                 <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap text-ink">{n.text}</p>
                 <p className="mt-1 flex items-center gap-2 text-[13px] text-muted">
                   <span className="font-data">{shortDateTime(n.createdAt)}</span>
-                  {n.needsReview ? <span className="inline-flex items-center gap-1 font-semibold text-warn"><CircleDashed size={14} aria-hidden />Conferir</span> : null}
+                  {n.needsReview ? <span className="inline-flex items-center gap-1 font-semibold text-warn"><CircleDashed size={14} aria-hidden />A IA teve dúvida</span> : null}
                 </p>
+                {otherIdeas.length ? (
+                  <>
+                    <label htmlFor={`${uid}-move-${n.id}`} className="sr-only">Mover esta anotação para outra ideia</label>
+                    <select
+                      id={`${uid}-move-${n.id}`}
+                      value=""
+                      onChange={(e) => { if (e.target.value) toastResult(moveNote(n.id, e.target.value), 'Anotação movida. A IA aprende com isso.') }}
+                      className="mt-2 min-h-11 w-full rounded-[12px] border border-line bg-bg px-3 text-[15px] text-ink"
+                      data-testid="idea-note-move"
+                    >
+                      <option value="">Mover para outra ideia…</option>
+                      {otherIdeas.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                    </select>
+                  </>
+                ) : null}
               </li>
             ))}
           </ol>

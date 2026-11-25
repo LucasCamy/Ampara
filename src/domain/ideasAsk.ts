@@ -4,7 +4,7 @@
  * aparece como "sem fonte". Perguntar nunca muda nada.
  */
 import { addDays } from './dates'
-import { foldText, type Idea, type IdeaNature, type IdeaNote } from './ideas'
+import { SENSE_MIN, foldText, type Idea, type IdeaNature, type IdeaNote } from './ideas'
 import type { IdeaData } from './ideasView'
 import type { DateKey, PartnerId } from './types'
 
@@ -79,7 +79,16 @@ export interface FoundNote { note: IdeaNote; idea: Idea | null; areaName: string
  * Até 30 anotações da pessoa para a pergunta: palavras em comum (texto, ideia, assunto e área), com os filtros
  * lidos na pergunta. Sem palavra útil, mas com filtro ("minhas preocupações deste mês"), vêm as mais recentes.
  */
-export function searchNotes(data: IdeaData, owner: PartnerId, question: string, today: DateKey, limit: number = ASK_LIMITS.notes): { found: FoundNote[]; filters: AskFilters } {
+/** Anotações (e pensamentos pendentes) da pessoa que a busca considera, com o texto usado para o sentido. */
+export function searchableNotes(data: IdeaData, owner: PartnerId): IdeaNote[] {
+  const pending: IdeaNote[] = Object.values(data.ideaCaptures)
+    .filter((c) => c.ownerId === owner && c.status === 'PENDENTE')
+    .map((c) => ({ id: c.id, ownerId: c.ownerId, captureId: c.id, ideaId: null, text: c.text, startPos: null, endPos: null, needsReview: false, inboxReason: null, createdAt: c.createdAt, updatedAt: c.updatedAt }))
+  return [...Object.values(data.ideaNotes).filter((n) => n.ownerId === owner), ...pending]
+}
+
+/** Busca local: palavras da mesma família e, com a IA local, o sentido de cada anotação (ADR-0012). */
+export function searchNotes(data: IdeaData, owner: PartnerId, question: string, today: DateKey, limit: number = ASK_LIMITS.notes, sense?: ReadonlyMap<string, number> | null): { found: FoundNote[]; filters: AskFilters } {
   const filters = filtersFromQuestion(question, data, owner, today)
   const areaNames = filters.areaIds.map((id) => foldText(data.ideaAreas[id]?.name ?? '').replace(/[^a-z0-9 ]/g, '')).filter(Boolean)
   const target = [...new Set(words(withoutFilterWords(foldText(question), areaNames)))]
@@ -87,10 +96,7 @@ export function searchNotes(data: IdeaData, owner: PartnerId, question: string, 
   const targetCount = target.length
   const out: FoundNote[] = []
   // pensamentos ainda não organizados também contam ("o que eu já falei" é tudo o que foi solto)
-  const pending: IdeaNote[] = Object.values(data.ideaCaptures)
-    .filter((c) => c.ownerId === owner && c.status === 'PENDENTE')
-    .map((c) => ({ id: c.id, ownerId: c.ownerId, captureId: c.id, ideaId: null, text: c.text, startPos: null, endPos: null, needsReview: false, inboxReason: null, createdAt: c.createdAt, updatedAt: c.updatedAt }))
-  for (const note of [...Object.values(data.ideaNotes), ...pending]) {
+  for (const note of searchableNotes(data, owner)) {
     if (note.ownerId !== owner) continue
     const idea = note.ideaId ? data.ideas[note.ideaId] ?? null : null
     if (idea && idea.ownerId !== owner) continue
@@ -102,6 +108,8 @@ export function searchNotes(data: IdeaData, owner: PartnerId, question: string, 
     const own = words(`${note.text} ${idea?.title ?? ''} ${idea?.summary ?? ''} ${topic?.name ?? ''} ${area?.name ?? ''}`)
     let score = 0
     for (const w of target) if (own.some((o) => sameFamily(w, o))) score += 1
+    const meaning = sense?.get(note.id) ?? 0
+    if (meaning >= SENSE_MIN) score += 2 + 10 * (meaning - SENSE_MIN)
     if (score === 0 && !(hasFilter && targetCount === 0)) continue
     out.push({ note, idea, areaName: area?.name ?? null, score })
   }

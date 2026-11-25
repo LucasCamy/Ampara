@@ -192,11 +192,15 @@ test('com a IA do PC: soltar organiza sozinho, mostra onde ficou e Desfazer volt
   })
   await open(page)
   await goTab(page, 'ideias')
-  await expect(page.getByTestId('idea-capture')).toContainText('A IA organiza em seguida')
+  await expect(page.getByTestId('idea-capture')).toContainText('a IA organiza por trás')
   await page.getByTestId('idea-capture-input').fill('quero aprender inglês')
   await page.getByTestId('idea-capture-save').click()
-  await expect(page.getByTestId('idea-organizing')).toBeVisible()
+  // não espera: o campo fica livre na hora e a IA organiza por trás
+  await expect(page.getByTestId('idea-capture-input')).toHaveValue('')
+  await expect(page.getByTestId('idea-saved')).toHaveText(/Guardado/)
+  await expect(page.getByTestId('idea-organizing')).toContainText('1 organizando por trás')
   await expect(page.getByText('Organizei em Estudos › Idiomas.')).toBeVisible()
+  await expect(page.getByTestId('idea-organizing')).not.toContainText('organizando por trás')
   await page.getByTestId('ideas-view-esboco').click()
   await expect(page.getByTestId('ideas-outline').getByRole('button', { name: /Aprender inglês/ })).toBeVisible()
   // Desfazer: a ideia some e o pensamento volta para a Caixa, pronto para organizar de novo

@@ -3,11 +3,15 @@
  * validador e só então grava (applyOrganization). Qualquer falha deixa a captura na Caixa de entrada.
  */
 import { currentProvider, type AiProvider } from '../ai/provider'
-import { ORGANIZER_SCHEMA, ORGANIZER_SYSTEM, ORGANIZER_VERSION, buildOrganizerInput, selectCandidates } from '../domain/ideasPrompt'
+import { ORGANIZER_SCHEMA, ORGANIZER_SYSTEM, ORGANIZER_VERSION, buildOrganizerInput, ideaSenseText, pickExamples, selectCandidates } from '../domain/ideasPrompt'
+import { SENSE_MIN, SEQUENCE_WINDOW_MS, type IdeaCapture } from '../domain/ideas'
+import { senseScores } from '../ai/sense'
+import { createStore, useStore } from './createStore'
+import type { DataState, PartnerId } from '../domain/types'
 import { validateOrganization, type ValidationResult } from '../domain/ideasValidate'
 import { CONCRETIZE_SCHEMA, CONCRETIZE_SYSTEM, buildConcretizeInput, defaultDraft, parseProposal, type ActionDraft } from '../domain/ideasConcretize'
 import type { DateKey } from '../domain/types'
-import { ASK_SCHEMA, ASK_SYSTEM, buildAskInput, checkAnswer, searchNotes, type AskFilters, type CheckedAnswer, type FoundNote } from '../domain/ideasAsk'
+import { ASK_SCHEMA, ASK_SYSTEM, buildAskInput, checkAnswer, searchNotes, searchableNotes, type AskFilters, type CheckedAnswer, type FoundNote } from '../domain/ideasAsk'
 import { dataStore } from './data'
 import { applyOrganization, myIdeaMap } from './ideaActions'
 import { uiStore } from './ui'
@@ -41,8 +45,12 @@ export async function organizeWithAi(captureId: string, provider: AiProvider | n
   try {
     const map = myIdeaMap(start, owner)
     const notes = Object.values(start.ideaNotes).filter((n) => n.ownerId === owner)
-    const candidates = selectCandidates(map, notes, capture.text)
-    const request = { system: ORGANIZER_SYSTEM, schema: ORGANIZER_SCHEMA, input: buildOrganizerInput(capture.text, { ...map, ideas: candidates }, candidates) }
+    // sentido (ADR-0012): ideias e anotações parecidas com a captura; sem IA local, só palavras
+    const sense = await senseFor(start, owner, capture.text)
+    const candidates = selectCandidates(map, notes, capture.text, undefined, sense)
+    const exemplos = pickExamples(notes, keptByPerson(start, owner), sense, new Set(candidates.map((c) => c.id)))
+    const contextoAnterior = sequenceBefore(start, capture).map((c) => c.text)
+    const request = { system: ORGANIZER_SYSTEM, schema: ORGANIZER_SCHEMA, input: buildOrganizerInput(capture.text, { ...map, ideas: candidates }, candidates, { contextoAnterior, exemplos }) }
     let response = await provider.runStructured(request)
     // valida contra o mapa ATUAL (a pessoa pode ter mexido enquanto a IA pensava)
     if (uiStore.get().viewer !== owner) throw new Error('A pessoa usando o app mudou. Nada foi gravado.')
@@ -72,6 +80,75 @@ export async function organizeWithAi(captureId: string, provider: AiProvider | n
   }
 }
 
+/** Sentido da captura contra as ideias e anotações da pessoa (ids das duas listas não se cruzam). */
+async function senseFor(state: DataState, owner: PartnerId, text: string): Promise<Map<string, number> | null> {
+  const notes = Object.values(state.ideaNotes).filter((n) => n.ownerId === owner && n.ideaId)
+  const ideas = Object.values(state.ideas).filter((i) => i.ownerId === owner)
+  const items = [
+    ...ideas.map((i) => ({ id: i.id, text: ideaSenseText(i, notes) })),
+    ...notes.map((n) => ({ id: n.id, text: n.text })),
+  ]
+  return senseScores(text, items).catch(() => null)
+}
+
+/** Capturas que a própria pessoa organizou (sem registro da IA valendo): são o "jeito dela". */
+function keptByPerson(state: DataState, owner: PartnerId): Set<string> {
+  const byAi = new Set(Object.values(state.ideaAiLog).filter((l) => l.ownerId === owner && !l.undone).map((l) => l.captureId))
+  return new Set(Object.values(state.ideaCaptures).filter((c) => c.ownerId === owner && c.status === 'ORGANIZADA' && !byAi.has(c.id)).map((c) => c.id))
+}
+
+/** Pensamentos soltos logo antes deste, em sequência (até 3 min entre um e outro). */
+export function sequenceBefore(state: Pick<DataState, 'ideaCaptures'>, capture: IdeaCapture): IdeaCapture[] {
+  const mine = Object.values(state.ideaCaptures)
+    .filter((c) => c.ownerId === capture.ownerId && c.id !== capture.id && c.createdAt <= capture.createdAt)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+  const out: IdeaCapture[] = []
+  let last = Date.parse(capture.createdAt)
+  for (const c of mine) {
+    const t = Date.parse(c.createdAt)
+    if (last - t > SEQUENCE_WINDOW_MS || out.length >= 3) break
+    out.push(c)
+    last = t
+  }
+  return out.reverse()
+}
+
+/** Palpite rápido pelo sentido, antes da IA grande: "Saúde › Corrida". null sem IA local ou sem nada parecido. */
+export async function guessPlace(text: string): Promise<string | null> {
+  const owner = uiStore.get().viewer
+  const state = dataStore.get()
+  const ideas = Object.values(state.ideas).filter((i) => i.ownerId === owner)
+  if (!ideas.length) return null
+  const notes = Object.values(state.ideaNotes).filter((n) => n.ownerId === owner && n.ideaId)
+  const sense = await senseScores(text, ideas.map((i) => ({ id: i.id, text: ideaSenseText(i, notes) }))).catch(() => null)
+  if (!sense) return null
+  let best: { id: string; s: number } | null = null
+  for (const [id, s] of sense) if (!best || s > best.s) best = { id, s }
+  if (!best || best.s < SENSE_MIN + 0.05) return null
+  const topic = state.ideaTopics[state.ideas[best.id]!.topicId]
+  const area = topic ? state.ideaAreas[topic.areaId] : undefined
+  return area && topic ? `${area.name} › ${topic.name}` : null
+}
+
+/* ------------------------------------------------ fila por trás (ADR-0012): um por vez, sem a pessoa esperar */
+
+export const organizerStore = createStore({ waiting: 0 })
+export const useOrganizerWaiting = () => useStore(organizerStore, (s) => s.waiting)
+const queued = new Set<string>()
+let chain: Promise<unknown> = Promise.resolve()
+
+/** Põe a captura na fila. A placa atende um pedido por vez, então a fila também. */
+export function queueOrganize(captureId: string, provider: AiProvider | null = currentProvider()): Promise<AiOrganizeResult> {
+  queued.add(captureId)
+  organizerStore.set((s) => ({ waiting: s.waiting + 1 }))
+  const job = chain.then(() => organizeWithAi(captureId, provider))
+  chain = job.catch(() => undefined)
+  return job.finally(() => {
+    queued.delete(captureId)
+    organizerStore.set((s) => ({ waiting: Math.max(0, s.waiting - 1) }))
+  })
+}
+
 /**
  * Pensamentos que esperam porque nenhuma IA respondeu (PC desligado, sem internet): organiza sozinho quando uma IA
  * volta. Só pega o que a IA nunca organizou (nada desfeito pela pessoa), do mais antigo para o mais novo, e para no
@@ -83,14 +160,14 @@ export async function organizePending(provider: AiProvider | null = currentProvi
   const state = dataStore.get()
   const touched = new Set(Object.values(state.ideaAiLog).map((l) => l.captureId))
   const waiting = Object.values(state.ideaCaptures)
-    .filter((c) => c.ownerId === owner && c.status === 'PENDENTE' && !touched.has(c.id) && !pending.has(c.id))
+    .filter((c) => c.ownerId === owner && c.status === 'PENDENTE' && !touched.has(c.id) && !pending.has(c.id) && !queued.has(c.id))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .slice(0, max)
   let done = 0
   for (const c of waiting) {
     if (uiStore.get().viewer !== owner) break
     try {
-      await organizeWithAi(c.id, provider)
+      await queueOrganize(c.id, provider)
       done++
     } catch {
       break
@@ -138,7 +215,9 @@ export async function askIdeas(question: string, today: DateKey, provider: AiPro
   if (!q) throw new Error('Escreva o que você quer saber.')
   const owner = uiStore.get().viewer
   const state = dataStore.get()
-  const { found, filters } = searchNotes(state, owner, q, today)
+  // sentido (ADR-0012): acha "fui correr" quando a pergunta é sobre exercício; sem IA local, só palavras
+  const sense = provider ? await senseScores(q, searchableNotes(state, owner).map((n) => ({ id: n.id, text: n.text }))).catch(() => null) : null
+  const { found, filters } = searchNotes(state, owner, q, today, undefined, sense)
   if (!provider || !found.length) return { found, filters, answer: null }
   const r = await provider.runStructured({ system: ASK_SYSTEM, schema: ASK_SCHEMA, input: buildAskInput(q, found, today) })
   return { found, filters, answer: checkAnswer(r.json, new Set(found.map((f) => f.note.id))) }

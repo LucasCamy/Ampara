@@ -21,6 +21,11 @@ for ($i = 0; $i -lt 60; $i++) {
 Write-Log "Carregando o modelo $($config.model)..."
 # --gpu max: o modelo inteiro na placa; --parallel 1: uma conversa por vez (menos memória, nada vai para a RAM)
 & $lms load $config.model --identifier ampara --gpu max --context-length $config.context --parallel $config.parallel -y *>> $log
+# modelo de sentido (ADR-0012): pequeno (~230 MB), carregado junto para o LM Studio não trocar um pelo outro
+if ($config.senseModel) {
+  Write-Log "Carregando o modelo de sentido $($config.senseModel)..."
+  & $lms load $config.senseModel --identifier ampara-sentido --gpu max -y *>> $log
+}
 
 $env:AMPARA_AI_PORT = '1235'
 $env:LMSTUDIO_URL = 'http://127.0.0.1:1234'

@@ -2,6 +2,7 @@
   "model": "google/gemma-4-e4b",
   "context": 8192,
   "parallel": 1,
+  "senseModel": "google/embedding-gemma-300m",
   "origins": [
     "https://ampara.cloudlane.com.br",
     "app://ampara"

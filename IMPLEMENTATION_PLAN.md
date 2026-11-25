@@ -649,3 +649,8 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
   com verificação rápida da IA local. Pensamentos que nenhuma IA pegou são organizados sozinhos quando uma IA
   volta (ao abrir, `online`, ao voltar para o app e a cada 5 min). Validação: 631 testes, `e2e:quick` com o
   cenário novo "IA fora do ar".
+- **Feito (2026-11-25), cérebro por trás (ADR-0012):** EmbeddingGemma 300M local como `ampara-sentido`, sentido
+  na escolha das candidatas e no "Perguntar"; soltar não espera (palpite rápido + fila um por vez); pensamentos em
+  sequência como contexto; exemplos tirados do mapa da pessoa; "Mover para outra ideia". Validação: 642 testes,
+  E2E de Ideias, bateria do Gemma (prompt sem mudança). **Pendente:** a pessoa reinstalar a tarefa da IA local
+  (carrega o modelo de sentido) e medir exemplos e contexto com Gemini e Claude.
