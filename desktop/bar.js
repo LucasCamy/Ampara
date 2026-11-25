@@ -25,7 +25,7 @@ function setChat(on) {
   chatMode = on
   document.body.classList.toggle('chat', on)
   modeBtn.setAttribute('aria-pressed', String(on))
-  const text = on ? 'Pergunte ou pense em voz alta…' : 'O que está na sua cabeça?'
+  const text = !on ? 'O que está na sua cabeça?' : view.kind === 'chat' && view.conversationId ? 'Continue a conversa…' : 'Pergunte ou pense em voz alta…'
   input.placeholder = text
   label.textContent = text
   if (!on && view.kind === 'chat') view = { kind: 'clear' }
@@ -138,6 +138,9 @@ document.getElementById('full').addEventListener('click', () => window.bar.openF
 window.bar.onFocus(() => { input.focus(); input.select(); fit() })
 window.bar.onView((v) => {
   view = v && typeof v === 'object' ? v : { kind: 'clear' }
-  if (view.kind === 'chat' && !chatMode) setChat(true)
-  else render()
+  // conversa aberta (da lista ou depois de responder): o cursor volta ao campo para continuar
+  if (view.kind === 'chat') {
+    setChat(true)
+    if (document.activeElement !== input) input.focus()
+  } else render()
 })
