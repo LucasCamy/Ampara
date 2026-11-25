@@ -7,7 +7,7 @@ import { AuthError } from '../../auth/vault'
 import { ui } from '../../store/ui'
 import { Field } from './CloudSection'
 
-function GeminiSettings() {
+function GeminiSettings({ reserve = false }: { reserve?: boolean }) {
   const ready = useAuth((s) => s.geminiReady)
   const saved = useAuth((s) => !!s.who && !!s.people?.[s.who].gemini)
   const [apiKey, setApiKey] = useState('')
@@ -50,9 +50,10 @@ function GeminiSettings() {
 
   return (
     <form onSubmit={submit} className="mt-4 flex flex-col gap-3 border-t border-line pt-4" aria-label="Configurar Gemini" noValidate>
+      {reserve ? <p className="text-[14px] font-semibold text-ink">Reserva para quando o PC estiver desligado (opcional).</p> : null}
       <p className="text-[14px] text-muted">
-        Com o Gemini selecionado, o Ampara envia novas capturas e o contexto necessário das suas ideias ao Google quando usa a IA.
-        No plano gratuito, use dados fictícios ou conteúdo sem informações pessoais, sensíveis ou confidenciais.
+        Com o Gemini ligado, o Ampara envia novas capturas e o contexto necessário das suas ideias ao Google quando usa a IA.
+        No plano gratuito, o Google pode usar esse conteúdo. Para pensamentos reais, use uma chave paga.
       </p>
       <p className="text-[14px] text-muted">
         Sua chave fica no seu cofre neste aparelho. A cota e o faturamento dependem do projeto da chave.
@@ -99,7 +100,7 @@ export function AiSection() {
   useEffect(check, [])
 
   const options: { value: AiChoice; label: string; hint: string; testId: string }[] = [
-    { value: 'auto', label: 'Automático', hint: 'IA local quando houver; senão, Claude no PC.', testId: 'ai-auto' },
+    { value: 'auto', label: 'Automático', hint: 'IA local primeiro. Se o PC não responder, Gemini (com chave) e depois Claude no PC.', testId: 'ai-auto' },
     ...(LOCAL_AI_URL ? [{ value: 'local' as const, label: 'IA local (grátis)', hint: 'Roda no seu PC. Mais lenta.', testId: 'ai-local' }] : []),
     ...(hasClaude ? [{ value: 'claude' as const, label: 'Claude (assinatura)', hint: 'Só no app do PC. Mais rápido.', testId: 'ai-claude' }] : []),
     { value: 'gemini', label: 'Gemini 3.1 Flash-Lite', hint: 'Usa sua chave do Google e precisa de internet.', testId: 'ai-gemini' },
@@ -137,7 +138,7 @@ export function AiSection() {
         options={options.map((o) => ({ value: o.value, label: o.label, hint: o.hint, testId: o.testId, icon: o.value === 'off' ? SquareX : o.value === 'auto' ? CircleDashed : CircleCheck }))}
         cols={1}
       />
-      {choice === 'gemini' ? <GeminiSettings /> : null}
+      {choice === 'gemini' || choice === 'auto' ? <GeminiSettings reserve={choice === 'auto'} /> : null}
     </section>
   )
 }

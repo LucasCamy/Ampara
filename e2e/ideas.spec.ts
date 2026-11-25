@@ -192,7 +192,7 @@ test('com a IA do PC: soltar organiza sozinho, mostra onde ficou e Desfazer volt
   })
   await open(page)
   await goTab(page, 'ideias')
-  await expect(page.getByTestId('idea-capture')).toContainText('A IA do PC organiza')
+  await expect(page.getByTestId('idea-capture')).toContainText('A IA organiza em seguida')
   await page.getByTestId('idea-capture-input').fill('quero aprender inglês')
   await page.getByTestId('idea-capture-save').click()
   await expect(page.getByTestId('idea-organizing')).toBeVisible()
@@ -206,6 +206,44 @@ test('com a IA do PC: soltar organiza sozinho, mostra onde ficou e Desfazer volt
   await expect(page.getByTestId('inbox-organize-ai')).toBeVisible()
   await page.getByTestId('inbox-organize-ai').click()
   await expect(page.getByText('Organizei em Estudos › Idiomas.')).toBeVisible()
+})
+
+test('IA fora do ar: o pensamento fica guardado e é organizado sozinho quando a IA volta', async ({ page, errors }) => {
+  void errors
+  await at(page, '10:00')
+  await page.addInitScript(() => {
+    const op = (o: Record<string, unknown>) => ({ tipo: null, trecho: null, ideia_id: null, assunto_id: null, assunto_ref: null, ref: null, area_id: null, nome: null, titulo: null, natureza: null, motivo: null, de_ideia: null, para_ideia: null, tipo_ligacao: null, resumo: null, estado: null, confianca: null, ...o })
+    const w = window as unknown as { amparaDesktop: unknown; aiDown: boolean }
+    w.aiDown = true
+    w.amparaDesktop = {
+      version: 'teste',
+      status: async () => ({ claude: true, model: 'modelo-teste' }),
+      runStructured: async (req: { input: string }) => {
+        if (w.aiDown) throw new Error('A IA não respondeu.')
+        const { captura } = JSON.parse(req.input) as { captura: string }
+        return {
+          model: 'modelo-teste',
+          json: { versao: 'organizador@1', operacoes: [
+            op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:lazer', nome: 'Jardinagem' }),
+            op({ tipo: 'CRIAR_IDEIA', trecho: captura, assunto_ref: 's', titulo: 'Plantar suculentas', natureza: 'PLANO', confianca: 0.9 }),
+          ] },
+        }
+      },
+    }
+  })
+  await open(page)
+  await goTab(page, 'ideias')
+  await page.getByTestId('idea-capture-input').fill('quero plantar suculentas na janela')
+  await page.getByTestId('idea-capture-save').click()
+  await expect(page.getByText('Está guardado, e eu organizo quando a IA voltar.')).toBeVisible()
+  // a IA volta (PC ligado, internet de volta): o app tenta de novo sozinho
+  await page.evaluate(() => {
+    (window as unknown as { aiDown: boolean }).aiDown = false
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect(page.getByText('Organizei 1 pensamento que estava esperando.')).toBeVisible()
+  await page.getByTestId('ideas-view-esboco').click()
+  await expect(page.getByTestId('ideas-outline').getByRole('button', { name: /Plantar suculentas/ })).toBeVisible()
 })
 
 test('isso vai acontecer: a ideia vira tarefa com micro-passo, fica ligada e a tarefa mostra a origem', async ({ page, errors }, info) => {

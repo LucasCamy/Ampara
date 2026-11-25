@@ -146,19 +146,71 @@ function claudeProvider(bridge: AmparaDesktopBridge): AiProvider {
 }
 
 /**
+ * Tenta cada IA na ordem. Uma IA que não responde (PC desligado, sem internet, cota acabada) passa a vez para a
+ * próxima. A resposta em si não é julgada aqui: quem confere é o validador.
+ */
+export interface ChainStep {
+  provider: AiProvider
+  /** Pergunta rápida antes de chamar (evita esperar o tempo-limite inteiro da IA local com o PC desligado) */
+  ready?: () => Promise<boolean>
+}
+export function fallbackProvider(steps: ChainStep[]): AiProvider | null {
+  if (!steps.length) return null
+  if (steps.length === 1) return steps[0]!.provider
+  return {
+    id: 'automatico',
+    label: steps.map((s) => s.provider.label).join(', depois '),
+    async runStructured(req) {
+      let last: unknown = null
+      for (const [i, step] of steps.entries()) {
+        const isLast = i === steps.length - 1
+        if (!isLast && step.ready && !(await step.ready().catch(() => false))) continue
+        try {
+          return await step.provider.runStructured(req)
+        } catch (e) {
+          last = e
+        }
+      }
+      throw last instanceof Error ? last : new Error('Nenhuma IA respondeu. O pensamento ficou guardado.')
+    },
+  }
+}
+
+/** Resposta da IA local vale por 1 min: várias chamadas seguidas não perguntam de novo. */
+let localCheck: { at: number; ok: boolean } | null = null
+export function localReady(url = LOCAL_AI_URL, now = () => Date.now()): () => Promise<boolean> {
+  return async () => {
+    if (localCheck && now() - localCheck.at < 60_000) return localCheck.ok
+    const { ok } = await localAiStatus(url)
+    localCheck = { at: now(), ok }
+    return ok
+  }
+}
+export function resetLocalCheck() { localCheck = null }
+
+function geminiForChoice(allowed: AiChoice[]): AiProvider | null {
+  const { who, geminiReady } = authStore.get()
+  if (!who || !geminiReady) return null
+  return geminiProvider(() => authStore.get().who === who && allowed.includes(aiChoice()) ? readGeminiSecret() : Promise.resolve(null))
+}
+
+/**
  * O provedor deste aparelho, ou null (sem IA: organizar à mão).
- * Automático: IA local quando configurada (grátis, PC e celular); senão, Claude pela assinatura no app do PC.
+ * Automático: IA local (grátis, PC e celular); se ela não responder, o Gemini (se a pessoa guardou a chave);
+ * por último, o Claude pela assinatura no app do PC.
  */
 export function currentProvider(choice: AiChoice = aiChoice()): AiProvider | null {
   if (choice === 'off') return null
-  if (choice === 'gemini') {
-    const { who, geminiReady } = authStore.get()
-    if (!who || !geminiReady) return null
-    return geminiProvider(() => authStore.get().who === who && aiChoice() === 'gemini' ? readGeminiSecret() : Promise.resolve(null))
-  }
+  if (choice === 'gemini') return geminiForChoice(['gemini'])
   const bridge = desktopBridge()
   const local = localProvider()
-  if (choice === 'claude') return bridge ? claudeProvider(bridge) : local
-  if (choice === 'local') return local ?? (bridge ? claudeProvider(bridge) : null)
-  return local ?? (bridge ? claudeProvider(bridge) : null)
+  const claude = bridge ? claudeProvider(bridge) : null
+  if (choice === 'claude') return claude ?? local
+  if (choice === 'local') return local ?? claude
+  const gemini = geminiForChoice(['auto'])
+  const steps: ChainStep[] = []
+  if (local) steps.push({ provider: local, ready: localReady() })
+  if (gemini) steps.push({ provider: gemini })
+  if (claude) steps.push({ provider: claude })
+  return fallbackProvider(steps)
 }

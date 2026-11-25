@@ -645,3 +645,7 @@ Screenshots ficam em `test-results/screens/<projeto>/` após `npm run e2e` (fora
 - **Feito (2026-11-23), validador:** o mesmo id de assunto existente repetido em `assunto_id` e `assunto_ref`
   passa a valer como `assunto_id`. Na mesma bateria, o Gemma local foi de 10, 9 e 11 para 11, 10 e 10 trechos de 13.
   As duas regras de corte sugeridas para o prompt pioraram o Gemma (10, 8 e 7) e ficaram de fora.
+- **Feito (2026-11-25), IA com reserva (ADR-0011):** Automático tenta IA local → Gemini (com chave) → Claude no PC,
+  com verificação rápida da IA local. Pensamentos que nenhuma IA pegou são organizados sozinhos quando uma IA
+  volta (ao abrir, `online`, ao voltar para o app e a cada 5 min). Validação: 631 testes, `e2e:quick` com o
+  cenário novo "IA fora do ar".

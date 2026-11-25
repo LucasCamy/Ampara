@@ -18,6 +18,8 @@ import { materializeRecurrences } from './store/financeActions'
 import { useAlertWatch } from './features/alerts/watch'
 import { desktopBridge } from './ai/provider'
 import { CompactCapture } from './features/ideas/CompactCapture'
+import { organizePending } from './store/ideaAi'
+import { usePeople } from './store/hooks'
 
 /** Entrar no lugar certo: /?quick=task|expense|med|sos, #/aba, ou o destino de uma notificação que esperou o login */
 function useQuickLaunch() {
@@ -116,6 +118,38 @@ function useDesktopShortcut() {
   }, [])
 }
 
+/**
+ * Pensamentos que esperam por uma IA: tenta de novo ao abrir, quando a internet volta, ao voltar para o app e a
+ * cada 5 min. Avisa só quando organizou algo.
+ */
+function usePendingIdeas() {
+  const viewer = useUi((s) => s.viewer)
+  const ideasOn = usePeople().me.enabledModules?.ideas !== false
+  useEffect(() => {
+    if (!ideasOn) return
+    let busy = false
+    const run = () => {
+      if (busy || (typeof navigator !== 'undefined' && navigator.onLine === false)) return
+      busy = true
+      void organizePending()
+        .then((n) => { if (n) ui.toast(n === 1 ? 'Organizei 1 pensamento que estava esperando.' : `Organizei ${n} pensamentos que estavam esperando.`, { tone: 'info' }) })
+        .catch(() => { /* fica para a próxima vez */ })
+        .finally(() => { busy = false })
+    }
+    const visible = () => { if (document.visibilityState === 'visible') run() }
+    const first = window.setTimeout(run, 4000)
+    const every = window.setInterval(run, 5 * 60_000)
+    window.addEventListener('online', run)
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.clearTimeout(first)
+      window.clearInterval(every)
+      window.removeEventListener('online', run)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [viewer, ideasOn])
+}
+
 /** No PC, a bolinha abre a janela como painel compacto: só o campo para soltar. */
 function useDesktopCompact(): boolean {
   const [compact, setCompact] = useState(false)
@@ -135,6 +169,7 @@ function AppShell() {
   usePrefetchTabs()
   useTour()
   useAlertWatch()
+  usePendingIdeas()
   if (compact) {
     return (
       <div data-testid="app">

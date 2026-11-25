@@ -10,8 +10,8 @@ vi.mock('./ui', async () => {
 
 const { dataStore } = await import('./data')
 const { uiStore } = await import('./ui')
-const { captureThought, myIdeaMap, organizeManually } = await import('./ideaActions')
-const { describeAiResult, organizeWithAi } = await import('./ideaAi')
+const { captureThought, myIdeaMap, organizeManually, undoOrganization } = await import('./ideaActions')
+const { describeAiResult, organizePending, organizeWithAi } = await import('./ideaAi')
 
 const iso = '2026-11-23T10:00:00.000Z'
 const values = <T,>(m: Record<string, T>) => Object.values(m)
@@ -115,5 +115,40 @@ describe('organizar com IA', () => {
     const item = ORGANIZER_SCHEMA.properties.operacoes.items
     expect(item.additionalProperties).toBe(false)
     expect([...item.required].sort()).toEqual(Object.keys(item.properties).sort())
+  })
+})
+
+describe('organizar sozinho o que ficou esperando', () => {
+  const answer = (input: string) => {
+    const captura = (JSON.parse(input) as { captura: string }).captura
+    return { versao: ORGANIZER_VERSION, operacoes: [
+      op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:lazer', nome: captura.split(' ').slice(-2).join(' '), motivo: 'novo' }),
+      op({ tipo: 'CRIAR_IDEIA', trecho: captura, assunto_ref: 's', titulo: 'Ideia ' + captura.slice(0, 20), natureza: 'PLANO', confianca: 0.9 }),
+    ] }
+  }
+
+  it('organiza o que nenhuma IA pegou e não mexe no que a pessoa desfez', async () => {
+    const undone = captureThought('aprender a tocar violão')!
+    const r = await organizeWithAi(undone, fakeProvider(answer))
+    undoOrganization(r.logId)
+    expect(dataStore.get().ideaCaptures[undone]!.status).toBe('PENDENTE')
+    const a = captureThought('comprar um teclado usado')!
+    const b = captureThought('montar uma banda com amigos')!
+    const provider = fakeProvider(answer)
+    expect(await organizePending(provider)).toBe(2)
+    expect(provider.calls.map((c) => (JSON.parse(c.input) as { captura: string }).captura)).toEqual(['comprar um teclado usado', 'montar uma banda com amigos'])
+    expect(dataStore.get().ideaCaptures[a]!.status).toBe('ORGANIZADA')
+    expect(dataStore.get().ideaCaptures[b]!.status).toBe('ORGANIZADA')
+    expect(dataStore.get().ideaCaptures[undone]!.status).toBe('PENDENTE')
+  })
+
+  it('IA ainda fora: para no primeiro erro e deixa tudo guardado; sem IA não faz nada', async () => {
+    captureThought('aprender violão')
+    captureThought('comprar um teclado')
+    const broken: AiProvider = { id: 'x', label: 'x', runStructured: vi.fn(async () => { throw new Error('PC desligado') }) }
+    expect(await organizePending(broken)).toBe(0)
+    expect(broken.runStructured).toHaveBeenCalledTimes(1)
+    expect(values(dataStore.get().ideaCaptures).every((c) => c.status === 'PENDENTE')).toBe(true)
+    expect(await organizePending(null)).toBe(0)
   })
 })

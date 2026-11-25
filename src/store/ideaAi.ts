@@ -72,6 +72,33 @@ export async function organizeWithAi(captureId: string, provider: AiProvider | n
   }
 }
 
+/**
+ * Pensamentos que esperam porque nenhuma IA respondeu (PC desligado, sem internet): organiza sozinho quando uma IA
+ * volta. Só pega o que a IA nunca organizou (nada desfeito pela pessoa), do mais antigo para o mais novo, e para no
+ * primeiro erro (a IA ainda está fora). Devolve quantos foram organizados.
+ */
+export async function organizePending(provider: AiProvider | null = currentProvider(), max = 5): Promise<number> {
+  if (!provider) return 0
+  const owner = uiStore.get().viewer
+  const state = dataStore.get()
+  const touched = new Set(Object.values(state.ideaAiLog).map((l) => l.captureId))
+  const waiting = Object.values(state.ideaCaptures)
+    .filter((c) => c.ownerId === owner && c.status === 'PENDENTE' && !touched.has(c.id) && !pending.has(c.id))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .slice(0, max)
+  let done = 0
+  for (const c of waiting) {
+    if (uiStore.get().viewer !== owner) break
+    try {
+      await organizeWithAi(c.id, provider)
+      done++
+    } catch {
+      break
+    }
+  }
+  return done
+}
+
 /** Frase curta para o aviso depois de organizar. */
 export function describeAiResult(r: AiOrganizeResult): string {
   if (!r.places.length) return 'A IA não teve certeza. Ficou na Caixa de entrada para você decidir.'

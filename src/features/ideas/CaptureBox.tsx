@@ -77,7 +77,7 @@ export function CaptureBox() {
       setOrganizing(true)
       organizeWithAi(captureId, provider)
         .then((r) => ui.toast(describeAiResult(r), { undo: () => { undoOrganization(r.logId) }, action: { label: 'Ver', onClick: () => document.querySelector<HTMLButtonElement>('[data-testid="ideas-view-esboco"]')?.click() } }))
-        .catch((e: unknown) => ui.toast(`${e instanceof Error ? e.message : 'A IA não respondeu.'} Ficou na Caixa de entrada.`, { tone: 'warn' }))
+        .catch((e: unknown) => ui.toast(`${e instanceof Error ? e.message : 'A IA não respondeu.'} Está guardado, e eu organizo quando a IA voltar.`, { tone: 'warn' }))
         .finally(() => { if (mounted.current) setOrganizing(false) })
       return
     }
@@ -113,7 +113,7 @@ export function CaptureBox() {
       />
       {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : (
         <p id={`${id}-hint`} className="text-[13px] text-muted">
-          {provider ? 'Fica guardado na hora. A IA do PC organiza em seguida, e você pode desfazer. Nada vira tarefa sozinho.' : 'Fica guardado na hora, só para você. Nada vira tarefa sozinho.'}
+          {provider ? 'Fica guardado na hora. A IA organiza em seguida, e você pode desfazer. Nada vira tarefa sozinho.' : 'Fica guardado na hora, só para você. Nada vira tarefa sozinho.'}
         </p>
       )}
       {organizing ? <p role="status" className="flex items-center gap-2 text-[14px] font-semibold text-ink" data-testid="idea-organizing"><Sparkles size={16} aria-hidden className="text-action" />Organizando com a IA…</p> : null}

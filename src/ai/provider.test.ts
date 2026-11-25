@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LOCAL_AI_MODEL, aiChoice, currentProvider, localProvider, setAiChoice } from './provider'
+import { LOCAL_AI_MODEL, aiChoice, currentProvider, fallbackProvider, localProvider, localReady, resetLocalCheck, setAiChoice } from './provider'
 
 const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
 
@@ -64,5 +64,55 @@ describe('escolha da IA no aparelho', () => {
     expect(currentProvider('auto')?.id).toBe('claude-assinatura')
     expect(currentProvider('claude')?.id).toBe('claude-assinatura')
     expect(currentProvider('off')).toBeNull()
+  })
+})
+
+describe('Automático com reserva', () => {
+  const req = { system: 's', schema: {}, input: 'i' }
+  const ok = (id: string) => ({ id, label: id, runStructured: vi.fn(async () => ({ json: { de: id }, provider: id, model: 'm' })) })
+  const down = (id: string) => ({ id, label: id, runStructured: vi.fn(async () => { throw new Error(id + ' fora') }) })
+
+  it('usa a primeira IA que responde e não chama as outras', async () => {
+    const a = ok('local'), b = ok('gemini')
+    const r = await fallbackProvider([{ provider: a }, { provider: b }])!.runStructured(req)
+    expect(r.provider).toBe('local')
+    expect(b.runStructured).not.toHaveBeenCalled()
+  })
+
+  it('IA que dá erro passa a vez para a próxima', async () => {
+    const a = down('local'), b = ok('gemini')
+    const r = await fallbackProvider([{ provider: a }, { provider: b }])!.runStructured(req)
+    expect(r.provider).toBe('gemini')
+  })
+
+  it('PC desligado: pula a IA local sem esperar o tempo-limite', async () => {
+    const a = ok('local'), b = ok('gemini')
+    const r = await fallbackProvider([{ provider: a, ready: async () => false }, { provider: b }])!.runStructured(req)
+    expect(r.provider).toBe('gemini')
+    expect(a.runStructured).not.toHaveBeenCalled()
+  })
+
+  it('só uma IA: tenta mesmo sem resposta da verificação; todas fora: erro da última', async () => {
+    const a = ok('local')
+    expect(fallbackProvider([{ provider: a, ready: async () => false }])).toBe(a)
+    await expect(fallbackProvider([{ provider: down('local') }, { provider: down('claude') }])!.runStructured(req)).rejects.toThrow('claude fora')
+    expect(fallbackProvider([])).toBeNull()
+  })
+
+  it('a verificação da IA local vale por 1 minuto', async () => {
+    resetLocalCheck()
+    let t = 0
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ id: 'ampara' }] })))
+    vi.stubGlobal('fetch', fetchMock)
+    const ready = localReady('https://pc.exemplo', () => t)
+    expect(await ready()).toBe(true)
+    t = 30_000
+    await ready()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    t = 61_000
+    await ready()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    vi.unstubAllGlobals()
+    resetLocalCheck()
   })
 })
