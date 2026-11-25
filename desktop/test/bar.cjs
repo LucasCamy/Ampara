@@ -120,6 +120,25 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
     await barPage.click('#mode')
     assert.match(await barPage.getAttribute('#text', 'placeholder'), /cabeça/)
 
+    // 6b. texto com dia e hora: a barra oferece marcar; Marcar cria na agenda; Desfazer tira
+    await barPage.fill('#text', 'amanhã tenho dentista às 18h')
+    await barPage.press('#text', 'Enter')
+    await out().getByText('Marcar na agenda?').waitFor()
+    await out().getByText('Dentista', { exact: true }).waitFor()
+    await out().getByText(/18:00 às 19:00/).waitFor()
+    await barPage.screenshot({ path: path.join(OUT, '24-barra-marcar.png') })
+    await out().getByRole('button', { name: 'Marcar', exact: true }).click()
+    await out().getByText(/Marcado na agenda: Dentista/).waitFor()
+    assert.strictEqual(await main.evaluate(() => document.title.length > 0), true)
+    await out().getByRole('button', { name: 'Desfazer' }).click()
+    await out().getByText('Desfeito. Nada ficou na agenda.').waitFor()
+    // "Só guardar como ideia" segue o caminho de sempre
+    await barPage.fill('#text', 'sexta pagar a luz')
+    await barPage.press('#text', 'Enter')
+    await out().getByText('Criar tarefa?').waitFor()
+    await out().getByRole('button', { name: 'Só guardar como ideia' }).click()
+    await out().getByText('Guardado na Caixa de entrada').waitFor()
+
     // 7. Esc esconde
     await barPage.press('#text', 'Escape')
     await until(async () => !(await get('bar')).visible, 'escondida com Esc')

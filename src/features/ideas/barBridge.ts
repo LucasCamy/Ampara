@@ -8,9 +8,27 @@ import { currentProvider, desktopBridge, type BarAction, type BarView } from '..
 import { CONVERSATION_LIMITS } from '../../domain/ideas'
 import { extractConversation, myConversations, SendError, sendMessage } from '../../store/conversationActions'
 import { dataStore } from '../../store/data'
-import { captureThought, undoOrganization } from '../../store/ideaActions'
-import { describeAiResult, guessPlace, queueOrganize } from '../../store/ideaAi'
+import { captureThought, scheduleFromProposal, undoOrganization } from '../../store/ideaActions'
+import { describeAiResult, guessPlace, proposeSchedule, queueOrganize, type ScheduleOffer } from '../../store/ideaAi'
+import { longDateLabel, toDateKey } from '../../domain/dates'
+import { parseWhen } from '../../domain/whenParse'
 import { useUi } from '../../store/ui'
+
+/** "qui., 26 de nov. · 18:00 às 19:00" ou "até sex., 27 de nov." */
+export function whenLabel(o: ScheduleOffer): string {
+  const p = o.proposal
+  const day = longDateLabel(p.date)
+  return p.kind === 'EVENT' && p.start ? `${day} · ${p.start} às ${p.end}` : `até ${day}`
+}
+
+export function proposalView(o: ScheduleOffer, busy = false): BarView {
+  const p = o.proposal
+  return {
+    kind: 'proposal',
+    busy,
+    proposal: { kind: p.kind, title: p.title, when: whenLabel(o), location: p.location, notes: p.notes, source: o.sourceLabel, conflicts: o.conflicts },
+  }
+}
 
 const when = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })
 
@@ -55,6 +73,9 @@ export function useBarBridge() {
     const show = (v: BarView) => bridge.barView!(v)
     let conversationId: string | null = null
     let busy = false
+    // marcar pela barra (ADR-0014): a proposta espera o clique em "Marcar" ou "Só guardar como ideia"
+    let offer: { text: string; data: ScheduleOffer | null } | null = null
+    let lastUndo: (() => void) | null = null
 
     const chat = async (text: string) => {
       if (busy) return
@@ -75,10 +96,26 @@ export function useBarBridge() {
       }
     }
 
+    const propose = async (text: string) => {
+      const mine = { text, data: null as ScheduleOffer | null }
+      offer = mine
+      show({ kind: 'proposal', busy: true, text: 'Vendo o que você já sabe sobre isso…' })
+      const data = await proposeSchedule(text, toDateKey(new Date())).catch(() => null)
+      if (offer !== mine) return
+      if (!data) {
+        offer = null
+        await release(text, show)
+        return
+      }
+      mine.data = data
+      show(proposalView(data))
+    }
+
     const take = async () => {
       const p = await bridge.takeBarSubmit!()
       if (!p) return
       if (p.mode === 'chat') await chat(p.text)
+      else if (parseWhen(p.text, toDateKey(new Date()))) await propose(p.text)
       else await release(p.text, show)
     }
 
@@ -108,6 +145,24 @@ export function useBarBridge() {
         } catch (e) {
           show(chatView(conversationId, { error: e instanceof Error ? e.message : 'Não consegui extrair.' }))
         }
+      } else if (a.type === 'confirm' && offer?.data) {
+        const o = offer.data
+        offer = null
+        const r = scheduleFromProposal(o.proposal)
+        if (!r.ok) {
+          show({ kind: 'saved', text: r.error })
+          return
+        }
+        lastUndo = r.undo
+        show({ kind: 'saved', text: `${o.proposal.kind === 'EVENT' ? 'Marcado na agenda' : 'Tarefa criada'}: ${o.proposal.title} · ${whenLabel(o)}.`, undo: 'marcar' })
+      } else if (a.type === 'keep' && offer) {
+        const text = offer.text
+        offer = null
+        void release(text, show)
+      } else if (a.type === 'undo' && a.id === 'marcar') {
+        lastUndo?.()
+        lastUndo = null
+        show({ kind: 'saved', text: 'Desfeito. Nada ficou na agenda.' })
       } else if (a.type === 'undo' && a.id) {
         if (undoOrganization(a.id)) show({ kind: 'saved', text: 'Desfeito. O pensamento voltou para a Caixa de entrada.' })
       }

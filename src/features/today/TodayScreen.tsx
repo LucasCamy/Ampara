@@ -369,6 +369,7 @@ function NowCard({ next, overload }: { next: ReturnType<typeof nextAction>; over
               </span>{' '}
               · {minutesUntil > 0 ? `começa em ${minutesUntil} min` : 'acontecendo agora'}
             </p>
+            {event.location ? <p className="mt-1 text-[14px] break-words text-muted">{event.location}</p> : null}
           </div>
         </div>
       </section>

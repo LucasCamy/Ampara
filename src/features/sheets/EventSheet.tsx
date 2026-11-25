@@ -31,6 +31,8 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
       end: '20:00',
       owner: isSolo ? 'ME' : 'US',
       type: 'APPOINTMENT',
+      location: '',
+      notes: '',
     }
   })
   const [errors, setErrors] = useState<ReturnType<typeof validateEvent>>({})
@@ -61,6 +63,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
   return (
     <form id={SHEET_FORM.event} onSubmit={submit} className="flex flex-col gap-5 pt-2" noValidate>
       <TextField label="Título do compromisso" value={form.title} onChange={set('title')} error={errors.title} placeholder="Ex.: Consulta médica" maxLength={80} testId="event-title" autoFocus={!id} />
+      <TextField label="Onde (opcional)" value={form.location ?? ''} onChange={set('location')} error={errors.location} placeholder="Ex.: Rua das Flores, 120" maxLength={200} testId="event-location" />
       <DateField label="Data" value={form.date} onChange={set('date')} error={errors.date} testId="event-date" />
       <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
         <TimeField label="Início" value={form.start} onChange={setStart} error={errors.start} testId="event-start" shortcuts={START_SHORTCUTS} />
@@ -101,6 +104,7 @@ export function EventSheet({ params, onDone }: { params: Record<string, string>;
         ]}
       />
       {id ? <DeleteButton label="Excluir compromisso" testId="event-delete" onClick={() => deleteEvent(id) && onDone()} /> : null}
+      <TextField label="Observação (opcional)" value={form.notes ?? ''} onChange={set('notes')} error={errors.notes} placeholder="Ex.: levar a carteirinha" maxLength={1000} testId="event-notes" />
     </form>
   )
 }

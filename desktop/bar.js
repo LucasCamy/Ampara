@@ -104,6 +104,21 @@ function render() {
     const row = el('div', 'row')
     row.append(button('Nova conversa', () => { setChat(true); window.bar.action('new') }))
     out.append(row)
+  } else if (v.kind === 'proposal') {
+    const p = v.proposal
+    if (v.busy || !p) out.append(el('p', 'status', v.text || 'Vendo o que você já sabe sobre isso…'))
+    else {
+      out.append(el('p', 'who', p.kind === 'EVENT' ? 'Marcar na agenda?' : 'Criar tarefa?'))
+      out.append(el('p', 'title', p.title))
+      out.append(el('p', 'status', p.when))
+      if (p.location) out.append(el('p', 'status', p.location))
+      if (p.notes) out.append(el('p', 'note', p.notes))
+      if (p.source && (p.location || p.notes)) out.append(el('p', 'note', `Achei nas suas anotações: ${p.source}`))
+      for (const c of p.conflicts || []) out.append(el('p', 'error', `Já tem nesse horário: ${c}`))
+      const row = el('div', 'row')
+      row.append(button(p.kind === 'EVENT' ? 'Marcar' : 'Criar tarefa', () => window.bar.action('confirm'), 'btn main'), button('Só guardar como ideia', () => window.bar.action('keep')))
+      out.append(row)
+    }
   } else if (v.kind === 'locked') {
     out.append(el('p', 'status', v.text || 'Entre no Ampara para continuar. O que você escreveu ficou esperando aqui.'))
     const row = el('div', 'row')

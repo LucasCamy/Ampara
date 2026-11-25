@@ -72,6 +72,9 @@ create table if not exists events (
   owner_id text,
   updated_at timestamptz not null default now()
 );
+-- Local e observação (ADR-0014). Padrão vazio: registros e apps antigos continuam valendo.
+alter table events add column if not exists location text not null default '' check (char_length(location) <= 200);
+alter table events add column if not exists notes text not null default '' check (char_length(notes) <= 1000);
 
 create table if not exists medications (
   id uuid primary key,

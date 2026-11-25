@@ -18,6 +18,9 @@ begin
                       'idea_areas','idea_topics','ideas','idea_captures','idea_notes','idea_links','idea_actions','idea_ai_log','idea_conversations']) t
    where to_regclass('public.' || t) is null;
   assert missing is null, 'FALHOU: tabelas ausentes: ' || coalesce(missing, '');
+  -- local e observação da agenda (ADR-0014)
+  assert (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'events' and column_name in ('location', 'notes')) = 2,
+    'FALHOU: events sem location/notes';
 
   select string_agg(c.relname, ', ') into missing
     from pg_class c join pg_namespace n on n.oid = c.relnamespace

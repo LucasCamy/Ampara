@@ -205,6 +205,8 @@ function EventRow({ e }: { e: CalendarEvent }) {
           {e.start} a {e.end}
         </p>
         <p className="text-[15px] font-semibold break-words text-ink">{e.title}</p>
+        {e.location ? <p className="text-[14px] break-words text-muted" data-testid="event-location-text">{e.location}</p> : null}
+        {e.notes ? <p className="text-[14px] break-words whitespace-pre-wrap text-muted">{e.notes}</p> : null}
         <div className="mt-0.5 flex flex-wrap gap-x-3">
           <OwnerTag tone={toneOf(e.ownerId)}>{ownerLabel(e.ownerId, viewer, partner)}</OwnerTag>
           <span className="text-[12px] text-muted">{kind}</span>

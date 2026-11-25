@@ -11,6 +11,7 @@ import { uuid } from '../domain/seed'
 import type { CalendarEvent, DataState, DateKey, PartnerId, Task } from '../domain/types'
 import { MAX_STEPS, dueDateOf, type ActionDraft } from '../domain/ideasConcretize'
 import { buildEvent, validateEvent, type EventInput } from '../domain/catalog'
+import type { ScheduleProposal } from '../domain/ideasSchedule'
 import { dataStore, transact, type Tx } from './data'
 import { uiStore } from './ui'
 
@@ -483,6 +484,48 @@ export function concretizeIdea(ideaId: string, draft: ActionDraft, today: DateKe
     const action: IdeaAction = { id: uuid(), ownerId: owner, ideaId, targetType: target.type, targetId, createdAt: iso, updatedAt: iso }
     tx.put('ideaActions', action)
     tx.put('ideas', { ...idea, state: 'VIROU_ACAO', updatedAt: iso })
+  })
+  return { ok: true, undo, targetId }
+}
+
+/**
+ * Marcar pela barra (ADR-0014): cria o compromisso ou a tarefa que a pessoa confirmou com um clique. Se algum campo
+ * veio de uma anotação, registra a ação na ideia dela (sem mudar o estado da ideia). Tudo com Desfazer.
+ */
+export function scheduleFromProposal(p: ScheduleProposal): ActionResult & { targetId?: string } {
+  const owner = viewer()
+  const s = dataStore.get()
+  const title = p.title.replace(/\s+/g, ' ').trim()
+  if (!title) return fail('Escreva o que é.')
+  const iso = nowIso()
+  let target: { type: 'TASK'; task: Task } | { type: 'EVENT'; event: CalendarEvent }
+  if (p.kind === 'EVENT' && p.start && p.end) {
+    const input: EventInput = { title, date: p.date, start: p.start, end: p.end, owner: 'ME', type: 'APPOINTMENT', location: p.location, notes: p.notes }
+    const first = Object.values(validateEvent(input)).find(Boolean)
+    if (first) return fail(first)
+    target = { type: 'EVENT', event: buildEvent(input, owner, uuid(), iso) }
+  } else {
+    target = {
+      type: 'TASK',
+      task: {
+        id: uuid(), createdBy: owner, assignedTo: owner, title: title.slice(0, 120), effort: 'QUICK_5M', status: 'PENDING',
+        dueDate: p.date, dueTime: null, visibleToPartner: false, sentBy: null,
+        completedAt: null, completedBy: null, sourceMedicationId: null,
+        steps: p.notes ? [{ id: uuid(), text: p.notes.slice(0, 120), done: false }] : [],
+        postponeCount: 0, createdAt: iso, updatedAt: iso,
+      },
+    }
+  }
+  const targetId = target.type === 'TASK' ? target.task.id : target.event.id
+  const sourceNote = [p.sources.location, p.sources.title, p.sources.notes].map((id) => (id ? s.ideaNotes[id] : undefined)).find((n) => n?.ideaId && n.ownerId === owner)
+  const idea = sourceNote?.ideaId ? s.ideas[sourceNote.ideaId] : undefined
+  const undo = transactFresh((tx) => {
+    if (target.type === 'TASK') tx.put('tasks', target.task)
+    else tx.put('events', target.event)
+    if (idea && idea.ownerId === owner) {
+      const action: IdeaAction = { id: uuid(), ownerId: owner, ideaId: idea.id, targetType: target.type, targetId, createdAt: iso, updatedAt: iso }
+      tx.put('ideaActions', action)
+    }
   })
   return { ok: true, undo, targetId }
 }

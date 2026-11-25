@@ -10,8 +10,8 @@ vi.mock('./ui', async () => {
 
 const { dataStore } = await import('./data')
 const { uiStore } = await import('./ui')
-const { captureThought, myIdeaMap, moveNote, organizeManually, undoOrganization } = await import('./ideaActions')
-const { describeAiResult, organizePending, organizeWithAi, queueOrganize, sequenceBefore } = await import('./ideaAi')
+const { captureThought, myIdeaMap, moveNote, organizeManually, scheduleFromProposal, undoOrganization } = await import('./ideaActions')
+const { describeAiResult, organizePending, organizeWithAi, proposeSchedule, queueOrganize, sequenceBefore } = await import('./ideaAi')
 
 const iso = '2026-11-23T10:00:00.000Z'
 const values = <T,>(m: Record<string, T>) => Object.values(m)
@@ -210,5 +210,49 @@ describe('fila por trás e sequência (ADR-0012)', () => {
     if (r.ok) r.undo?.()
     expect(dataStore.get().ideaNotes[note.id]!.ideaId).toBe(note.ideaId)
     expect(moveNote('nada', target).ok).toBe(false)
+  })
+})
+
+describe('marcar pela barra (ADR-0014)', () => {
+  const place = (input: string) => {
+    const captura = (JSON.parse(input) as { captura: string }).captura
+    return { versao: ORGANIZER_VERSION, operacoes: [
+      op({ tipo: 'CRIAR_ASSUNTO', ref: 's', area_id: 'A:saude', nome: 'Dentista', motivo: 'novo' }),
+      op({ tipo: 'CRIAR_IDEIA', trecho: captura, assunto_ref: 's', titulo: 'Dentista da família', natureza: 'OBSERVACAO', confianca: 0.9 }),
+    ] }
+  }
+
+  it('completa com a anotação, cria o compromisso ligado à ideia e desfaz', async () => {
+    const c = captureThought('minha dentista é a Dra. Paula, fica na Rua das Flores, 120')!
+    await organizeWithAi(c, fakeProvider(place))
+    const provider = fakeProvider((input) => {
+      const { anotacoes } = JSON.parse(input) as { anotacoes: { n: number; texto: string }[] }
+      const n = anotacoes.find((a) => a.texto.includes('Rua das Flores'))!.n
+      return { versao: 'agendar@1', titulo: 'Dentista com Dra. Paula', titulo_fonte: n, local: 'Rua das Flores, 120', local_fonte: n, observacao: null, observacao_fonte: null }
+    })
+    const offer = (await proposeSchedule('amanhã tenho dentista às 18h', '2026-11-25', provider))!
+    expect(offer.proposal).toMatchObject({ kind: 'EVENT', title: 'Dentista com Dra. Paula', location: 'Rua das Flores, 120', date: '2026-11-26', start: '18:00' })
+    expect(offer.sourceLabel).toBe('Dentista › Dentista da família')
+
+    const r = scheduleFromProposal(offer.proposal)
+    expect(r.ok).toBe(true)
+    const ev = dataStore.get().events[(r as { targetId: string }).targetId]!
+    expect(ev).toMatchObject({ title: 'Dentista com Dra. Paula', location: 'Rua das Flores, 120', date: '2026-11-26', start: '18:00', end: '19:00', ownerId: 'A' })
+    const action = values(dataStore.get().ideaActions).find((a) => a.targetId === ev.id)!
+    expect(action.targetType).toBe('EVENT')
+    // a ideia não muda de estado: é informação, não um plano que virou ação
+    expect(dataStore.get().ideas[action.ideaId]!.state).toBe('SOLTA')
+    if (r.ok) r.undo()
+    expect(dataStore.get().events[ev.id]).toBeUndefined()
+  })
+
+  it('sem dia: não é proposta; IA fora do ar: proposta só do código', async () => {
+    expect(await proposeSchedule('quero aprender violão', '2026-11-25')).toBeNull()
+    const broken: AiProvider = { id: 'x', label: 'x', runStructured: async () => { throw new Error('fora') } }
+    const offer = (await proposeSchedule('pagar a luz até sexta', '2026-11-25', broken))!
+    expect(offer.proposal).toMatchObject({ kind: 'TASK', title: 'Pagar a luz', date: '2026-11-27' })
+    const r = scheduleFromProposal(offer.proposal)
+    const task = dataStore.get().tasks[(r as { targetId: string }).targetId]!
+    expect(task).toMatchObject({ title: 'Pagar a luz', dueDate: '2026-11-27', assignedTo: 'A', visibleToPartner: false })
   })
 })

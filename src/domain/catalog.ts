@@ -182,10 +182,18 @@ export interface EventInput {
   end: string
   owner: EventOwner
   type: EventType
+  /** Onde (opcional, ADR-0014) */
+  location?: string
+  /** Observação (opcional, ADR-0014) */
+  notes?: string
 }
 
-export function validateEvent(i: EventInput): Errors<'title' | 'date' | 'start' | 'end'> {
-  const e: Errors<'title' | 'date' | 'start' | 'end'> = {}
+export const EVENT_LIMITS = { location: 200, notes: 1000 } as const
+
+export function validateEvent(i: EventInput): Errors<'title' | 'date' | 'start' | 'end' | 'location' | 'notes'> {
+  const e: Errors<'title' | 'date' | 'start' | 'end' | 'location' | 'notes'> = {}
+  if ((i.location ?? '').trim().length > EVENT_LIMITS.location) e.location = `Use até ${EVENT_LIMITS.location} letras no local.`
+  if ((i.notes ?? '').trim().length > EVENT_LIMITS.notes) e.notes = `Use até ${EVENT_LIMITS.notes} letras na observação.`
   if (!i.title.trim()) e.title = 'Escreva o compromisso (ex.: Consulta médica).'
   if (!isDateKey(i.date)) e.date = 'Escolha uma data válida.'
   if (!isTimeKey(i.start)) e.start = 'Informe o início no formato HH:MM.'
@@ -208,6 +216,8 @@ export function eventToInput(e: CalendarEvent): EventInput {
     end: e.end,
     owner: e.ownerId === null ? 'US' : 'ME',
     type: e.kind === 'HEALTH' ? 'HEALTH' : e.kind === 'BILL' ? 'BILL' : 'APPOINTMENT',
+    location: e.location ?? '',
+    notes: e.notes ?? '',
   }
 }
 
@@ -220,6 +230,8 @@ export function buildEvent(i: EventInput, viewer: PartnerId, id: string, nowIso:
     end: i.end,
     kind: eventKindOf(i.type, i.owner),
     ownerId: i.owner === 'US' ? null : viewer,
+    location: (i.location ?? '').replace(/\s+/g, ' ').trim().slice(0, EVENT_LIMITS.location),
+    notes: (i.notes ?? '').trim().slice(0, EVENT_LIMITS.notes),
     updatedAt: nowIso,
   }
 }

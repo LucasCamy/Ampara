@@ -7,6 +7,8 @@ import { ORGANIZER_SCHEMA, ORGANIZER_SYSTEM, ORGANIZER_VERSION, buildOrganizerIn
 import { SENSE_MIN, SEQUENCE_WINDOW_MS, focusSense, type IdeaCapture } from '../domain/ideas'
 import { senseScores } from '../ai/sense'
 import { createStore, useStore } from './createStore'
+import { SCHEDULE_SCHEMA, SCHEDULE_SYSTEM, baseProposal, buildScheduleInput, overlaps, parseSchedule, type ScheduleNote, type ScheduleProposal } from '../domain/ideasSchedule'
+import { parseWhen } from '../domain/whenParse'
 import type { DataState, PartnerId } from '../domain/types'
 import { validateOrganization, type ValidationResult } from '../domain/ideasValidate'
 import { CONCRETIZE_SCHEMA, CONCRETIZE_SYSTEM, buildConcretizeInput, defaultDraft, parseProposal, type ActionDraft } from '../domain/ideasConcretize'
@@ -228,3 +230,47 @@ export async function askIdeas(question: string, today: DateKey, provider: AiPro
   return { found, filters, answer: checkAnswer(r.json, new Set(found.map((f) => f.note.id))) }
 }
 
+/* ------------------------------------------------ marcar pela barra (ADR-0014) */
+
+export interface ScheduleOffer {
+  proposal: ScheduleProposal
+  /** "09:00 Reunião" do que se cruza com o horário */
+  conflicts: string[]
+  /** "Saúde › Dentista" de onde veio o local (ou o título) */
+  sourceLabel: string | null
+}
+
+/**
+ * Se o texto fala de um dia, monta a proposta: dia e hora pelo código; título, local e observação pela IA com
+ * as anotações parecidas (sentido; sem IA local, palavras). Sem dia: null (segue como pensamento).
+ */
+export async function proposeSchedule(text: string, today: DateKey, provider: AiProvider | null = currentProvider()): Promise<ScheduleOffer | null> {
+  const when = parseWhen(text, today)
+  if (!when) return null
+  const owner = uiStore.get().viewer
+  const state = dataStore.get()
+  // tudo o que a pessoa já soltou conta: anotações nas ideias, na Caixa de entrada e pensamentos ainda não organizados
+  const placed = searchableNotes(state, owner)
+  let notes: ScheduleNote[]
+  const sense = focusSense(await senseScores(text, placed.map((n) => ({ id: n.id, text: n.text }))).catch(() => null))
+  if (sense?.size) {
+    const textOf = new Map(placed.map((n) => [n.id, n.text]))
+    notes = [...sense].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id]) => ({ id, text: textOf.get(id) ?? '' }))
+  } else {
+    notes = searchNotes(state, owner, text, today).found.slice(0, 8).map((f) => ({ id: f.note.id, text: f.note.text }))
+  }
+  let proposal = baseProposal(text, when)
+  if (provider) {
+    try {
+      const r = await provider.runStructured({ system: SCHEDULE_SYSTEM, schema: SCHEDULE_SCHEMA, input: buildScheduleInput(text, today, when, notes) })
+      proposal = parseSchedule(r.json, text, when, notes)
+    } catch {
+      // sem resposta da IA: fica a proposta do código (dia, hora e o texto como título)
+    }
+  }
+  const mine = Object.values(state.events).filter((e) => e.ownerId === null || e.ownerId === owner)
+  const sourceId = proposal.sources.location ?? proposal.sources.title ?? proposal.sources.notes
+  const idea = sourceId ? state.ideas[state.ideaNotes[sourceId]?.ideaId ?? ''] : undefined
+  const topic = idea ? state.ideaTopics[idea.topicId] : undefined
+  return { proposal, conflicts: overlaps(mine, proposal), sourceLabel: idea ? (topic ? `${topic.name} › ${idea.title}` : idea.title) : null }
+}

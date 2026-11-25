@@ -267,7 +267,7 @@ ipcMain.on('bar:submit', (event, text, mode) => {
   if (appReady && win) win.webContents.send('ampara:bar-submit')
   else sendBar(LOCKED)
 })
-const BAR_ACTIONS = new Set(['new', 'list', 'open', 'extract', 'undo'])
+const BAR_ACTIONS = new Set(['new', 'list', 'open', 'extract', 'undo', 'confirm', 'keep'])
 ipcMain.on('bar:action', (event, a) => {
   if (!fromBar(event) || !a || !BAR_ACTIONS.has(a.type)) return
   if (!appReady || !win) return sendBar(LOCKED)
@@ -283,7 +283,7 @@ ipcMain.on('ampara:bar-ready', (event, ready) => {
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : undefined)
 function cleanView(v) {
   if (!v || typeof v !== 'object') return { kind: 'clear' }
-  const kinds = ['clear', 'saved', 'chat', 'list', 'locked']
+  const kinds = ['clear', 'saved', 'chat', 'list', 'locked', 'proposal']
   return {
     kind: kinds.includes(v.kind) ? v.kind : 'clear',
     text: str(v.text, 600),
@@ -298,6 +298,17 @@ function cleanView(v) {
     undo: str(v.undo, 64),
     items: Array.isArray(v.items)
       ? v.items.slice(0, 30).map((i) => ({ id: str(i && i.id, 64) || '', title: str(i && i.title, 80) || 'Conversa', when: str(i && i.when, 24) || '' }))
+      : undefined,
+    proposal: v.proposal && typeof v.proposal === 'object'
+      ? {
+          kind: v.proposal.kind === 'EVENT' ? 'EVENT' : 'TASK',
+          title: str(v.proposal.title, 120) || '',
+          when: str(v.proposal.when, 80) || '',
+          location: str(v.proposal.location, 200) || '',
+          notes: str(v.proposal.notes, 300) || '',
+          source: str(v.proposal.source, 120) || null,
+          conflicts: Array.isArray(v.proposal.conflicts) ? v.proposal.conflicts.slice(0, 3).map((c) => str(c, 100) || '') : [],
+        }
       : undefined,
   }
 }

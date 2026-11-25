@@ -87,6 +87,10 @@ export interface CalendarEvent {
   kind: EventKind
   /** null = do casal */
   ownerId: PartnerId | null
+  /** Onde (ADR-0014). Vazio ou ausente em registros antigos. */
+  location?: string
+  /** Observação curta (ADR-0014). */
+  notes?: string
   updatedAt: string
 }
 

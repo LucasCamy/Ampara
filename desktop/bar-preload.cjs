@@ -2,7 +2,7 @@
 // Nenhum dado do cofre é gravado aqui.
 const { contextBridge, ipcRenderer } = require('electron')
 
-const ACTIONS = new Set(['new', 'list', 'open', 'extract', 'undo'])
+const ACTIONS = new Set(['new', 'list', 'open', 'extract', 'undo', 'confirm', 'keep'])
 
 contextBridge.exposeInMainWorld('bar', {
   submit: (text, mode) => ipcRenderer.send('bar:submit', String(text || '').slice(0, 8000), mode === 'chat' ? 'chat' : 'capture'),

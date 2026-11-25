@@ -45,7 +45,7 @@ export interface AmparaDesktopBridge {
 
 /** O que a barra mostra embaixo do campo. Só texto: a barra nunca recebe dados para gravar. */
 export interface BarView {
-  kind: 'clear' | 'saved' | 'chat' | 'list' | 'locked'
+  kind: 'clear' | 'saved' | 'chat' | 'list' | 'locked' | 'proposal'
   text?: string
   conversationId?: string
   messages?: { role: 'PESSOA' | 'IA'; text: string }[]
@@ -56,9 +56,11 @@ export interface BarView {
   /** id do registro da IA para o botão Desfazer */
   undo?: string
   items?: { id: string; title: string; when: string }[]
+  /** Marcar pela barra (ADR-0014) */
+  proposal?: { kind: 'EVENT' | 'TASK'; title: string; when: string; location: string; notes: string; source: string | null; conflicts: string[] }
 }
 export interface BarAction {
-  type: 'new' | 'list' | 'open' | 'extract' | 'undo'
+  type: 'new' | 'list' | 'open' | 'extract' | 'undo' | 'confirm' | 'keep'
   id?: string
 }
 
