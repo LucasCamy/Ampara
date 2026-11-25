@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Toaster } from './components/Toaster'
 import { ScreenSkeleton } from './components/Skeleton'
 import { BottomNav, Dock, Sidebar } from './features/shell/Nav'
@@ -17,7 +17,7 @@ import { toDateKey } from './domain/dates'
 import { materializeRecurrences } from './store/financeActions'
 import { useAlertWatch } from './features/alerts/watch'
 import { desktopBridge } from './ai/provider'
-import { CompactCapture } from './features/ideas/CompactCapture'
+import { useBarBridge } from './features/ideas/barBridge'
 import { organizePending } from './store/ideaAi'
 import { usePeople } from './store/hooks'
 
@@ -150,19 +150,7 @@ function usePendingIdeas() {
   }, [viewer, ideasOn])
 }
 
-/** No PC, a barra abre a janela como painel compacto (ADR-0013). */
-function useDesktopCompact(): boolean {
-  const [compact, setCompact] = useState(false)
-  useEffect(() => {
-    const bridge = desktopBridge()
-    void bridge?.isCompact?.().then(setCompact)
-    return bridge?.onCompact?.(setCompact)
-  }, [])
-  return compact
-}
-
 function AppShell() {
-  const compact = useDesktopCompact()
   useQuickLaunch()
   useDesktopShortcut()
   useRecurrences()
@@ -170,15 +158,7 @@ function AppShell() {
   useTour()
   useAlertWatch()
   usePendingIdeas()
-  if (compact) {
-    return (
-      <div data-testid="app">
-        <CompactCapture />
-        <SheetHost />
-        <Toaster />
-      </div>
-    )
-  }
+  useBarBridge()
   return (
     <div className="flex min-h-dvh" data-testid="app">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:rounded-[12px] focus:bg-surface focus:p-3">

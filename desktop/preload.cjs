@@ -8,17 +8,16 @@ const listen = (channel, cb) => {
 }
 
 contextBridge.exposeInMainWorld('amparaDesktop', {
-  version: '2',
+  version: '3',
   status: () => ipcRenderer.invoke('ampara:status'),
   runStructured: (req) => ipcRenderer.invoke('ampara:run', req),
-  onCompact: (cb) => listen('ampara:compact', (compact) => cb(!!compact)),
   openFull: () => ipcRenderer.send('ampara:open-full'),
-  isCompact: () => ipcRenderer.invoke('ampara:is-compact'),
   dictate: () => ipcRenderer.invoke('ampara:dictate'),
   onShortcut: (cb) => listen('ampara:shortcut', () => cb()),
-  // painel da barra: o que a pessoa mandou pela barra espera aqui até a tela estar pronta (cofre aberto)
+  // barra (ADR-0013): o app atende por trás, escondido. O texto espera no exe até o cofre estar aberto.
   onBarSubmit: (cb) => listen('ampara:bar-submit', () => cb()),
   takeBarSubmit: () => ipcRenderer.invoke('ampara:take-bar-submit'),
-  onPanelTab: (cb) => listen('ampara:panel-tab', (tab) => cb(tab)),
-  hidePanel: () => ipcRenderer.send('ampara:hide-all'),
+  setBarReady: (ready) => ipcRenderer.send('ampara:bar-ready', !!ready),
+  barView: (view) => ipcRenderer.send('ampara:bar-view', view),
+  onBarAction: (cb) => listen('ampara:bar-action', (action) => cb(action)),
 })

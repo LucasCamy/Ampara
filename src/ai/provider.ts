@@ -29,19 +29,37 @@ export interface AmparaDesktopBridge {
   status(): Promise<{ claude: boolean; model: string }>
   runStructured(req: StructuredRequest): Promise<{ json: unknown; model: string }>
   onShortcut?(cb: () => void): () => void
-  /** Painel da barra (true) ou janela completa (false) */
-  onCompact?(cb: (compact: boolean) => void): () => void
   openFull?(): void
-  isCompact?(): Promise<boolean>
   /** Abre a digitação por voz do Windows no campo em foco */
   dictate?(): Promise<boolean>
-  /** Barra do PC (ADR-0013): o texto que a pessoa mandou espera no exe até a tela estar pronta */
+  /** Barra do PC (ADR-0013): o texto que a pessoa mandou espera no exe até o app (cofre aberto) pegar */
   onBarSubmit?(cb: () => void): () => void
   takeBarSubmit?(): Promise<{ text: string; mode: 'capture' | 'chat' } | null>
-  /** A barra pediu uma aba do painel */
-  onPanelTab?(cb: (tab: 'capture' | 'chat' | 'talks') => void): () => void
-  /** Esc no painel: esconde o painel e a barra */
-  hidePanel?(): void
+  /** O app está pronto para atender a barra (cofre aberto) */
+  setBarReady?(ready: boolean): void
+  /** O que a barra mostra embaixo do campo (só texto) */
+  barView?(view: BarView): void
+  /** Botões da barra: extrair, nova conversa, lista, abrir uma conversa, desfazer */
+  onBarAction?(cb: (action: BarAction) => void): () => void
+}
+
+/** O que a barra mostra embaixo do campo. Só texto: a barra nunca recebe dados para gravar. */
+export interface BarView {
+  kind: 'clear' | 'saved' | 'chat' | 'list' | 'locked'
+  text?: string
+  conversationId?: string
+  messages?: { role: 'PESSOA' | 'IA'; text: string }[]
+  busy?: boolean
+  extracted?: boolean
+  note?: string
+  error?: string
+  /** id do registro da IA para o botão Desfazer */
+  undo?: string
+  items?: { id: string; title: string; when: string }[]
+}
+export interface BarAction {
+  type: 'new' | 'list' | 'open' | 'extract' | 'undo'
+  id?: string
 }
 
 declare global {

@@ -34,6 +34,23 @@ na pasta de documentos, fora do cofre e sem sincronização.
    para mostrar "extraída para as Ideias". A captura cabe em 8000 caracteres: passando disso, ficam as falas
    mais novas, inteiras.
 
+## Revisão (2026-11-25): conversa integrada na barra
+
+A pessoa achou estranho o painel separado: tinha barra de título, abas e um segundo campo grande. Também
+estranhou o contorno verde no campo da barra. Ela pediu tudo integrado ao campo do atalho. Por isso, o item 3
+acima foi trocado:
+
+- **Um campo só:** a barra. Enter guarda como ideia. O botão de balão (ou Ctrl+Enter) liga o modo conversa, e aí
+  o Enter conversa. A conversa continua no mesmo campo.
+- **A resposta cresce embaixo da barra**, na mesma janela sem moldura: a última resposta, "Ver mais", e os botões
+  Extrair, Nova conversa e Conversas. A lista de conversas abre ali também.
+- **O Ampara atende por trás, escondido** (`useBarBridge`): grava no cofre, chama a IA e devolve **só texto** para
+  a barra (`barView`), que mostra com `textContent`. O processo do PC filtra os campos e os tamanhos (`cleanView`).
+- **Cofre fechado:** a barra diz "Entre no Ampara para continuar"; o texto espera e é guardado sozinho depois do login.
+- Sem contorno verde: em foco, só a borda da barra fica mais forte. O painel compacto (`CompactCapture`) saiu.
+- Verificado: `desktop/test/bar.cjs` (sem IA) e `desktop/test/live-bar.cjs` (IA local: resposta em 6 s, Extrair
+  organizou em "Casa › Reforma do quarto").
+
 ## Alternativas consideradas
 
 - **`.md` em Documentos (como o protótipo):** fora do cofre, sem cifra, sem sincronização e fora da privacidade do

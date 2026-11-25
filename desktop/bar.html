@@ -9,19 +9,19 @@
 <body>
   <form id="bar" role="search" aria-label="Soltar um pensamento no Ampara" autocomplete="off">
     <span id="grip" aria-hidden="true" title="Arraste para mover"><img src="icon.png" alt="" draggable="false"></span>
-    <label for="text" class="sr-only">O que está na sua cabeça?</label>
+    <label for="text" class="sr-only" id="text-label">O que está na sua cabeça?</label>
     <input id="text" type="text" maxlength="8000" placeholder="O que está na sua cabeça?" enterkeyhint="send" spellcheck="true">
     <button type="button" id="mic" class="icon" aria-label="Falar (voz do Windows)" title="Falar (Win + H)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></svg>
     </button>
-    <button type="button" id="talks" class="icon" aria-label="Ver conversas" title="Ver conversas">
+    <button type="button" id="mode" class="icon" aria-pressed="false" aria-label="Conversar com a IA" title="Conversar (Ctrl + Enter)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></svg>
     </button>
     <button type="button" id="full" class="icon" aria-label="Abrir o Ampara completo" title="Abrir o Ampara completo">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/></svg>
     </button>
   </form>
-  <p id="hint" aria-live="polite">Enter guarda como ideia. Ctrl + Enter abre uma conversa. Esc fecha.</p>
+  <section id="out" hidden aria-live="polite" aria-label="Resposta do Ampara"></section>
   <script src="bar.js"></script>
 </body>
 </html>

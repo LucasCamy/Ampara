@@ -26,19 +26,17 @@ let win = null
 let bar = null
 let tray = null
 let quitting = false
-/** Modo compacto: a janela vira um painel por cima de tudo, logo abaixo da barra. */
-let compact = false
-let normalBounds = null
-/** O que a pessoa mandou pela barra espera aqui até a tela do Ampara estar pronta (cofre aberto). */
+/** O que a pessoa mandou pela barra espera aqui até o Ampara (cofre aberto) pegar. */
 let pendingBar = null
+/** O app avisa quando está pronto para atender a barra por trás (cofre aberto). */
+let appReady = false
 /** A digitação por voz do Windows rouba o foco: não esconder enquanto ela roda. */
 let dictatingUntil = 0
 // Testes: a barra começa visível e não some ao perder o foco.
 const TEST_VISIBLE = process.env.AMPARA_BAR_VISIBLE === '1'
 
-// A barra tem 8 px de margem em volta para a sombra: 480 de largura visível.
-const BAR = { width: 496, height: 72 }
-const PANEL = { width: 480, height: 580 }
+// A barra tem 8 px de margem em volta para a sombra: 480 de largura visível. A resposta cresce para baixo.
+const BAR = { width: 496, height: 72, maxHeight: 600 }
 const prefsFile = () => path.join(app.getPath('userData'), 'desktop-prefs.json')
 function readPrefs() {
   try { return JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) } catch { return {} }
@@ -102,7 +100,8 @@ function createWindow() {
     backgroundColor: '#F7F6F2',
     autoHideMenuBar: true,
     icon: path.join(__dirname, 'icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    // escondido, o app continua atendendo a barra e organizando por trás
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
   })
   win.loadURL(`${ORIGIN}/#/ideias`)
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -116,14 +115,10 @@ function createWindow() {
     e.preventDefault()
     win.hide()
   })
-  // o painel compacto some ao clicar fora (quando a barra também não está em foco)
-  win.on('blur', () => { if (compact) hideIfAway() })
-  // o painel compacto some ao clicar fora (quando a barra também não está em foco)
-  win.on('blur', () => { if (compact) hideIfAway() })
   win.on('closed', () => { win = null })
 }
 
-/* ---------------------------------------------------------------- barra e painel compacto */
+/* ---------------------------------------------------------------- barra (a resposta cresce embaixo dela) */
 
 function barPosition() {
   const wa = screen.getPrimaryDisplay().workArea
@@ -142,14 +137,14 @@ function createBar() {
     ...barPosition(), width: BAR.width, height: BAR.height,
     frame: false, transparent: true, resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
     skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, title: 'Ampara (barra)',
-    webPreferences: { preload: path.join(__dirname, 'bar-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    webPreferences: { preload: path.join(__dirname, 'bar-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
   })
   bar.setAlwaysOnTop(true, 'floating')
   bar.loadFile(path.join(__dirname, 'bar.html'))
   if (TEST_VISIBLE) bar.once('ready-to-show', () => bar.showInactive())
   bar.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   bar.webContents.on('will-navigate', (e) => e.preventDefault())
-  // arrastar pela alça: guarda o lugar novo (e leva o painel junto, se estiver aberto)
+  // arrastar pela alça: guarda o lugar novo
   let moveTimer = null
   bar.on('move', () => {
     clearTimeout(moveTimer)
@@ -157,7 +152,6 @@ function createBar() {
       if (!bar || bar.isDestroyed()) return
       const { x, y } = bar.getBounds()
       writePrefs({ bar: { x, y } })
-      if (compact && win && !win.isDestroyed() && win.isVisible()) placePanel()
     }, 250)
   })
   bar.on('blur', hideIfAway)
@@ -165,75 +159,48 @@ function createBar() {
   bar.on('closed', () => { bar = null })
 }
 
-/** Some ao clicar fora: só esconde quando nem a barra nem o painel têm o foco e a voz do Windows não está ditando. */
+/** Some ao clicar fora (menos enquanto a voz do Windows dita). */
 function hideIfAway() {
   if (TEST_VISIBLE) return
   setTimeout(() => {
     if (Date.now() < dictatingUntil) return
-    const barFocused = bar && !bar.isDestroyed() && bar.isFocused()
-    const panelFocused = win && !win.isDestroyed() && compact && win.isFocused()
-    if (!barFocused && !panelFocused) hideAll()
+    if (!(bar && !bar.isDestroyed() && bar.isFocused())) hideAll()
   }, 200)
 }
 
-/** Esconde a barra e, se estiver no modo compacto, o painel. A janela completa nunca some por aqui. */
 function hideAll() {
   if (bar && !bar.isDestroyed()) bar.hide()
-  if (win && !win.isDestroyed() && compact) win.hide()
 }
 
 function showBar() {
   if (!bar) createBar()
-  if (!bar.isVisible()) bar.setBounds({ ...barPosition(), width: BAR.width, height: BAR.height })
+  if (!bar.isVisible()) {
+    const { height } = bar.getBounds()
+    bar.setBounds({ ...barPosition(), width: BAR.width, height })
+  }
   bar.show()
   bar.focus()
   bar.webContents.send('bar:focus')
 }
 
-/** Painel compacto logo abaixo da barra (se não couber embaixo, acima), sempre por cima. */
-function placePanel() {
-  const b = bar && !bar.isDestroyed() ? bar.getBounds() : { ...barPosition(), width: BAR.width, height: BAR.height }
+/** A barra pede a altura do que mostra; nunca passa do fim da tela. */
+function resizeBar(height) {
+  if (!bar || bar.isDestroyed()) return
+  const b = bar.getBounds()
   const d = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).workArea
-  const width = Math.min(PANEL.width, d.width - 16)
-  const height = Math.min(PANEL.height, d.height - 16)
-  const barBottom = b.y + b.height - 8
-  let y = barBottom + 4
-  if (y + height > d.y + d.height - 8) y = Math.max(d.y + 8, b.y + 8 - height - 4)
-  const x = Math.min(Math.max(b.x + 8, d.x + 8), d.x + d.width - width - 8)
-  win.setBounds({ x: Math.round(x), y: Math.round(y), width, height })
+  const h = Math.round(Math.min(Math.max(height, BAR.height), BAR.maxHeight, d.y + d.height - b.y))
+  if (h !== b.height) bar.setBounds({ x: b.x, y: b.y, width: BAR.width, height: h })
 }
 
-function showPanel(tab) {
-  if (!win) createWindow()
-  if (!compact) normalBounds = win.isMaximized() ? null : win.getBounds()
-  if (win.isMaximized()) win.unmaximize()
-  placePanel()
-  win.setAlwaysOnTop(true, 'floating')
-  compact = true
-  win.webContents.send('ampara:compact', true)
-  if (tab) win.webContents.send('ampara:panel-tab', tab)
-  win.show()
-  win.focus()
-  win.webContents.send('ampara:shortcut')
-}
-
-/** Atalho: mostra a barra com o cursor pronto; se ela (ou o painel) já está em foco, esconde tudo. */
+/** Atalho: mostra a barra com o cursor pronto; se ela já está em foco, esconde. */
 function toggleBar() {
-  const barUp = bar && bar.isVisible()
-  const focused = (bar && bar.isFocused()) || (win && compact && win.isVisible() && win.isFocused())
-  if (barUp && focused) hideAll()
+  if (bar && bar.isVisible() && bar.isFocused()) hideAll()
   else showBar()
 }
 
 /** Janela normal (abrir o Ampara de novo, bandeja): volta ao tamanho de antes, sem ficar por cima. */
 function showNormal() {
   if (!win) createWindow()
-  if (compact) {
-    win.setAlwaysOnTop(false)
-    win.setBounds(normalBounds || { width: 1280, height: 860 })
-    compact = false
-    win.webContents.send('ampara:compact', false)
-  }
   if (bar && !bar.isDestroyed()) bar.hide()
   if (win.isMinimized()) win.restore()
   win.show()
@@ -267,8 +234,6 @@ const fromApp = (event) => (event.senderFrame?.url || '').startsWith(ORIGIN)
 const fromBar = (event) => !!bar && !bar.isDestroyed() && event.sender === bar.webContents
 
 ipcMain.on('ampara:open-full', (event) => { if (fromApp(event)) showNormal() })
-ipcMain.on('ampara:hide-all', (event) => { if (fromApp(event)) hideAll() })
-ipcMain.handle('ampara:is-compact', (event) => fromApp(event) && compact)
 ipcMain.handle('ampara:take-bar-submit', (event) => {
   if (!fromApp(event)) return null
   const p = pendingBar
@@ -290,14 +255,53 @@ ipcMain.on('bar:dictate', (event) => { if (fromBar(event)) void dictate() })
 
 ipcMain.on('bar:hide', (event) => { if (fromBar(event)) hideAll() })
 ipcMain.on('bar:full', (event) => { if (fromBar(event)) showNormal() })
-ipcMain.on('bar:panel', (event, tab) => { if (fromBar(event)) showPanel(tab === 'talks' ? 'talks' : 'capture') })
-// Enter guarda como ideia; Ctrl+Enter conversa. O texto vai para a tela do Ampara, que grava no cofre.
+ipcMain.on('bar:resize', (event, height) => { if (fromBar(event) && Number.isFinite(height)) resizeBar(height) })
+
+const sendBar = (view) => { if (bar && !bar.isDestroyed()) bar.webContents.send('bar:view', view) }
+const LOCKED = { kind: 'locked', text: 'Entre no Ampara para continuar. O que você escreveu ficou esperando aqui.' }
+
+// Enter guarda como ideia; no modo conversa, conversa. O Ampara grava no cofre e responde por trás, escondido.
 ipcMain.on('bar:submit', (event, text, mode) => {
   if (!fromBar(event) || typeof text !== 'string' || !text.trim()) return
   pendingBar = { text: text.slice(0, 8000), mode: mode === 'chat' ? 'chat' : 'capture' }
-  showPanel(pendingBar.mode === 'chat' ? 'chat' : 'capture')
-  if (win) win.webContents.send('ampara:bar-submit')
+  if (appReady && win) win.webContents.send('ampara:bar-submit')
+  else sendBar(LOCKED)
 })
+const BAR_ACTIONS = new Set(['new', 'list', 'open', 'extract', 'undo'])
+ipcMain.on('bar:action', (event, a) => {
+  if (!fromBar(event) || !a || !BAR_ACTIONS.has(a.type)) return
+  if (!appReady || !win) return sendBar(LOCKED)
+  win.webContents.send('ampara:bar-action', { type: a.type, id: typeof a.id === 'string' ? a.id.slice(0, 64) : undefined })
+})
+ipcMain.on('ampara:bar-ready', (event, ready) => {
+  if (!fromApp(event)) return
+  appReady = !!ready
+  if (appReady && pendingBar && win) win.webContents.send('ampara:bar-submit')
+})
+
+/** O que a barra mostra: só campos conhecidos, só texto, com limites. */
+const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : undefined)
+function cleanView(v) {
+  if (!v || typeof v !== 'object') return { kind: 'clear' }
+  const kinds = ['clear', 'saved', 'chat', 'list', 'locked']
+  return {
+    kind: kinds.includes(v.kind) ? v.kind : 'clear',
+    text: str(v.text, 600),
+    conversationId: str(v.conversationId, 64),
+    messages: Array.isArray(v.messages)
+      ? v.messages.slice(-80).map((m) => ({ role: m && m.role === 'IA' ? 'IA' : 'PESSOA', text: str(m && m.text, 4000) || '' }))
+      : undefined,
+    busy: !!v.busy,
+    extracted: !!v.extracted,
+    note: str(v.note, 400),
+    error: str(v.error, 400),
+    undo: str(v.undo, 64),
+    items: Array.isArray(v.items)
+      ? v.items.slice(0, 30).map((i) => ({ id: str(i && i.id, 64) || '', title: str(i && i.title, 80) || 'Conversa', when: str(i && i.when, 24) || '' }))
+      : undefined,
+  }
+}
+ipcMain.on('ampara:bar-view', (event, view) => { if (fromApp(event)) sendBar(cleanView(view)) })
 
 ipcMain.handle('ampara:status', (event) => {
   if (!fromApp(event)) throw new Error('origem não autorizada')
@@ -325,7 +329,7 @@ app.whenReady().then(() => {
 })
 
 // Testes (desktop/test/bar.cjs): o atalho global do Windows não dá para apertar daqui.
-if (process.env.AMPARA_TEST_HOOKS === '1') global.__ampara = { toggleBar, showBar, hideAll }
+if (process.env.AMPARA_TEST_HOOKS === '1') global.__ampara = { toggleBar, showBar, hideAll, isReady: () => appReady }
 
 app.on('before-quit', () => { quitting = true })
 
