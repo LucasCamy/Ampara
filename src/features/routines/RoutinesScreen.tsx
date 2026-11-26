@@ -51,10 +51,9 @@ export function RoutinesScreen() {
   return (
     <div>
       <div className="mb-5">
-        <Title anchor="Cuidados," rest={showCycle ? 'remédios, rotinas e ciclo sem cegueira de alarme.' : 'remédios e rotinas no seu ritmo.'} />
+        <Title anchor="Cuidados," rest="no seu ritmo." />
         <p className="mt-2 max-w-[60ch] text-[14px] text-muted">
-          Confirme em dois estágios: <strong className="text-ink">Já engoli</strong> registra o horário exato.{' '}
-          <strong className="text-ink">Pegando água</strong> segura a lembrança por 5 minutos.
+          <strong className="text-ink">Já engoli</strong> registra a hora. <strong className="text-ink">Pegando água</strong> lembra de novo em 5 minutos.
         </p>
       </div>
 
@@ -108,10 +107,7 @@ export function RoutinesScreen() {
               title={isSolo ? 'Minhas rotinas' : 'Rotinas da casa'}
               rest={isSolo ? '· uma coisa por vez' : '· qualquer um confirma'}
               action={
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="quiet" icon={Plus} className="grow basis-[140px]" onClick={() => ui.openSheet('routine')} data-testid="add-routine">Nova rotina</Button>
-                  <Button size="sm" variant="ghost" icon={Lightbulb} className="grow basis-[140px]" onClick={() => ui.openSheet('templates', { group: 'routines' })} data-testid="ideas-routines">Ideias prontas</Button>
-                </div>
+                <Button size="sm" variant="quiet" icon={Plus} onClick={() => ui.openSheet('routine')} data-testid="add-routine">Nova rotina</Button>
               }
             />
             {d.routines.length === 0 ? (
@@ -161,7 +157,7 @@ export function RoutinesScreen() {
                     </div>
                     {dose ? (
                       <div className="mt-3 flex flex-col gap-3">
-                        <DoseStatus dose={dose} now={now} />
+                        <div><DoseStatus dose={dose} now={now} /></div>
                         <DoseActions dose={dose} />
                       </div>
                     ) : (
@@ -172,6 +168,7 @@ export function RoutinesScreen() {
                 )
               })}
             </ul>
+            <Button block size="sm" variant="ghost" icon={Lightbulb} className="mt-2" onClick={() => ui.openSheet('templates', { group: 'routines' })} data-testid="ideas-routines">Ideias prontas de rotina</Button>
           </section>
 
           {!isSolo ? <section aria-labelledby="rede-apoio">
@@ -225,7 +222,7 @@ function DoseCard({ dose, now }: { dose: DoseItem; now: Date }) {
         </div>
       </div>
       <div className="mt-3 flex flex-col gap-3">
-        <DoseStatus dose={dose} now={now} />
+        <div><DoseStatus dose={dose} now={now} /></div>
         {med.pack && dose.view === 'LATE' ? (
           <p className="text-[13px] text-muted" data-testid="pack-late-hint">
             {PACK_LATE_HINT}

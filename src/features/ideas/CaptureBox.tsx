@@ -175,9 +175,9 @@ export function CaptureBox() {
           {waiting ? <span className="font-normal text-muted">{waiting === 1 ? '1 organizando por trás' : `${waiting} organizando por trás`}</span> : null}
         </p>
       ) : null}
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex gap-2">
         {canDictate() || desktopBridge()?.dictate ? (
-          <Button type="button" variant="quiet" icon={listening ? Square : Mic} onClick={dictate} aria-pressed={listening} data-testid="idea-capture-mic" className="sm:w-auto">
+          <Button type="button" variant="quiet" icon={listening ? Square : Mic} onClick={dictate} aria-pressed={listening} data-testid="idea-capture-mic" className="shrink-0">
             {listening ? 'Parar' : 'Falar'}
           </Button>
         ) : null}

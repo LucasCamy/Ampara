@@ -1,7 +1,7 @@
 import { Archive, ArrowRight, CalendarDays, Lightbulb, ListChecks, Repeat, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { authStore } from '../../auth/session'
-import { Button, StatusBadge } from '../../components/ui'
+import { Button } from '../../components/ui'
 import { formatCents } from '../../domain/format'
 import { pickTopSuggestion, type DiscoveryTip, type Suggestion } from '../../domain/suggestions'
 import { addTask, archiveTasks } from '../../store/actions'
@@ -87,7 +87,7 @@ export function SuggestionCard() {
   return (
     <section className="module border border-line-strong p-4 sm:p-5" aria-labelledby="suggestion-title" data-testid="suggestion-card" data-suggestion-id={suggestion.id}>
       <div className="flex items-start justify-between gap-2">
-        <StatusBadge kind="pending"><Lightbulb size={14} aria-hidden /> Uma ideia, se ajudar</StatusBadge>
+        <p className="flex items-center gap-2 text-[13px] font-bold text-muted"><Lightbulb size={16} aria-hidden /> Uma ideia, se ajudar</p>
         <button type="button" className="press hoverable -mt-2 -mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Dispensar esta sugestão por uma semana" aria-busy={busy} disabled={busy} data-testid="suggestion-dismiss" onClick={() => void done()}><X size={18} aria-hidden /></button>
       </div>
       <h2 id="suggestion-title" className="mt-2 text-[17px] font-bold text-ink"><Title suggestion={suggestion} /></h2>

@@ -111,7 +111,7 @@ export function PerspectiveSwitch({ compact = false }: { compact?: boolean }) {
       }}
       size="sm"
       stretch
-      fill={compact}
+      fill
       options={[
         { value: 'A', label: compact ? firstName(profiles.A.displayName) : `Visão: ${firstName(profiles.A.displayName)}`, shortLabel: firstName(profiles.A.displayName), testId: 'viewer-A', ariaLabel: viewer === 'A' ? `Usando como ${profiles.A.displayName}` : `Entrar como ${profiles.A.displayName} (pede a senha)` },
         { value: 'B', label: compact ? firstName(profiles.B.displayName) : `Visão: ${firstName(profiles.B.displayName)}`, shortLabel: firstName(profiles.B.displayName), testId: 'viewer-B', ariaLabel: viewer === 'B' ? `Usando como ${profiles.B.displayName}` : `Entrar como ${profiles.B.displayName} (pede a senha)` },
@@ -178,13 +178,17 @@ export function TopBar() {
 export function ContextRow() {
   const isSolo = useIsSolo()
   return (
-    <div className="mx-auto flex max-w-[720px] items-center gap-1 px-4 pt-3 lg:hidden">
-      <div className="min-w-0 flex-1">
-        {!isSolo ? <PerspectiveSwitch /> : null}
+    <div className="mx-auto flex max-w-[720px] flex-wrap items-center justify-end gap-x-1.5 gap-y-2 px-4 pt-3 lg:hidden">
+      {/* o nome nunca é cortado: com fonte larga e tela estreita, os atalhos descem para a linha de baixo */}
+      {!isSolo ? <div className="min-w-fit flex-1 [&_[role=radio]]:min-w-max">
+        <PerspectiveSwitch />
+      </div> : null}
+      {/* os três atalhos num grupo só, com a mesma altura do seletor de pessoa (sem respiro lateral: cabe em 360px) */}
+      <div className="flex shrink-0 items-center rounded-[16px] border border-line bg-surface py-[3px]">
+        <button type="button" onClick={() => ui.openSheet('quickCapture')} aria-label="Captura livre" data-testid="quick-capture" className="press hoverable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink"><Mic size={19} aria-hidden /></button>
+        <LockButton />
+        <ThemeToggle />
       </div>
-      <button type="button" onClick={() => ui.openSheet('quickCapture')} aria-label="Captura livre" data-testid="quick-capture" className="press hoverable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink"><Mic size={19} aria-hidden /></button>
-      <LockButton />
-      <ThemeToggle />
     </div>
   )
 }

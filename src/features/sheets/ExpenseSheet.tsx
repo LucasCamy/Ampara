@@ -147,6 +147,8 @@ export function ExpenseSheet({ params, onDone }: { params: Record<string, string
 
       <ChoiceChips<TxCategory>
         label="Categoria"
+        cols={3}
+        tiles
         value={category}
         onChange={setCategory}
         options={CATEGORY_ORDER.map((c) => ({ value: c, label: CATEGORIES[c].label, icon: CATEGORIES[c].icon }))}

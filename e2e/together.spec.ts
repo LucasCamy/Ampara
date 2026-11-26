@@ -78,6 +78,8 @@ test('caixinhas: quanto falta, quanto por mês, guardar, tirar e meta batida', a
   await sheet.getByTestId('goal-target').pressSequentially('300000')
   await sheet.getByTestId('goal-save').click()
   await expect(sheet).toBeHidden()
+  // a gaveta devolve o foco no quadro seguinte (relógio simulado): digitar antes disso perde dígitos
+  await expect(page.getByTestId('goal-add')).toBeFocused()
   const sofa = page.getByTestId('goal-card').filter({ hasText: 'Sofá novo' })
   await sofa.getByTestId('goal-amount').pressSequentially('300000')
   await sofa.getByTestId('goal-deposit').click()

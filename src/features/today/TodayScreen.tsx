@@ -74,7 +74,11 @@ export function TodayScreen() {
   const header = (
     <div className="mb-5 flex flex-col gap-2">
       <Title size="xl" anchor={`${greeting(now)}, ${firstName(me.displayName)}.`} rest={overload ? 'Só uma coisa por vez.' : 'Uma coisa de cada vez.'} />
-      <div className="self-start"><DayListenButton state={state} viewer={viewer} now={now} /></div>
+      {/* atalhos do dia lado a lado, mesma altura */}
+      <div className="flex flex-wrap gap-2">
+        <DayListenButton state={state} viewer={viewer} now={now} />
+        {d.inboxCount > 0 ? <Button variant="quiet" size="sm" icon={Inbox} data-testid="today-inbox" onClick={() => ui.openInbox()}><span className="font-data">{d.inboxCount}</span> na Caixa de Entrada</Button> : null}
+      </div>
       {!isSolo ? <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted">
         <span className="inline-flex items-center gap-1.5">
           {(() => {
@@ -90,7 +94,6 @@ export function TodayScreen() {
           {firstName(partner.displayName)} ativou o Modo Calmo hoje. Pegue leve nos pedidos.
         </p>
       ) : null}
-      {d.inboxCount > 0 ? <Button variant="ghost" size="sm" icon={Inbox} className="self-start" data-testid="today-inbox" onClick={() => ui.openInbox()}><span className="font-data">{d.inboxCount}</span> na Caixa de Entrada</Button> : null}
     </div>
   )
 
@@ -293,22 +296,26 @@ export function TodayScreen() {
   return (
     <div data-testid="today-normal">
       {header}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
-        <div className="flex flex-col gap-4 lg:sticky lg:top-8">
-          {now_}
-          <RitualCard />
-          <SuggestionCard />
-          <div className="hidden lg:block">
+      {/*
+        Celular: uma coluna na ordem de prioridade (agora, urgente, foco, ritual, próximas horas, para hoje).
+        Computador: à esquerda o que fazer, à direita o contexto. "contents" desfaz as colunas no celular.
+      */}
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="contents lg:flex lg:flex-col lg:gap-5">
+          <div className="order-1">{now_}</div>
+          <div className="order-2 flex flex-col gap-4 empty:hidden">{urgent}</div>
+          <div className="order-3">{focusSection}</div>
+          <div className="order-6 empty:hidden">{soft}</div>
+        </div>
+        <div className="contents lg:flex lg:flex-col lg:gap-5">
+          <div className="order-5">{nextHours}</div>
+          <div className="order-4 empty:hidden"><RitualCard /></div>
+          <div className="order-7 empty:hidden"><SuggestionCard /></div>
+          <div className="order-8 hidden lg:block">
             <Button variant="secondary" icon={LifeBuoy} onClick={() => ui.openSheet('sos')} className="w-full border-err text-err">
               {isSolo ? 'Travei' : `Pedir ajuda para ${firstName(partner.displayName)}`}
             </Button>
           </div>
-        </div>
-        <div className="flex flex-col gap-4">
-          {urgent}
-          {focusSection}
-          {soft}
-          {nextHours}
         </div>
       </div>
     </div>
@@ -458,10 +465,13 @@ function Timeline({ doses, events, now }: { doses: DoseItem[]; events: ReturnTyp
       {items.map((i) => (
         <li key={i.key} className="relative">
           <span aria-hidden className="absolute top-3.5 -left-[21px] h-2.5 w-2.5 rounded-full border-2 border-line-strong bg-bg" />
-          <div className={cx('rounded-[14px] bg-surface px-3 py-2', i.dashed ? 'ledger-dashed' : 'ledger-solid')}>
-            <span className="font-data text-[13px] text-muted">{i.time}</span>
-            <span className="ml-2 text-[15px] font-semibold text-ink">{i.title}</span>
-            <span className="ml-2 text-[12px] text-muted">{i.kind}</span>
+          {/* hora numa coluna fixa; nome e tipo empilhados: sempre se lê no mesmo lugar */}
+          <div className={cx('grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-2 rounded-[14px] bg-surface px-3 py-2', i.dashed ? 'ledger-dashed' : 'ledger-solid')}>
+            <span className="font-data pt-0.5 text-[14px] text-muted">{i.time}</span>
+            <span className="min-w-0">
+              <span className="block text-[15px] leading-snug font-semibold break-words text-ink">{i.title}</span>
+              <span className="block text-[13px] text-muted">{i.kind}</span>
+            </span>
           </div>
         </li>
       ))}

@@ -83,6 +83,8 @@ export function ShoppingSection() {
         <div className="mt-3">
           <ChoiceChips<ShopCategory>
             label="Onde comprar"
+            cols={4}
+            tiles
             value={category}
             onChange={setCategory}
             options={SHOP_ORDER.map((c) => ({ value: c, label: SHOP_CATEGORY[c].label, icon: SHOP_ICON[c], testId: `shop-cat-${c}` }))}

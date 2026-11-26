@@ -126,6 +126,18 @@ Marcadores do calendário mensal: `●` compromisso do casal (`--couple`), `▲`
 - `Toast`: topo, `aria-live="polite"`, botão `[Desfazer]`, 5 s.
 - `StatusBadge`: implementa a tabela de estados.
 
+## Organização das telas (revisão de 2026-11-26, ver `docs/09-estudo-de-caso-telas.md`)
+
+- **`SectionHeader`:** título em uma linha, complemento menor embaixo, ação sempre à direita na mesma linha. Uma
+  ação só; a segunda (ex.: "Ideias prontas") vai no fim da lista.
+- **`PeriodNav`:** setas junto do rótulo, no máximo 420px (substitui as setas nas pontas da tela).
+- **Ações de cartão:** largura toda, colunas iguais. A mais usada pode ocupar a linha inteira.
+- **`ChoiceChips`:** 3 opções curtas viram blocos lado a lado (ícone em cima); `tiles` + `cols` para 4 ou mais.
+- **Selo de estado** nunca estica: tem o tamanho do texto.
+- **Telas longas** (Nós, Ajustes > Aparelho) têm índice no topo com ícone e uma palavra.
+- **Ordem no celular:** o que fazer, contexto, histórico. No Hoje: Agora, urgente, foco, ritual, próximas horas,
+  para hoje, sugestão.
+
 ## Padrões de interação (revisão de 2026-11-06)
 
 - **Seletores (`Segmented`):** `stretch` é o padrão das telas: colunas iguais na largura toda até o tablet e

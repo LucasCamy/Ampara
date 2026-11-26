@@ -1,6 +1,12 @@
 import { firstName } from '../../domain/format'
 import {
+  Bell,
+  BookOpen,
   ChevronDown,
+  Download,
+  Lock,
+  Sparkles,
+  Sunrise,
   CircleCheck,
   Copy,
   Eye,
@@ -14,7 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useId, useState } from 'react'
-import { Actions, Button, ChoiceChips, cx, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
+import { Button, ChoiceChips, cx, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
 import type { PartnerId } from '../../domain/types'
 import { useAuth } from '../../auth/session'
 import { SecuritySection } from './SecuritySection'
@@ -184,18 +190,39 @@ function DeviceGroup() {
   const { viewer, partner, profiles } = usePeople()
   const theme = useUi((s) => s.theme)
   const [confirmReset, setConfirmReset] = useState(false)
+  const jumps = [
+    { id: 'leitura', label: 'Leitura', icon: BookOpen },
+    { id: 'avisos', label: 'Avisos', icon: Bell },
+    { id: 'rituais', label: 'Rituais', icon: Sunrise },
+    { id: 'ia', label: 'IA', icon: Sparkles },
+    { id: 'seguranca', label: 'Senha', icon: Lock },
+    { id: 'backup', label: 'Backup', icon: Download },
+  ]
   return (
-    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-      <div className="flex flex-col gap-6">
-        <AiSection />
-        <ReadingSection />
-        <RitualsSection />
-        <AlertsSection />
-        <SecuritySection partnerName={firstName(partner.displayName)} />
+    <div>
+      {/* índice: a aba tem muitos blocos; escolher o assunto evita rolar procurando */}
+      <nav aria-label="Ir para" className="mb-5 grid grid-cols-3 gap-2 sm:grid-cols-6 lg:max-w-[760px]">
+        {jumps.map((j) => (
+          <button
+            key={j.id}
+            type="button"
+            onClick={() => document.getElementById(`ajuste-${j.id}`)?.scrollIntoView({ block: 'start' })}
+            className="press hoverable flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-[14px] border border-line bg-surface px-1 text-[13px] font-semibold text-ink"
+          >
+            <j.icon size={20} aria-hidden className="text-action" />
+            {j.label}
+          </button>
+        ))}
+      </nav>
+      {/* computador: o navegador equilibra as duas colunas, sem uma sobrar vazia */}
+      <div className="lg:columns-2 lg:gap-6 [&>*]:mb-6 [&>*]:break-inside-avoid [&>*]:scroll-mt-24">
+        <div id="ajuste-leitura"><ReadingSection /></div>
+        <div id="ajuste-avisos"><AlertsSection /></div>
+        <div id="ajuste-rituais"><RitualsSection /></div>
+        <div id="ajuste-ia"><AiSection /></div>
+        <div id="ajuste-seguranca"><SecuritySection partnerName={firstName(partner.displayName)} /></div>
+        <div id="ajuste-backup"><BackupSection /></div>
         <AboutSection />
-      </div>
-      <div className="flex flex-col gap-6">
-        <BackupSection />
         <section className="module p-4 sm:p-5" aria-labelledby="aparelho">
           <SectionHeader id="aparelho" title="Este aparelho" />
           <p className="text-[14px] text-muted">
@@ -252,7 +279,7 @@ function ShortcutsSection() {
     }
   }
   return (
-    <section className="module p-4 sm:p-5 lg:max-w-[760px]" aria-labelledby="atalhos">
+    <section className="module p-4 sm:p-5" aria-labelledby="atalhos">
       <SectionHeader id="atalhos" title="Atalhos de captura" />
       <p className="mb-3 text-[14px] text-muted">
         <strong className="text-ink">Android e computador:</strong> segure o ícone do Ampara instalado e escolha o atalho. Abre direto na gaveta certa.
@@ -268,7 +295,7 @@ function ShortcutsSection() {
           dentro do app.
         </p>
       </details>
-      <ul className="grid gap-3 sm:grid-cols-2">
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {SHORTCUTS.map((s) => {
           const url = `${base}?quick=${s.quick}`
           return (
@@ -283,14 +310,14 @@ function ShortcutsSection() {
                   <p className="font-data mt-1 text-[12px] break-all text-ink">/?quick={s.quick}</p>
                 </div>
               </div>
-              <Actions className="mt-3">
-                <Button block variant="primary" icon={Smartphone} onClick={() => ui.launchQuick(s.quick)} data-testid={`try-${s.quick}`}>
-                  Testar agora
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button block variant="primary" size="compact" icon={Smartphone} onClick={() => ui.launchQuick(s.quick)} data-testid={`try-${s.quick}`}>
+                  Testar
                 </Button>
-                <Button block variant="quiet" icon={copied === s.quick ? CircleCheck : Copy} onClick={() => copy(url, s.quick)}>
-                  {copied === s.quick ? 'Endereço copiado' : 'Copiar endereço'}
+                <Button block variant="quiet" size="compact" icon={copied === s.quick ? CircleCheck : Copy} onClick={() => copy(url, s.quick)} aria-label={copied === s.quick ? 'Endereço copiado' : 'Copiar endereço'}>
+                  {copied === s.quick ? 'Copiado' : 'Copiar'}
                 </Button>
-              </Actions>
+              </div>
             </li>
           )
         })}

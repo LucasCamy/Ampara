@@ -1,5 +1,5 @@
 import { firstName } from '../../domain/format'
-import { ArrowRightLeft, ChevronLeft, ChevronRight, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Lock, ReceiptText, User, Users } from 'lucide-react'
+import { ArrowRightLeft, CircleCheck, CircleDashed, Eye, EyeOff, Gift, Lock, ReceiptText, User, Users } from 'lucide-react'
 import { GoalsSection } from './GoalsSection'
 import { RulesSection } from './RulesSection'
 import { SpendingSummary } from './SpendingSummary'
@@ -7,7 +7,7 @@ import { SoloFinance } from './SoloFinance'
 import { DueBadge, SeriesTag, TxHeader } from './TransactionParts'
 import { useMemo, useState } from 'react'
 import { CATEGORIES } from '../../components/categories'
-import { Button, cx, EmptyState, MoneyText, OwnerTag, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
+import { Button, cx, EmptyState, MoneyText, OwnerTag, PeriodNav, SectionHeader, Segmented, StatusBadge, Switch, Title } from '../../components/ui'
 import { dayOfMonth, monthName, parseDateKey, toDateKey } from '../../domain/dates'
 import { computeCoupleBalance, coupleShareTotal, describeBalance, settlementPlan, shareOf, splitRuleLabel } from '../../domain/finance'
 import { formatCents } from '../../domain/format'
@@ -40,41 +40,41 @@ export function FinanceScreen() {
         {/* título fixo: o mês fica só no seletor abaixo (trocar o mês no título mudava o tamanho e quebrava a linha) */}
         <Title anchor="Finanças," rest="claras e leves." />
       </div>
-      {/* mesmo navegador da Agenda: setas com borda e o mês no meio */}
-      <div className="mb-4" role="group" aria-label="Mês">
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => step(-1)} aria-label="Mês anterior" data-testid="month-prev" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
-            <ChevronLeft size={20} aria-hidden />
-          </button>
-          <p className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite" data-testid="month-label">
-            {monthTitle(month, '')}
-          </p>
-          <button type="button" onClick={() => step(1)} aria-label="Próximo mês" data-testid="month-next" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
-            <ChevronRight size={20} aria-hidden />
-          </button>
-        </div>
-        {/* voltar fica numa linha própria: ao lado do mês ele espremia o nome e quebrava a linha */}
-        {month !== current ? (
-          <div className="mt-1 flex justify-center">
+      {/* de quem + qual mês: empilhados no celular, lado a lado no computador */}
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+        {!isSolo ? (
+          <div className="w-full lg:w-auto">
+            <Segmented<FinTab>
+              label="Escopo financeiro"
+              value={tab}
+              onChange={setTab}
+              stretch
+              options={[
+                { value: 'US', label: 'Do casal (Nós)', shortLabel: 'Casal', icon: Users, testId: 'fin-US' },
+                { value: 'MINE', label: 'Meu', icon: User, testId: 'fin-MINE' },
+                { value: 'PARTNER', label: possessive(partner), icon: User, testId: 'fin-PARTNER' },
+              ]}
+            />
+          </div>
+        ) : null}
+        <div className="flex w-full flex-wrap items-center justify-center gap-2 lg:w-[420px]" role="group" aria-label="Mês">
+          <PeriodNav
+            onPrev={() => step(-1)}
+            onNext={() => step(1)}
+            prevLabel="Mês anterior"
+            nextLabel="Próximo mês"
+            prevTestId="month-prev"
+            nextTestId="month-next"
+            labelTestId="month-label"
+            label={monthTitle(month, '')}
+          />
+          {month !== current ? (
             <Button size="sm" variant="ghost" onClick={() => setMonth(current)} data-testid="month-today">
               Voltar para o mês atual
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
-      {!isSolo ? <div className="mb-5">
-        <Segmented<FinTab>
-          label="Escopo financeiro"
-          value={tab}
-          onChange={setTab}
-          stretch
-          options={[
-            { value: 'US', label: 'Do casal (Nós)', shortLabel: 'Casal', icon: Users, testId: 'fin-US' },
-            { value: 'MINE', label: 'Meu', icon: User, testId: 'fin-MINE' },
-            { value: 'PARTNER', label: possessive(partner), icon: User, testId: 'fin-PARTNER' },
-          ]}
-        />
-      </div> : null}
       {isSolo ? <SoloFinance month={month} today={today} /> : (
         <>
           {tab === 'US' ? <CoupleTab month={month} monthLabel={label} isCurrent={month === current} today={today} /> : null}
@@ -148,10 +148,6 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
           </p>
         </div>
       </section>
-      <SpendingSummary transactions={coupleTx} month={month} current={today.slice(0, 7)} tone="us" whose="do casal" testId="spend-couple" />
-      </div>
-
-      <div className="flex flex-col gap-6">
         <section aria-labelledby="previstos">
           <SectionHeader id="previstos" title="Contas a pagar" rest={d.predicted.some((t) => isOverdue(t, today)) ? '· tem vencida' : '· tracejado até a baixa'} />
           {d.predicted.length === 0 ? (
@@ -166,14 +162,15 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
                     <SeriesTag tx={t} />
                     <span className="text-[13px] text-muted">{splitRuleLabel(t.splitRule, couple.ratioABps)}</span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Button size="sm" variant="quiet" icon={CircleCheck} className="grow basis-[120px]" onClick={() => quickPay(t.id, viewer)} data-testid="pay-me">
+                  {/* a ação mais comum na largura toda; as outras duas lado a lado */}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Button block size="sm" variant="quiet" icon={CircleCheck} className="col-span-2" onClick={() => quickPay(t.id, viewer)} data-testid="pay-me">
                       Eu paguei
                     </Button>
-                    <Button size="sm" variant="secondary" className="grow basis-[120px]" onClick={() => quickPay(t.id, partnerId)}>
+                    <Button block size="sm" variant="secondary" onClick={() => quickPay(t.id, partnerId)}>
                       {firstName(partner.displayName)} pagou
                     </Button>
-                    <Button size="sm" variant="secondary" className="grow basis-[120px]" onClick={() => ui.openSheet('pay', { id: t.id })} data-testid="pay-other">
+                    <Button block size="sm" variant="secondary" onClick={() => ui.openSheet('pay', { id: t.id })} data-testid="pay-other">
                       Outro valor
                     </Button>
                   </div>
@@ -227,6 +224,11 @@ function CoupleTab({ month, monthLabel, isCurrent, today }: { month: string; mon
             </ul>
           )}
         </section>
+
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-6">
+        <SpendingSummary transactions={coupleTx} month={month} current={today.slice(0, 7)} tone="us" whose="do casal" testId="spend-couple" />
 
         <RulesSection scope="COUPLE" />
 

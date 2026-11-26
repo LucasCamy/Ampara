@@ -95,7 +95,7 @@ export function DoseActions({ dose, size = 'md', onAfter }: { dose: DoseItem; si
 
 export function EffortTag({ effort }: { effort: Task['effort'] }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted">
+    <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-muted">
       {effort === 'QUICK_5M' ? <Zap size={13} aria-hidden /> : <Brain size={13} aria-hidden />}
       {effort === 'QUICK_5M' ? 'Rápida 5 min' : 'Foco'}
     </span>
@@ -115,83 +115,75 @@ export function TaskRow({
   const done = task.status === 'DONE'
   const sentToMe = task.sentBy !== null && task.sentBy !== viewer && task.assignedTo === viewer
   const sentByMe = task.sentBy === viewer && task.assignedTo !== viewer
+  const canPostpone = !done && actions.includes('postpone')
+  const canSend = !done && !isSolo && actions.includes('send') && task.assignedTo === viewer
+  const quick = 'press hoverable inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[12px] border border-line px-2 text-[14px] font-semibold text-action'
   return (
     <li
       data-testid="task-row"
       data-task-title={task.title}
-      className={cx('flex items-start gap-2 rounded-[18px] bg-surface p-2', done ? 'ledger-ok' : 'border border-line')}
+      className={cx('rounded-[18px] bg-surface p-2', done ? 'ledger-ok' : 'border border-line')}
     >
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={done}
-        aria-label={done ? `Reabrir: ${task.title}` : `Concluir: ${task.title}`}
-        onClick={() => toggleTask(task.id)}
-        className={cx('press inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px]', done ? 'text-ok' : 'text-muted hoverable')}
-      >
-        {done ? (
-          <CircleCheck size={28} strokeWidth={2.4} aria-hidden />
-        ) : (
-          <CircleDashed size={28} aria-hidden />
-        )}
-      </button>
-      <div className="min-w-0 flex-1 py-1.5">
-        <p className={cx('text-[15px] leading-snug font-semibold', done ? 'text-muted' : 'text-ink')}>{task.title}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <OwnerTag tone={toneOf(task.assignedTo)}>{ownerLabel(task.assignedTo, viewer, partner)}</OwnerTag>
-          <EffortTag effort={task.effort} />
-          {task.dueTime ? <span className="font-data text-[12px] text-muted">{task.dueTime}</span> : null}
-          {sentToMe ? (
-            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-couple">
-              <Mail size={13} aria-hidden /> Enviada por {firstName(profiles[task.sentBy!].displayName)}
-            </span>
-          ) : null}
-          {sentByMe ? (
-            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted">
-              <MoveRight size={13} aria-hidden /> Você enviou
-            </span>
-          ) : null}
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={done}
+          aria-label={done ? `Reabrir: ${task.title}` : `Concluir: ${task.title}`}
+          onClick={() => toggleTask(task.id)}
+          className={cx('press inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px]', done ? 'text-ok' : 'text-muted hoverable')}
+        >
           {done ? (
-            <StatusBadge kind="ok" className="min-h-6 text-[12px]">
-              Feita{task.completedBy ? ` por ${task.completedBy === viewer ? 'você' : firstName(profiles[task.completedBy].displayName)}` : ''}
-            </StatusBadge>
-          ) : null}
-        </div>
-        {!done && (actions.includes('postpone') || (!isSolo && actions.includes('send') && task.assignedTo === viewer)) ? (
-          <div className="mt-2 flex gap-2">
-            {actions.includes('postpone') ? (
-              <button
-                type="button"
-                onClick={() => postponeTask(task.id)}
-                aria-label={`Adiar para amanhã: ${task.title}`}
-                className="press hoverable inline-flex min-h-11 min-w-0 grow basis-0 items-center justify-center gap-1.5 rounded-[12px] border border-line px-2 text-[13px] font-semibold text-action"
-              >
-                <MoveRight size={15} aria-hidden /> <span className="sm:hidden">Amanhã</span><span className="hidden sm:inline">Adiar para amanhã</span>
-              </button>
+            <CircleCheck size={28} strokeWidth={2.4} aria-hidden />
+          ) : (
+            <CircleDashed size={28} aria-hidden />
+          )}
+        </button>
+        <div className="min-w-0 flex-1 py-1.5">
+          <p className={cx('text-[15px] leading-snug font-semibold break-words', done ? 'text-muted' : 'text-ink')}>{task.title}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <OwnerTag tone={toneOf(task.assignedTo)}>{ownerLabel(task.assignedTo, viewer, partner)}</OwnerTag>
+            <EffortTag effort={task.effort} />
+            {task.dueTime ? <span className="font-data text-[13px] text-muted">{task.dueTime}</span> : null}
+            {sentToMe ? (
+              <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-couple">
+                <Mail size={13} aria-hidden /> Enviada por {firstName(profiles[task.sentBy!].displayName)}
+              </span>
             ) : null}
-            {!isSolo && actions.includes('send') && task.assignedTo === viewer ? (
-              <button
-                type="button"
-                onClick={() => sendTaskToPartner(task.id)}
-                aria-label={`Enviar para ${firstName(partner.displayName)}: ${task.title}`}
-                className="press hoverable inline-flex min-h-11 min-w-0 grow basis-0 items-center justify-center gap-1.5 rounded-[12px] border border-line px-2 text-[13px] font-semibold text-action"
-              >
-                <Mail size={15} aria-hidden /> <span className="sm:hidden">Enviar ao amor</span><span className="hidden sm:inline">Enviar para meu amor</span>
-              </button>
+            {sentByMe ? (
+              <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-muted">
+                <MoveRight size={13} aria-hidden /> Você enviou
+              </span>
+            ) : null}
+            {done ? (
+              <StatusBadge kind="ok" className="min-h-6 text-[12px]">
+                Feita{task.completedBy ? ` por ${task.completedBy === viewer ? 'você' : firstName(profiles[task.completedBy].displayName)}` : ''}
+              </StatusBadge>
             ) : null}
           </div>
+        </div>
+        {!done && actions.includes('help') ? (
+          <button
+            type="button"
+            onClick={() => ui.openSheet('sos', { taskId: task.id })}
+            aria-label={`${isSolo ? 'Destravar' : 'Pedir ajuda com'}: ${task.title}`}
+            className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] text-muted"
+          >
+            <LifeBuoy size={20} aria-hidden />
+          </button>
         ) : null}
       </div>
-      {!done ? (
-        <div className="flex shrink-0 items-center">
-          {actions.includes('help') ? (
-            <button
-              type="button"
-              onClick={() => ui.openSheet('sos', { taskId: task.id })}
-              aria-label={`${isSolo ? 'Destravar' : 'Pedir ajuda com'}: ${task.title}`}
-              className="press hoverable inline-flex h-12 w-12 items-center justify-center rounded-[12px] text-muted"
-            >
-              <LifeBuoy size={20} aria-hidden />
+      {/* ações na largura toda do cartão, em colunas iguais */}
+      {canPostpone || canSend ? (
+        <div className={cx('mt-2 grid gap-2', canPostpone && canSend ? 'grid-cols-2' : 'grid-cols-1')}>
+          {canPostpone ? (
+            <button type="button" onClick={() => postponeTask(task.id)} aria-label={`Adiar para amanhã: ${task.title}`} className={quick}>
+              <MoveRight size={15} aria-hidden /> Amanhã
+            </button>
+          ) : null}
+          {canSend ? (
+            <button type="button" onClick={() => sendTaskToPartner(task.id)} aria-label={`Enviar para ${firstName(partner.displayName)}: ${task.title}`} className={quick}>
+              <Mail size={15} aria-hidden /> Enviar
             </button>
           ) : null}
         </div>

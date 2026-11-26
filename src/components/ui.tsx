@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDashed, Clock, HeartHandshake, LoaderCircle, Pencil, SkipForward, SquareX, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleCheck, CircleDashed, Clock, HeartHandshake, LoaderCircle, Pencil, SkipForward, SquareX, type LucideIcon } from 'lucide-react'
 import { useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(' ')
@@ -158,7 +158,8 @@ export function ChoiceChips<T extends string>({
   onChange,
   error,
   stack = false,
-  cols = 2,
+  cols,
+  tiles,
 }: {
   label: string
   value: T | null
@@ -167,12 +168,16 @@ export function ChoiceChips<T extends string>({
   error?: string
   /** uma opção por linha, na largura toda (cartões de Ajustes, rótulos com nomes) */
   stack?: boolean
-  /** colunas iguais na largura toda; a última opção de uma conta ímpar ocupa a linha */
-  cols?: 1 | 2 | 3
+  /** colunas iguais na largura toda; a última opção de uma conta ímpar (em 2 colunas) ocupa a linha */
+  cols?: 1 | 2 | 3 | 4
+  /** blocos com o ícone em cima do texto, lado a lado; ligado sozinho quando são 3 opções curtas */
+  tiles?: boolean
 }) {
   const id = useId()
-  const n = stack ? 1 : Math.min(cols, options.length)
-  const grid = n === 1 ? 'grid-cols-1' : n === 2 ? 'grid-cols-2' : 'grid-cols-3'
+  const auto3 = !stack && cols === undefined && options.length === 3 && options.every((o) => !o.hint)
+  const asTiles = tiles ?? auto3
+  const n = stack ? 1 : Math.min(cols ?? (auto3 ? 3 : 2), options.length)
+  const grid = n === 1 ? 'grid-cols-1' : n === 2 ? 'grid-cols-2' : n === 3 ? 'grid-cols-3' : 'grid-cols-4'
   const odd = n === 2 && options.length % 2 === 1
   return (
     <fieldset className="min-w-0">
@@ -192,7 +197,8 @@ export function ChoiceChips<T extends string>({
               data-testid={o.testId}
               onClick={() => onChange(o.value)}
               className={cx(
-                'press flex min-h-12 w-full min-w-0 items-center gap-2 rounded-[14px] border px-3.5 py-2 text-left text-[14px] leading-snug font-semibold',
+                'press flex w-full min-w-0 items-center rounded-[14px] border leading-snug font-semibold',
+                asTiles ? 'min-h-16 flex-col justify-center gap-1 px-1.5 py-2 text-center text-[13px]' : 'min-h-12 gap-2 px-3.5 py-2 text-left text-[14px]',
                 odd && i === options.length - 1 && 'col-span-2',
                 active ? 'border-action bg-selected text-ink' : 'border-line bg-surface text-ink hoverable',
               )}
@@ -431,7 +437,7 @@ export function EditButton({ label, onClick, testId }: { label: string; onClick:
 export function OwnerTag({ tone, children }: { tone: 'a' | 'b' | 'us'; children: ReactNode }) {
   const map = { a: 'text-partner-a', b: 'text-partner-b', us: 'text-couple' }
   return (
-    <span className={cx('inline-flex items-center gap-1.5 text-[12px] font-semibold', map[tone])}>
+    <span className={cx('inline-flex items-center gap-1.5 text-[13px] font-semibold', map[tone])}>
       <span aria-hidden className="h-2 w-2 rounded-full bg-current" />
       <span>{children}</span>
     </span>
@@ -443,12 +449,55 @@ export function Actions({ children, className }: { children: ReactNode; classNam
   return <div className={cx('mt-4 flex flex-col gap-2', className)}>{children}</div>
 }
 
+/**
+ * Cabeçalho de seção: título em cima, complemento numa linha própria e menor, ação sempre à direita
+ * na mesma linha (em qualquer largura). O olho acha o "adicionar" sempre no mesmo lugar.
+ */
 export function SectionHeader({ title, rest, action, id }: { title: string; rest?: string; action?: ReactNode; id?: string }) {
+  const detail = rest?.replace(/^·\s*/, '')
   return (
-    <div className="mb-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
-      <Title as="h2" size="md" anchor={title} rest={rest} id={id} />
-      {/* no celular a ação desce para a largura toda; no computador fica ao lado do título */}
-      {action ? <div className="w-full sm:w-auto [&>*]:w-full sm:[&>*]:w-auto">{action}</div> : null}
+    <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+      <h2 id={id} className="min-w-0 flex-1 scroll-mt-24 text-[18px] leading-snug font-bold tracking-tight text-ink">
+        {title}
+        {detail ? <span className="block text-[13px] leading-snug font-medium tracking-normal text-muted"> {detail}</span> : null}
+      </h2>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
+
+/** Navegador de período (Agenda e Finanças): setas junto do rótulo, sem esticar de ponta a ponta no computador */
+export function PeriodNav({
+  label,
+  onPrev,
+  onNext,
+  prevLabel,
+  nextLabel,
+  prevTestId,
+  nextTestId,
+  labelTestId,
+}: {
+  label: ReactNode
+  onPrev: () => void
+  onNext: () => void
+  prevLabel: string
+  nextLabel: string
+  prevTestId?: string
+  nextTestId?: string
+  labelTestId?: string
+}) {
+  const arrow = 'press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] border border-line bg-surface text-ink'
+  return (
+    <div className="flex w-full items-center gap-2 sm:max-w-[420px]">
+      <button type="button" onClick={onPrev} aria-label={prevLabel} data-testid={prevTestId} className={arrow}>
+        <ChevronLeft size={20} aria-hidden />
+      </button>
+      <p className="min-w-0 flex-1 text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite" data-testid={labelTestId}>
+        {label}
+      </p>
+      <button type="button" onClick={onNext} aria-label={nextLabel} data-testid={nextTestId} className={arrow}>
+        <ChevronRight size={20} aria-hidden />
+      </button>
     </div>
   )
 }

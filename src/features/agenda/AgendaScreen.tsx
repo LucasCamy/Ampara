@@ -1,7 +1,7 @@
-import { CalendarPlus, CircleCheck, CircleDashed, ChevronLeft, ChevronRight, Droplet, Heart, HeartHandshake, Inbox, ListPlus, Mail, MoveRight, Sun, type LucideIcon } from 'lucide-react'
+import { CalendarPlus, CircleCheck, CircleDashed, Droplet, Heart, HeartHandshake, Inbox, ListPlus, Mail, MoveRight, Sun, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { TaskRow } from '../../components/domain'
-import { Button, cx, EditButton, EmptyState, OwnerTag, Segmented, StatusBadge, Title } from '../../components/ui'
+import { Button, cx, EditButton, EmptyState, OwnerTag, PeriodNav, SectionHeader, Segmented, StatusBadge, Title } from '../../components/ui'
 import { addDays, dayOfMonth, monthGrid, monthName, parseDateKey, relativeDayLabel, toDateKey, weekDays, weekdayLong, weekdayShort } from '../../domain/dates'
 import { formatCents } from '../../domain/format'
 import { agendaMarks, marksForScope, type DayMark, type MarkKind } from '../../domain/agenda'
@@ -94,73 +94,72 @@ export function AgendaScreen() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
-        <Title anchor="Agenda e tarefas," rest="no tempo certo." />
-        <Button variant="primary" size="compact" icon={CalendarPlus} className="w-full sm:w-auto" onClick={() => ui.openSheet('event', { date: view === 'INBOX' ? today : cursor })} data-testid="agenda-new-event">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <Title anchor="Agenda" />
+        <Button variant="primary" size="compact" icon={CalendarPlus} className="shrink-0" onClick={() => ui.openSheet('event', { date: view === 'INBOX' ? today : cursor })} data-testid="agenda-new-event">
           Compromisso
         </Button>
       </div>
-      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-        <div className="w-full lg:w-auto">
-        <Segmented<View>
-          label="Visão da agenda"
-          value={view}
-          onChange={setView}
-          size="sm"
-          stretch
-          options={[
-            { value: 'DAY', label: 'Dia', testId: 'agenda-DAY' },
-            { value: 'WEEK', label: 'Semana', testId: 'agenda-WEEK' },
-            { value: 'MONTH', label: 'Mês', testId: 'agenda-MONTH' },
-            { value: 'INBOX', label: 'Caixa de Entrada', shortLabel: 'Entrada', testId: 'agenda-INBOX', ariaLabel: 'Caixa de Entrada' },
-          ]}
-        />
+      {/* 1) como ver  2) qual período  3) de quem. No computador: visão e pessoa lado a lado, período embaixo */}
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+        <div className="order-1 w-full lg:w-auto">
+          <Segmented<View>
+            label="Visão da agenda"
+            value={view}
+            onChange={setView}
+            size="sm"
+            stretch
+            options={[
+              { value: 'DAY', label: 'Dia', testId: 'agenda-DAY' },
+              { value: 'WEEK', label: 'Semana', testId: 'agenda-WEEK' },
+              { value: 'MONTH', label: 'Mês', testId: 'agenda-MONTH' },
+              { value: 'INBOX', label: 'Caixa de Entrada', shortLabel: 'Entrada', testId: 'agenda-INBOX', ariaLabel: 'Caixa de Entrada' },
+            ]}
+          />
         </div>
-        {!isSolo ? <Segmented<ScopeFilter>
-          label="Filtrar por pessoa"
-          value={scope}
-          onChange={setScope}
-          size="sm"
-          stretch
-          options={[
-            { value: 'ALL', label: 'Todos' },
-            { value: 'MINE', label: 'Meu' },
-            { value: 'PARTNER', label: possessive(partner) },
-            { value: 'US', label: 'Nós' },
-          ]}
-        /> : null}
-      </div>
-
-      {view !== 'INBOX' ? (
-        <div className="mb-4">
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => move(-1)} aria-label="Período anterior" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
-              <ChevronLeft size={20} aria-hidden />
-            </button>
-            <p className="min-w-0 flex-1 text-center text-[15px] font-semibold text-ink first-letter:uppercase" aria-live="polite">
-              {view === 'DAY' ? (
-                <>
-                  <span className="sm:hidden">{shortDay}</span>
-                  <span className="hidden sm:inline">{rangeLabel}</span>
-                </>
-              ) : (
-                rangeLabel
-              )}
-            </p>
-            <button type="button" onClick={() => move(1)} aria-label="Próximo período" className="press hoverable inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line text-ink">
-              <ChevronRight size={20} aria-hidden />
-            </button>
-          </div>
-          {/* voltar numa linha própria, como nas Finanças: ao lado ele espremia o período */}
-          {cursor !== today ? (
-            <div className="mt-1 flex justify-center">
-              <Button size="sm" variant="ghost" onClick={() => setCursor(today)} data-testid="agenda-today">
+        {view !== 'INBOX' ? (
+          <div className="order-2 flex w-full flex-wrap items-center gap-2 lg:order-3">
+            <PeriodNav
+              onPrev={() => move(-1)}
+              onNext={() => move(1)}
+              prevLabel="Período anterior"
+              nextLabel="Próximo período"
+              label={
+                view === 'DAY' ? (
+                  <>
+                    <span className="sm:hidden">{shortDay}</span>
+                    <span className="hidden sm:inline">{rangeLabel}</span>
+                  </>
+                ) : (
+                  rangeLabel
+                )
+              }
+            />
+            {cursor !== today ? (
+              <Button size="sm" variant="ghost" className="mx-auto sm:mx-0" onClick={() => setCursor(today)} data-testid="agenda-today">
                 Voltar para hoje
               </Button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+            ) : null}
+          </div>
+        ) : null}
+        {!isSolo ? (
+          <div className="order-3 w-full lg:order-2 lg:w-auto">
+            <Segmented<ScopeFilter>
+              label="Filtrar por pessoa"
+              value={scope}
+              onChange={setScope}
+              size="sm"
+              stretch
+              options={[
+                { value: 'ALL', label: 'Todos' },
+                { value: 'MINE', label: 'Meu' },
+                { value: 'PARTNER', label: possessive(partner) },
+                { value: 'US', label: 'Nós' },
+              ]}
+            />
+          </div>
+        ) : null}
+      </div>
 
       {view === 'DAY' ? <DayView day={cursor} today={today} {...data} /> : null}
       {view === 'WEEK' ? <WeekView day={cursor} today={today} {...data} /> : null}
@@ -228,6 +227,15 @@ function DayView({ day, today, tasks, events, bills, meds, marks }: ViewData & {
   const doses = meds.filter((m) => isScheduledOn(m, day)).flatMap((m) => m.times.map((t) => ({ m, t })))
   const hours = Array.from({ length: 17 }, (_, i) => i + 7)
   const hh = (t: string) => Number(t.slice(0, 2))
+  const busy = (h: number) => dayEvents.some((e) => hh(e.start) === h) || doses.some((d) => hh(d.t) === h) || dayTasks.some((t) => t.dueTime && hh(t.dueTime) === h)
+  const slots: { from: number; to: number; free: boolean }[] = []
+  for (const h of hours) {
+    const free = !busy(h)
+    const last = slots[slots.length - 1]
+    if (free && last?.free) last.to = h
+    else slots.push({ from: h, to: h, free })
+  }
+  const clock = (h: number) => `${String(h).padStart(2, '0')}:00`
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
@@ -239,9 +247,7 @@ function DayView({ day, today, tasks, events, bills, meds, marks }: ViewData & {
             ))}
           </div>
         ) : null}
-        <h2 id="sem-horario" className="mb-2 text-[15px] font-bold text-ink">
-          Demandas do dia <span className="font-medium text-muted">· sem horário fixo</span>
-        </h2>
+        <SectionHeader id="sem-horario" title="Demandas do dia" rest="sem horário fixo" />
         {untimed.length === 0 && dayBills.length === 0 ? (
           <EmptyState
             icon={Sun}
@@ -271,30 +277,37 @@ function DayView({ day, today, tasks, events, bills, meds, marks }: ViewData & {
       </section>
 
       <section aria-labelledby="linha-tempo" className="min-w-0">
-        <h2 id="linha-tempo" className="mb-2 text-[15px] font-bold text-ink">
-          Linha do tempo <span className="font-medium text-muted">· 07:00 às 23:00</span>
-        </h2>
+        <SectionHeader id="linha-tempo" title="Linha do tempo" rest="07:00 às 23:00" />
         <ol className="rounded-[20px] border border-line bg-surface">
-          {hours.map((h) => {
+          {slots.map(({ from: h, to, free }) => {
+            if (free) {
+              return (
+                <li key={h} className="flex items-center gap-3 border-b border-line px-3 py-1.5 last:border-b-0">
+                  <span className="font-data w-12 shrink-0 text-[13px] text-muted">{clock(h)}</span>
+                  <span className="min-w-0 text-[13px] text-muted">
+                    {to === 23 && to > h ? 'Livre até o fim do dia' : to > h ? <>Livre até <span className="font-data">{clock(to + 1)}</span></> : 'Livre'}
+                  </span>
+                </li>
+              )
+            }
             const evs = dayEvents.filter((e) => hh(e.start) === h)
             const ds = doses.filter((d) => hh(d.t) === h)
             const ts = dayTasks.filter((t) => t.dueTime && hh(t.dueTime) === h)
-            const empty = evs.length + ds.length + ts.length === 0
             return (
-              <li key={h} className={cx('flex gap-3 border-b border-line px-3 last:border-b-0', empty ? 'py-1.5' : 'py-2.5')}>
-                <span className="font-data w-12 shrink-0 pt-0.5 text-[13px] text-muted">{String(h).padStart(2, '0')}:00</span>
+              <li key={h} className="flex gap-3 border-b border-line px-3 py-2.5 last:border-b-0">
+                <span className="font-data w-12 shrink-0 pt-2 text-[13px] font-semibold text-ink">{clock(h)}</span>
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   {evs.map((e) => (
                     <EventRow key={e.id} e={e} />
                   ))}
                   {ds.map(({ m, t }) => (
                     <p key={`${m.id}${t}`} className="ledger-dashed rounded-[14px] px-3 py-2 text-[14px] text-ink">
-                      <span className="font-data text-muted">{t}</span> · {m.name} <span className="text-muted">({m.kind === 'ROUTINE' ? 'rotina' : 'remédio'})</span>
+                      {t !== clock(h) ? <><span className="font-data text-muted">{t}</span> · </> : null}{m.name} <span className="text-muted">({m.kind === 'ROUTINE' ? 'rotina' : 'remédio'})</span>
                     </p>
                   ))}
                   {ts.map((t) => (
                     <p key={t.id} className="rounded-[14px] border border-line px-3 py-2 text-[14px] text-ink">
-                      <span className="font-data text-muted">{t.dueTime}</span> · {t.title}
+                      {t.dueTime !== clock(h) ? <><span className="font-data text-muted">{t.dueTime}</span> · </> : null}{t.title}
                     </p>
                   ))}
                 </div>
@@ -337,6 +350,18 @@ function WeekView({ day, today, tasks, events, bills, marks }: ViewData & { day:
         const evs = events.filter((e) => e.date === d).sort((a, b) => a.start.localeCompare(b.start))
         const bs = bills.filter((b) => b.competenceDate === d)
         const { load } = dayLoad(ts, evs, bs, d)
+        const dayHasContent = ts.length + evs.length + bs.length > 0 || marks.some((m) => m.date === d)
+        if (!dayHasContent) {
+          return (
+            <li key={d} className={cx('card flex min-h-12 min-w-0 items-center justify-between gap-2 self-start px-3 py-2', d === today && 'ring-2 ring-action')} data-testid="week-day">
+              <p className="min-w-0 text-[14px] font-bold text-ink">
+                {weekdayShort(d)} <span className="font-data text-muted">{dayOfMonth(d)}</span>
+                {d === today ? <span className="ml-1 text-[12px] font-semibold text-action">hoje</span> : null}
+              </p>
+              <p className="text-[13px] text-muted">Livre</p>
+            </li>
+          )
+        }
         return (
           <li key={d} className={cx('card flex min-w-0 flex-col gap-2 p-3', d === today && 'ring-2 ring-action')} data-testid="week-day">
             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -438,33 +463,6 @@ function MonthView({ day, today, onPick, tasks, events, bills, marks }: ViewData
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
       <div>
-        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted" aria-label="Legenda">
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-couple" /> Compromisso
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <svg aria-hidden width="11" height="10" viewBox="0 0 11 10" className="text-warn">
-              <path d="M5.5 0L11 10H0z" fill="currentColor" />
-            </svg>
-            Conta que vence
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="h-2.5 w-2.5 bg-partner-a" /> Saúde / remédio
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Heart size={11} aria-hidden className="text-couple" /> Data especial
-          </span>
-          {marks.some((m) => m.kind === 'PERIOD') ? (
-            <span className="inline-flex items-center gap-1.5">
-              <Droplet size={11} aria-hidden className="text-partner-b" /> Menstruação
-            </span>
-          ) : null}
-          {marks.some((m) => m.kind === 'CARE') ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden className="h-0.5 w-3 bg-muted" /> Semana de mais cuidado
-            </span>
-          ) : null}
-        </div>
         <div role="grid" aria-label={`Calendário de ${monthName(day)}`} className="grid grid-cols-7 gap-1">
           {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((w, i) => (
             <span key={i} role="columnheader" className="pb-1 text-center text-[12px] font-bold text-muted">
@@ -511,6 +509,33 @@ function MonthView({ day, today, onPick, tasks, events, bills, marks }: ViewData
               </button>
             )
           })}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-[16px] bg-subtle p-3 text-[13px] text-muted sm:flex sm:flex-wrap" aria-label="Legenda">
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-couple" /> Compromisso
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <svg aria-hidden width="11" height="10" viewBox="0 0 11 10" className="text-warn">
+              <path d="M5.5 0L11 10H0z" fill="currentColor" />
+            </svg>
+            Conta que vence
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-2.5 w-2.5 bg-partner-a" /> Saúde / remédio
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Heart size={11} aria-hidden className="text-couple" /> Data especial
+          </span>
+          {marks.some((m) => m.kind === 'PERIOD') ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Droplet size={11} aria-hidden className="text-partner-b" /> Menstruação
+            </span>
+          ) : null}
+          {marks.some((m) => m.kind === 'CARE') ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="h-0.5 w-3 bg-muted" /> Semana de mais cuidado
+            </span>
+          ) : null}
         </div>
       </div>
       <section aria-labelledby="dia-sel" className="min-w-0">

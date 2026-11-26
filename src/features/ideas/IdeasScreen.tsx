@@ -33,14 +33,15 @@ export function IdeasScreen() {
 
   return (
     <div className="flex flex-col gap-5" data-testid="ideas-screen">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Title anchor="Ideias," rest="soltas agora, com sentido depois." />
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="secondary" icon={MessagesSquare} onClick={() => ui.openSheet('conversation')} data-testid="ideas-chat" className="shrink-0">Conversar</Button>
-          <Button variant="secondary" icon={MessageCircleQuestion} onClick={() => ui.openSheet('askIdeas')} data-testid="ideas-ask" className="shrink-0">Perguntar às minhas ideias</Button>
+      <Title anchor="Ideias," rest="soltas agora, com sentido depois." />
+      {/* soltar o pensamento vem primeiro; conversar e perguntar ficam logo abaixo, lado a lado */}
+      <div className="flex flex-col gap-2">
+        <CaptureBox />
+        <div className="grid grid-cols-2 gap-2 sm:max-w-[520px]">
+          <Button block variant="secondary" icon={MessagesSquare} onClick={() => ui.openSheet('conversation')} data-testid="ideas-chat">Conversar</Button>
+          <Button block variant="secondary" icon={MessageCircleQuestion} onClick={() => ui.openSheet('askIdeas')} data-testid="ideas-ask" aria-label="Perguntar às minhas ideias">Perguntar</Button>
         </div>
       </div>
-      <CaptureBox />
       <Segmented<View>
         label="Como ver suas ideias"
         value={current}
