@@ -1,4 +1,4 @@
-# Instala a IA local do Ampara para ligar junto com o PC (ADR-0010). Rode UMA vez, como administrador:
+﻿# Instala a IA local do Ampara para ligar junto com o PC (ADR-0010). Rode UMA vez, como administrador:
 #   powershell -ExecutionPolicy Bypass -File desktop\ia-local\instalar-servico.ps1
 # O Windows pede a sua senha numa janela própria: ela fica com o Agendador de Tarefas, não com o Ampara.
 #Requires -RunAsAdministrator
@@ -29,7 +29,9 @@ if ($ts) {
   Write-Warning 'Tailscale não encontrado. Instale e rode: tailscale serve --bg --https=443 http://127.0.0.1:1235'
 }
 
-# Para um intermediário que esteja rodando à mão (senão a porta 1235 fica ocupada)
+# Para a tarefa antiga (senão o Windows ignora o novo início) e um intermediário que esteja rodando à mão
+# (senão a porta 1235 fica ocupada)
+Stop-ScheduledTask -TaskName 'Ampara IA local' -ErrorAction SilentlyContinue
 Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" | Where-Object { $_.CommandLine -like '*proxy.cjs*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -Confirm:$false }
 Start-ScheduledTask -TaskName 'Ampara IA local'
 Write-Host 'Pronto. A IA local está subindo (o modelo leva ~30 s para carregar).'
