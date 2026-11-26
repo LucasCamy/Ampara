@@ -29,6 +29,7 @@ import { IdeaSheet } from './IdeaSheet'
 import { OrganizeIdeaSheet } from './OrganizeIdeaSheet'
 import { ConcretizeSheet } from './ConcretizeSheet'
 import { AskIdeasSheet } from './AskIdeasSheet'
+import { ConversationSheet } from './ConversationSheet'
 
 const TITLES: Record<SheetKind, { title: string; description: string }> = {
   quickCapture: { title: 'Captura livre', description: 'Escreva ou dite uma frase. Confira o que foi entendido antes de salvar.' },
@@ -54,6 +55,7 @@ const TITLES: Record<SheetKind, { title: string; description: string }> = {
   organizeIdea: { title: 'Organizar pensamento', description: 'Escolha a área, o assunto e a ideia. Tudo pode mudar depois.' },
   concretize: { title: 'Isso vai acontecer', description: 'Confira e ajuste. Só é criado quando você confirmar.' },
   askIdeas: { title: 'Perguntar às minhas ideias', description: 'A resposta vem só do que você anotou. Nada é mudado.' },
+  conversation: { title: 'Conversar', description: 'Pense em voz alta com a IA. Extrair leva para as Ideias.' },
 }
 
 const EDIT_TITLES: Partial<Record<SheetKind, { title: string; description: string }>> = {
@@ -142,6 +144,7 @@ export function SheetHost() {
       {sheet?.kind === 'goal' && exists ? <GoalSheet key={editId ?? 'new'} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'idea' && exists && editId ? <IdeaSheet key={editId} id={editId} onDone={close} /> : null}
       {sheet?.kind === 'askIdeas' ? <AskIdeasSheet /> : null}
+      {sheet?.kind === 'conversation' ? <ConversationSheet startId={sheet.params.id} /> : null}
       {sheet?.kind === 'concretize' && sheet.params.ideaId ? <ConcretizeSheet key={sheet.params.ideaId} ideaId={sheet.params.ideaId} onDone={close} /> : null}
       {sheet?.kind === 'organizeIdea' ? <OrganizeIdeaSheet key={sheet.params.captureId ?? sheet.params.noteId} params={sheet.params} onDone={close} /> : null}
       {sheet?.kind === 'gift' && exists ? <GiftSheet key={editId ?? 'new'} id={editId} params={sheet.params} onDone={close} /> : null}

@@ -2,7 +2,7 @@ import type { PartnerId } from '../domain/types'
 import { createStore, useStore } from './createStore'
 
 export type Tab = 'hoje' | 'agenda' | 'nos' | 'rotinas' | 'financas' | 'ideias' | 'ajustes'
-export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'unstuck' | 'templates' | 'newMed' | 'routine' | 'event' | 'period' | 'cycleSetup' | 'specialDate' | 'gift' | 'goal' | 'pay' | 'tx' | 'rule' | 'tour' | 'quickCapture' | 'idea' | 'organizeIdea' | 'concretize' | 'askIdeas'
+export type SheetKind = 'task' | 'expense' | 'med' | 'sos' | 'unstuck' | 'templates' | 'newMed' | 'routine' | 'event' | 'period' | 'cycleSetup' | 'specialDate' | 'gift' | 'goal' | 'pay' | 'tx' | 'rule' | 'tour' | 'quickCapture' | 'idea' | 'organizeIdea' | 'concretize' | 'askIdeas' | 'conversation'
 export type Theme = 'light' | 'dark'
 export type ReadingFont = 'jakarta' | 'lexend' | 'atkinson'
 export type ReadingComfort = 'default' | 'wide'

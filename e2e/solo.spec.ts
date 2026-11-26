@@ -63,6 +63,8 @@ test.describe('Modo Solo · cadastro e armazenamento', () => {
     await expect(page.getByRole('button', { name: 'Restaurar dados de exemplo', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Novo convite para/ })).toHaveCount(0)
     await page.getByRole('button', { name: 'Bloquear agora', exact: true }).click()
+    // espera o bloqueio terminar (apagar a sessão lembrada) antes de recarregar
+    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 15_000 })
     await page.reload()
     await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 15_000 })
     await page.getByTestId('login-password').fill(PASSWORDS.A)
@@ -85,6 +87,8 @@ test.describe('Modo Solo · cadastro e armazenamento', () => {
     // Bloquear espera as gravações cifradas antes de fechar a sessão.
     await goSettings(page, 'aparelho')
     await page.getByRole('button', { name: 'Bloquear agora', exact: true }).click()
+    // espera o bloqueio terminar (apagar a sessão lembrada) antes de recarregar
+    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 15_000 })
     await page.reload()
     await page.getByTestId('login-password').fill(PASSWORDS.A)
     await page.getByTestId('login-submit').click()

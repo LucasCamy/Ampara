@@ -324,6 +324,8 @@ test('isso vai acontecer com a IA do PC: a sugestão preenche a gaveta e a pesso
   await goTab(page, 'ideias')
   await page.getByTestId('idea-capture-input').fill('combinei de correr com o João sábado às 7h')
   await page.getByTestId('idea-capture-save').click()
+  // tem dia e hora: a barra oferece marcar; aqui a pessoa prefere guardar como ideia primeiro
+  await page.getByTestId('schedule-keep').click()
   await expect(page.getByText('Organizei em Saúde › Corrida.')).toBeVisible()
   await page.getByTestId('ideas-view-esboco').click()
   await page.getByTestId('ideas-outline').getByRole('button', { name: /Correr com o João/ }).click()
@@ -400,3 +402,65 @@ test('perguntar às ideias sem IA: só a busca, sem resposta inventada', async (
   await expect(sheet.getByText('Nada encontrado nas suas anotações.')).toBeVisible()
 })
 
+
+test('marcar pelo campo de Ideias: texto com dia vira proposta; Marcar cria; sem dia segue como pensamento', async ({ page, errors }, info) => {
+  void errors
+  await at(page, '10:00')
+  await open(page)
+  await goTab(page, 'ideias')
+  await page.getByTestId('idea-capture-input').fill('amanhã tenho dentista às 18h')
+  await page.getByTestId('idea-capture-save').click()
+  await expect(page.getByTestId('idea-capture-input')).toHaveValue('')
+  await expect(page.getByTestId('schedule-offer')).toContainText('Marcar na agenda?')
+  await expect(page.getByTestId('schedule-title')).toHaveText('Dentista')
+  await expect(page.getByTestId('schedule-when')).toContainText('18:00 às 19:00')
+  await shot(page, '78-ideias-marcar', info.project.name)
+  await page.getByTestId('schedule-confirm').click()
+  await expect(page.getByText(/Marcado na agenda: Dentista/)).toBeVisible()
+  await expect(page.getByTestId('schedule-offer')).toHaveCount(0)
+  // sem hora: tarefa; "Só guardar como ideia" volta ao caminho de sempre
+  await page.getByTestId('idea-capture-input').fill('pagar a luz até sexta')
+  await page.getByTestId('idea-capture-save').click()
+  await expect(page.getByTestId('schedule-offer')).toContainText('Criar tarefa?')
+  await page.getByTestId('schedule-keep').click()
+  await expect(page.getByText('Guardado na Caixa de entrada. Organize quando quiser.')).toBeVisible()
+  await noHorizontalOverflow(page)
+})
+
+test('conversar no app: um campo só, continua a conversa, lista e Extrair', async ({ page, errors }, info) => {
+  void errors
+  await at(page, '10:00')
+  await page.addInitScript(() => {
+    let n = 0
+    ;(window as unknown as { amparaDesktop: unknown }).amparaDesktop = {
+      version: 'teste',
+      status: async () => ({ claude: true, model: 'modelo-teste' }),
+      runStructured: async (req: { schema: { required?: string[] } }) => {
+        if (req.schema.required?.includes('resposta')) return { model: 'm', json: { resposta: ++n === 1 ? 'Comece pelo quarto menor. Só tirar o que está no chão.' : 'Quinze minutos já ajudam. Use um timer.' } }
+        return { model: 'm', json: { versao: 'organizador@1', operacoes: [] } }
+      },
+    }
+  })
+  await open(page)
+  await goTab(page, 'ideias')
+  await page.getByTestId('ideas-chat').click()
+  await page.getByTestId('conv-input').fill('estou travado na reforma do quarto')
+  await page.getByTestId('conv-input').press('Enter')
+  await expect(page.getByTestId('conv-answer')).toContainText('Comece pelo quarto menor')
+  await expect(page.getByTestId('conv-input')).toBeFocused()
+  await page.getByTestId('conv-input').fill('e se eu tiver só 15 minutos?')
+  await page.getByTestId('conv-input').press('Enter')
+  await expect(page.getByTestId('conv-answer')).toContainText('Quinze minutos')
+  await expect(page.getByTestId('conv-asked')).toHaveText('e se eu tiver só 15 minutos?')
+  await expect(page.getByTestId('conv-more')).toContainText('Ver mais (2)')
+  await shot(page, '79-ideias-conversa', info.project.name)
+  // a lista reabre a mesma conversa, com o cursor no campo
+  await page.getByTestId('conv-open-list').click()
+  await expect(page.getByTestId('conv-item')).toHaveCount(1)
+  await page.getByTestId('conv-item').click()
+  await expect(page.getByTestId('conv-input')).toBeFocused()
+  await expect(page.getByTestId('conv-input')).toHaveAttribute('placeholder', 'Continue a conversa…')
+  await page.getByTestId('conv-extract').click()
+  await expect(page.getByText('Enviada para as Ideias. A IA organiza por trás.')).toBeVisible()
+  await noHorizontalOverflow(page)
+})

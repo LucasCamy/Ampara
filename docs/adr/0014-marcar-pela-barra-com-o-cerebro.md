@@ -58,3 +58,8 @@ Riscos:
   "Dentista › Dados da Dentista". A busca considera também a Caixa de entrada e o que ainda não foi organizado:
   no primeiro teste a anotação tinha caído lá e o endereço não aparecia.
 
+## No celular e na web (2026-11-26)
+
+O campo "O que está na sua cabeça?" das Ideias faz o mesmo que a barra: texto com dia mostra a proposta
+(`ScheduleOfferCard`) com Marcar e "Só guardar como ideia". Sem IA no aparelho, a proposta vem só do código.
+Verificado em `e2e/ideas.spec.ts` (390 claro e 1280 escuro).

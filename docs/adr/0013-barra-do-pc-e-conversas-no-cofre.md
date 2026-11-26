@@ -68,3 +68,9 @@ acima foi trocado:
   aberto e o cofre destravado.
 - **Não incluído:** o agente de arquivos do PC (`fstools` e `claudecode` do protótipo). Exige confirmação por
   diálogo do processo principal e revisão de segurança própria (ADR-0008, item 3). Fica como pendência.
+
+## Conversa no celular e na web (2026-11-26)
+
+O botão "Conversar" nas Ideias abre a gaveta `ConversationSheet`, igual à barra: um campo só, a pergunta e a
+última resposta em destaque, o resto em "Ver mais", lista de conversas que reabre com o cursor no campo, e Extrair.
+Usa a IA do aparelho (local pelo Tailscale, Gemini com chave ou Claude no PC). Verificado em `e2e/ideas.spec.ts`.

@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import { useIsDesktop } from '../../components/Sheet'
 import { Button, Segmented, Title } from '../../components/ui'
-import { MessageCircleQuestion } from 'lucide-react'
+import { MessageCircleQuestion, MessagesSquare } from 'lucide-react'
 import { ui } from '../../store/ui'
 import type { IdeaNature } from '../../domain/ideas'
 import { IDEA_NATURES } from '../../domain/ideas'
@@ -35,7 +35,10 @@ export function IdeasScreen() {
     <div className="flex flex-col gap-5" data-testid="ideas-screen">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Title anchor="Ideias," rest="soltas agora, com sentido depois." />
-        <Button variant="secondary" icon={MessageCircleQuestion} onClick={() => ui.openSheet('askIdeas')} data-testid="ideas-ask" className="shrink-0">Perguntar às minhas ideias</Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button variant="secondary" icon={MessagesSquare} onClick={() => ui.openSheet('conversation')} data-testid="ideas-chat" className="shrink-0">Conversar</Button>
+          <Button variant="secondary" icon={MessageCircleQuestion} onClick={() => ui.openSheet('askIdeas')} data-testid="ideas-ask" className="shrink-0">Perguntar às minhas ideias</Button>
+        </div>
       </div>
       <CaptureBox />
       <Segmented<View>

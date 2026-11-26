@@ -63,7 +63,10 @@ function render() {
     const msgs = v.messages || []
     const lastIa = [...msgs].reverse().find((m) => m.role === 'IA')
     const lastIdx = lastIa ? msgs.lastIndexOf(lastIa) : -1
+    // a pergunta que gerou a última resposta fica junto dela; o resto vai para "Ver mais"
+    const asked = lastIdx > 0 && msgs[lastIdx - 1].role === 'PESSOA' ? lastIdx - 1 : lastIdx
     const after = msgs.slice(lastIdx + 1).filter((m) => m.role === 'PESSOA')
+    if (!v.busy && lastIa && asked < lastIdx) out.append(el('p', 'me', msgs[asked].text))
     for (const m of after) out.append(el('p', 'me', m.text))
     if (v.busy) out.append(el('p', 'status', 'Pensando…'))
     else if (lastIa) {
@@ -71,7 +74,7 @@ function render() {
       p.append(el('span', 'who', 'Ampara'), document.createTextNode(lastIa.text))
       out.append(p)
     }
-    const earlier = lastIdx > 0 ? msgs.slice(0, lastIdx) : []
+    const earlier = asked > 0 ? msgs.slice(0, asked) : []
     if (earlier.length) {
       const d = el('details')
       d.append(el('summary', null, `Ver mais (${earlier.length})`))

@@ -2,8 +2,14 @@ import { Mic, Send, Sparkles, Square } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, cx, FieldError } from '../../components/ui'
 import { IDEA_LIMITS } from '../../domain/ideas'
-import { captureThought } from '../../store/ideaActions'
-import { useOrganizerWaiting } from '../../store/ideaAi'
+import { captureThought, scheduleFromProposal } from '../../store/ideaActions'
+import { proposeSchedule, useOrganizerWaiting, type ScheduleOffer } from '../../store/ideaAi'
+import { parseWhen } from '../../domain/whenParse'
+import { toDateKey } from '../../domain/dates'
+import { useNow } from '../../store/clock'
+import { ui } from '../../store/ui'
+import { ScheduleOfferCard } from './ScheduleOfferCard'
+import { whenLabel } from './barBridge'
 import { afterCapture } from './releaseThought'
 import { currentProvider, desktopBridge } from '../../ai/provider'
 import { canDictate, startDictation, type DictationSession } from '../voice/speech'
@@ -17,6 +23,11 @@ export function CaptureBox() {
   const [usedVoice, setUsedVoice] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
   const waiting = useOrganizerWaiting()
+  const today = toDateKey(useNow())
+  // marcar pelo campo (ADR-0014): o texto com dia espera o clique em Marcar ou em Só guardar
+  const [offer, setOffer] = useState<{ text: string; data: ScheduleOffer | null } | null>(null)
+  const offerRef = useRef(offer)
+  offerRef.current = offer
   const provider = currentProvider()
   const recognition = useRef<DictationSession | null>(null)
   const mounted = useRef(true)
@@ -63,9 +74,56 @@ export function CaptureBox() {
     })
   }
 
+  /** Guardar como pensamento (o caminho de sempre). */
+  const keep = (thought: string, voice: boolean) => {
+    const captureId = captureThought(thought, voice ? 'VOZ' : 'TEXTO')
+    if (!captureId) return false
+    if (provider) setSaved('Guardado.')
+    afterCapture(captureId, thought, provider, {
+      onPlace: (place) => { if (mounted.current) setSaved(`Guardado. Parece ser de ${place}.`) },
+      restoreText: () => setText((cur) => cur || thought),
+      view: () => document.querySelector<HTMLButtonElement>('[data-testid="ideas-view-esboco"]')?.click(),
+    })
+    return true
+  }
+
+  const confirmOffer = () => {
+    const o = offerRef.current?.data
+    if (!o) return
+    const r = scheduleFromProposal(o.proposal)
+    if (!r.ok) {
+      setError(r.error)
+      return
+    }
+    setOffer(null)
+    ui.toast(`${o.proposal.kind === 'EVENT' ? 'Marcado na agenda' : 'Tarefa criada'}: ${o.proposal.title} · ${whenLabel(o)}`, { undo: r.undo })
+  }
+
+  const keepOffer = () => {
+    const o = offerRef.current
+    if (!o) return
+    setOffer(null)
+    keep(o.text, false)
+  }
+
   const submit = (event: FormEvent) => {
     event.preventDefault()
     stop()
+    const thought = text.trim()
+    if (thought && parseWhen(thought, today)) {
+      // tem um dia: oferece marcar (o código decide dia e hora; a IA só completa com as anotações)
+      const mine = { text: thought, data: null as ScheduleOffer | null }
+      setOffer(mine)
+      setSaved(null)
+      setText('')
+      setUsedVoice(false)
+      void proposeSchedule(thought, today, provider).then((data) => {
+        if (!mounted.current || offerRef.current?.text !== thought) return
+        if (data) setOffer({ text: thought, data })
+        else keepOffer()
+      })
+      return
+    }
     const captureId = captureThought(text, usedVoice ? 'VOZ' : 'TEXTO')
     if (!captureId) {
       setError('Escreva ou dite o que está na sua cabeça.')
@@ -109,6 +167,7 @@ export function CaptureBox() {
           {provider ? 'Fica guardado na hora. Pode soltar o próximo: a IA organiza por trás, e você pode desfazer. Nada vira tarefa sozinho.' : 'Fica guardado na hora, só para você. Nada vira tarefa sozinho.'}
         </p>
       )}
+      {offer ? <ScheduleOfferCard offer={offer.data} onConfirm={confirmOffer} onKeep={keepOffer} /> : null}
       {saved || waiting ? (
         <p role="status" className="flex flex-wrap items-center gap-x-2 text-[14px] font-semibold text-ink" data-testid="idea-organizing">
           <Sparkles size={16} aria-hidden className="text-action" />
