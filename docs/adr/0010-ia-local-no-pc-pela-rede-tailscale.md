@@ -70,3 +70,8 @@ Restrições:
   na rede privada; teste real do app do PC organizando pela IA local via Tailscale (3 ideias em 24 s).
 - **Pendente:** a pessoa rodar `instalar-servico.ps1` como administrador; variável `LOCAL_AI_URL` no GitHub para o
   app publicado (celular e web); teste no celular com o Tailscale ligado.
+- **Vigia (2026-11-26):** `iniciar.ps1` fica de vigia. A cada 30 s confere o LM Studio, os modelos `ampara` e
+  `ampara-sentido` e o intermediário, e religa o que caiu (a tarefa do Windows só reinicia quando ela mesma
+  falha). Testado numa cópia na porta 1239: o intermediário derrubado voltou em 30 s. O script é salvo com BOM
+  para o PowerShell do Windows ler os acentos. Depois do reinício de 2026-11-25, tudo subiu antes do login.
+
